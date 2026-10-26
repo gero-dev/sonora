@@ -1,0 +1,65 @@
+name: Bug report
+description: Что-то работает неправильно
+title: "[bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Спасибо за отчёт! Пожалуйста, не прикладывайте токены, персональные данные и полные архивы Takeout.
+  - type: input
+    id: version
+    attributes:
+      label: Версия Sonora
+      description: Настройки → О приложении, или имя APK
+      placeholder: "0.5.0"
+    validations:
+      required: true
+  - type: input
+    id: android
+    attributes:
+      label: Android и устройство
+      placeholder: "Android 14, Pixel 8 / эмулятор API 34"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Шаги воспроизведения
+      placeholder: |
+        1. Открыть …
+        2. Нажать …
+        3. Ожидалось …, получил …
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Логи / скриншоты
+      description: logcat (`adb logcat -d > log.txt`) или скриншот. Уберите приватные данные.
+      render: shell
+  - type: dropdown
+    id: area
+    attributes:
+      label: Область
+      multiple: true
+      options:
+        - Плеер / очередь
+        - Медиатека / сканирование
+        - Виджет
+        - Тексты песен
+        - Google-аккаунт / OAuth
+        - Импорт Takeout
+        - Веб-плеер YouTube Music
+        - Обзор (Archive.org / Jamendo)
+        - Настройки / тема
+        - Другое
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Проверки
+      options:
+        - label: Я искал такой же Issue
+          required: true
+        - label: Это не запрос на обход DRM/ToS
+          required: true

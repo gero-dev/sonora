@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Эквалайзер как символ приложения -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M30,48h7v12h-7z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M42,38h7v32h-7z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,30h7v48h-7z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M66,38h7v32h-7z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M78,48h7v12h-7z" />
+</vector>

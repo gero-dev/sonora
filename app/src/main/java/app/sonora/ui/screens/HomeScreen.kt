@@ -1,0 +1,1140 @@
+package app.sonora.ui.screens
+
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.FavoriteBorder
+import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.MusicNote
+import androidx.compose.material.icons.rounded.Pause
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.PlayCircle
+import androidx.compose.material.icons.rounded.QueueMusic
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Sort
+import androidx.compose.material.icons.rounded.UploadFile
+import androidx.compose.material.icons.rounded.VpnKey
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import app.sonora.core.model.Playlist
+import app.sonora.core.model.Source
+import app.sonora.core.model.Track
+import app.sonora.net.warp.WarpState
+import app.sonora.net.warp.WarpStatus
+import app.sonora.ui.MainViewModel
+import app.sonora.ui.WaveMood
+import app.sonora.ui.WaveSort
+import app.sonora.ui.WaveSourceMode
+import app.sonora.ui.WaveUiState
+import app.sonora.ui.components.CoverArt
+import app.sonora.ui.components.CoverArtBox
+import app.sonora.ui.components.CreatePlaylistDialog
+import app.sonora.ui.components.EmptyState
+import app.sonora.ui.components.TrackActionSheet
+import app.sonora.ui.components.TrackRow
+import app.sonora.ui.nav.Routes
+import app.sonora.ui.theme.LocalSonoraColors
+import java.time.LocalTime
+
+/** Единый шаг страницы: 16dp по краям и 12dp между блоками. */
+private val PagePadding = 16.dp
+private val SectionGap = 12.dp
+private val RailSpacing = 12.dp
+private val CardRadius = 20.dp
+private val TileWidth = 160.dp
+private val ArtworkRadius = 12.dp
+
+/**
+ * Главный экран: приветствие, «Моя волна», быстрые карточки действий,
+ * недавние треки, плейлисты и избранное. Вся логика — в [MainViewModel],
+ * экран только раскладывает состояние и вызывает те же действия, что и раньше.
+ */
+@Composable
+fun HomeScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) -> Unit) {
+    val tracks by vm.tracks.collectAsState()
+    val favorites by vm.favorites.collectAsState()
+    val playlists by vm.playlists.collectAsState()
+    val player by vm.player.collectAsState()
+    val scanning by vm.scanning.collectAsState()
+    val wave by vm.wave.collectAsState()
+    val warpStatus by vm.warpStatus.collectAsState()
+    val warpConfigs by vm.warpConfigs.collectAsState()
+    val warpExternal by vm.warpExternalVpn.collectAsState()
+    val warpError by vm.warpError.collectAsState()
+    val fileImport by vm.fileImport.collectAsState()
+
+    var showImportGuide by remember { mutableStateOf(false) }
+    val musicImportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenMultipleDocuments(),
+    ) { uris ->
+        if (uris.isNotEmpty()) vm.importMusicFiles(uris)
+    }
+    val vpnPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult(),
+    ) { vm.startWarp() }
+    LaunchedEffect(Unit) { vm.refreshWarp() }
+
+    val localTracks = remember(tracks) { tracks.filter { it.source == Source.LOCAL } }
+    val recent = remember(localTracks) { localTracks.take(15) }
+    val favoriteTracks = remember(tracks, favorites) { tracks.filter { it.id in favorites } }
+    val ownPlaylists = remember(playlists) { playlists.filter { it.editable } }
+
+    var showCreateDialog by remember { mutableStateOf(false) }
+    var actionTrack by remember { mutableStateOf<Track?>(null) }
+    var playlistForNewTrack by remember { mutableStateOf<Track?>(null) }
+
+    val favoriteAction: (() -> Unit)? = if (favoriteTracks.isEmpty()) {
+        null
+    } else {
+        { vm.playQueue(favoriteTracks) }
+    }
+
+    Box(Modifier.fillMaxSize()) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(
+                start = PagePadding,
+                end = PagePadding,
+                top = padding.calculateTopPadding() + 16.dp,
+                bottom = padding.calculateBottomPadding() + 28.dp,
+            ),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            item { HomeGreeting(localCount = localTracks.size) }
+            item {
+                WaveCard(
+                    state = wave,
+                    onPlay = { vm.playWave() },
+                    onEnqueue = { vm.enqueueWave() },
+                    onRefresh = { vm.refreshWave() },
+                    onSource = vm::setWaveSource,
+                    onMood = vm::setWaveMood,
+                    onSort = vm::setWaveSort,
+                    onTrackClick = { vm.playOrOpen(it) },
+                    onLoadMore = { vm.loadMoreWave() },
+                )
+            }
+
+            if (localTracks.isEmpty()) {
+                item { ScanLibraryCard(scanning = scanning, onScan = { vm.scanLibrary() }) }
+            }
+            item { YouTubeWebCard(onOpen = { navigate(Routes.SEARCH) }) }
+
+            item {
+                WarpHomeCard(
+                    status = warpStatus,
+                    configsCount = warpConfigs.size,
+                    externalVpn = warpExternal,
+                    error = warpError,
+                    onOpenSettings = { navigate(Routes.SETTINGS) },
+                    onDisable = { vm.stopWarp() },
+                    onEnable = {
+                        if (warpStatus.state == WarpState.CONNECTED ||
+                            warpStatus.state == WarpState.CONNECTING
+                        ) {
+                            vm.stopWarp()
+                        } else {
+                            val permission = vm.warpVpnPermissionIntent()
+                            if (permission != null) {
+                                vpnPermissionLauncher.launch(permission)
+                            } else {
+                                vm.startWarp()
+                            }
+                        }
+                    },
+                )
+            }
+
+            item {
+                ImportMusicCard(
+                    importing = fileImport.importing,
+                    imported = fileImport.imported,
+                    failed = fileImport.failed,
+                    done = fileImport.done,
+                    onPickFiles = { musicImportLauncher.launch(arrayOf("*/*")) },
+                    onShowGuide = { showImportGuide = true },
+                )
+            }
+
+            val current = player.current
+            if (current != null) {
+                item {
+                    NowPlayingCard(
+                        track = current,
+                        isPlaying = player.isPlaying,
+                        onClick = { navigate(Routes.PLAYER) },
+                    )
+                }
+            }
+
+            if (recent.isNotEmpty()) {
+                item { HomeSectionHeader(title = "Недавно добавленные") }
+                item {
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(RailSpacing)) {
+                        items(recent, key = { "recent-${it.id}" }) { track ->
+                            TrackTile(track = track, onClick = { vm.playOrOpen(track) })
+                        }
+                    }
+                }
+            }
+
+            item { HomeSectionHeader(title = "Плейлисты") }
+            item {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(RailSpacing)) {
+                    item { CreatePlaylistTile(onClick = { showCreateDialog = true }) }
+                    items(ownPlaylists, key = { "pl-${it.id}" }) { playlist ->
+                        PlaylistTile(
+                            playlist = playlist,
+                            onClick = { navigate(Routes.playlist(playlist.id)) },
+                        )
+                    }
+                }
+            }
+
+            item {
+                HomeSectionHeader(
+                    title = "Избранное",
+                    actionLabel = if (favoriteAction != null) "Играть все" else null,
+                    onAction = favoriteAction,
+                )
+            }
+            if (favoriteTracks.isEmpty()) {
+                item {
+                    EmptyState(
+                        icon = Icons.Rounded.FavoriteBorder,
+                        title = "Пока пусто",
+                        subtitle = "Отмечайте треки сердечком — они появятся здесь.",
+                    )
+                }
+            } else {
+                items(favoriteTracks.take(10), key = { "fav-${it.id}" }) { track ->
+                    TrackRow(
+                        track = track,
+                        isFavorite = track.id in favorites,
+                        isPlaying = player.current?.id == track.id && player.isPlaying,
+                        onClick = { vm.playOrOpen(track) },
+                        onLongClick = { actionTrack = track },
+                        onFavorite = { vm.toggleFavorite(track.id) },
+                    )
+                }
+            }
+        }
+
+        actionTrack?.let { track ->
+            TrackActionSheet(
+                track = track,
+                isFavorite = track.id in favorites,
+                playlists = playlists,
+                onDismiss = { actionTrack = null },
+                onPlay = {
+                    actionTrack = null
+                    vm.playOrOpen(track)
+                },
+                onAddToQueue = {
+                    actionTrack = null
+                    vm.addToQueue(track)
+                },
+                onPlayNext = {
+                    actionTrack = null
+                    vm.playNext(track)
+                },
+                onAddToPlaylist = { playlist ->
+                    actionTrack = null
+                    vm.addToPlaylist(playlist.id, track.id)
+                },
+                onCreatePlaylist = {
+                    actionTrack = null
+                    playlistForNewTrack = track
+                },
+                onToggleFavorite = {
+                    actionTrack = null
+                    vm.toggleFavorite(track)
+                },
+                onDownload = if (track.playable && track.source != Source.LOCAL && !vm.isTrackDownloaded(track)) {
+                    {
+                        actionTrack = null
+                        vm.downloadTrack(track)
+                    }
+                } else {
+                    null
+                },
+                downloadLabel = "Скачать",
+            )
+        }
+
+        if (showCreateDialog) {
+            CreatePlaylistDialog(
+                onDismiss = { showCreateDialog = false },
+                onCreate = { name ->
+                    showCreateDialog = false
+                    vm.createPlaylist(name) { created -> navigate(Routes.playlist(created.id)) }
+                },
+            )
+        }
+
+        playlistForNewTrack?.let { track ->
+            CreatePlaylistDialog(
+                title = "Новый плейлист с треком",
+                onDismiss = { playlistForNewTrack = null },
+                onCreate = { name ->
+                    playlistForNewTrack = null
+                    vm.createPlaylist(name) { created -> vm.addToPlaylist(created.id, track.id) }
+                },
+            )
+        }
+
+        if (showImportGuide) {
+            ImportGuideDialog(
+                onDismiss = { showImportGuide = false },
+                onPickFiles = {
+                    showImportGuide = false
+                    musicImportLauncher.launch(arrayOf("*/*"))
+                },
+            )
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Заголовки и приветствие
+// ---------------------------------------------------------------------------
+
+/** Заголовок секции: 20sp semibold, отступ 12dp сверху, действие справа. */
+@Composable
+private fun HomeSectionHeader(
+    title: String,
+    actionLabel: String? = null,
+    onAction: (() -> Unit)? = null,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = SectionGap, bottom = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.headlineMedium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        if (actionLabel != null && onAction != null) {
+            TextButton(
+                onClick = onAction,
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+            ) {
+                Text(actionLabel, style = MaterialTheme.typography.labelLarge)
+            }
+        }
+    }
+}
+
+/** Приветствие по времени суток + краткая сводка по фонотеке. */
+@Composable
+private fun HomeGreeting(localCount: Int) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(bottom = 4.dp),
+    ) {
+        Text(
+            text = "SONORA",
+            style = MaterialTheme.typography.labelMedium.copy(letterSpacing = 3.sp),
+            color = MaterialTheme.colorScheme.primary,
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = greetingForNow(),
+            style = MaterialTheme.typography.headlineLarge,
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = if (localCount == 0) {
+                "Фонотека пока пуста — начнём со сканирования устройства."
+            } else {
+                "Треков на устройстве: $localCount · всё ваше звучит здесь"
+            },
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+private fun greetingForNow(): String {
+    val hour = LocalTime.now().hour
+    return when (hour) {
+        in 5..11 -> "Доброе утро"
+        in 12..17 -> "Добрый день"
+        in 18..22 -> "Добрый вечер"
+        else -> "Доброй ночи"
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Карточки действий
+// ---------------------------------------------------------------------------
+
+/** Большая градиентная карточка первичного действия — сканирование фонотеки. */
+@Composable
+private fun ScanLibraryCard(scanning: Boolean, onScan: () -> Unit) {
+    val gradient = LocalSonoraColors.current.gradient
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(CardRadius))
+            .background(Brush.linearGradient(gradient))
+            .padding(20.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(44.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(Color.White.copy(alpha = 0.18f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.MusicNote,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(24.dp),
+            )
+        }
+        Spacer(Modifier.height(14.dp))
+        Text(
+            text = "Своя музыка — в один тап",
+            style = MaterialTheme.typography.titleLarge,
+            color = Color.White,
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = "Найдём аудиофайлы на устройстве: MP3, FLAC, Opus и другие форматы.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = Color.White.copy(alpha = 0.88f),
+        )
+        Spacer(Modifier.height(16.dp))
+        Button(
+            onClick = onScan,
+            enabled = !scanning,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Color.White,
+                contentColor = Color(0xFF1B1B1F),
+            ),
+        ) {
+            if (scanning) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(18.dp),
+                    strokeWidth = 2.dp,
+                    color = Color(0xFF1B1B1F),
+                )
+                Spacer(Modifier.width(8.dp))
+                Text("Сканируем…")
+            } else {
+                Text("Сканировать фонотеку")
+            }
+        }
+    }
+}
+
+/** Карточка встроенного веб-плеера YouTube Music. */
+@Composable
+private fun YouTubeWebCard(onOpen: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(CardRadius))
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .clickable(onClick = onOpen)
+            .padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(44.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(MaterialTheme.colorScheme.primaryContainer),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.PlayCircle,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text("YouTube Music · InnerTube", style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = "Поиск и воспроизведение без API-ключей: очередь, тексты и обложки прямо в приложении",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        Icon(
+            imageVector = Icons.Rounded.ChevronRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** Компактная карточка «Сейчас играет» с переходом в полный плеер. */
+@Composable
+private fun NowPlayingCard(track: Track, isPlaying: Boolean, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(CardRadius))
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .clickable(onClick = onClick)
+            .padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        CoverArt(
+            url = track.artworkUrl ?: track.artworkUri,
+            size = 56.dp,
+            cornerRadius = ArtworkRadius,
+        )
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = "Сейчас играет",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = track.title,
+                style = MaterialTheme.typography.titleMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = track.artist,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(22.dp),
+            )
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// «Моя волна»
+// ---------------------------------------------------------------------------
+
+@Composable
+private fun WaveCard(
+    state: WaveUiState,
+    onPlay: () -> Unit,
+    onEnqueue: () -> Unit,
+    onRefresh: () -> Unit,
+    onSource: (WaveSourceMode) -> Unit,
+    onMood: (WaveMood) -> Unit,
+    onSort: (WaveSort) -> Unit,
+    onTrackClick: (Track) -> Unit,
+    onLoadMore: () -> Unit,
+) {
+    var sortMenu by remember { mutableStateOf(false) }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(CardRadius))
+            .background(
+                Brush.linearGradient(
+                    listOf(
+                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.85f),
+                        MaterialTheme.colorScheme.surfaceContainerHigh,
+                    ),
+                ),
+            )
+            .padding(16.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(42.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.AutoAwesome,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text("Моя волна", style = MaterialTheme.typography.titleLarge)
+                Text(
+                    text = state.seedLabel.ifBlank { "Подборка под ваш вкус" },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (state.loading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    strokeWidth = 2.dp,
+                )
+            } else {
+                IconButton(onClick = onRefresh) {
+                    Icon(
+                        imageVector = Icons.Rounded.Refresh,
+                        contentDescription = "Обновить волну",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            WaveSourceMode.entries.forEach { mode ->
+                FilterChip(
+                    selected = state.filters.source == mode,
+                    onClick = { onSource(mode) },
+                    label = { Text(mode.label) },
+                )
+            }
+        }
+        Spacer(Modifier.height(4.dp))
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(WaveMood.entries) { mood ->
+                FilterChip(
+                    selected = state.filters.mood == mood,
+                    onClick = { onMood(mood) },
+                    label = { Text(mood.label) },
+                )
+            }
+        }
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box {
+                TextButton(
+                    onClick = { sortMenu = true },
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Sort,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = "Сортировка: ${state.sort.label}",
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                }
+                DropdownMenu(expanded = sortMenu, onDismissRequest = { sortMenu = false }) {
+                    WaveSort.entries.forEach { sort ->
+                        DropdownMenuItem(
+                            text = { Text(sort.label) },
+                            onClick = {
+                                sortMenu = false
+                                onSort(sort)
+                            },
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.weight(1f))
+            Text(
+                text = "${state.tracks.size} треков",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        val error = state.error
+        if (!error.isNullOrBlank() && state.tracks.isEmpty() && !state.loading) {
+            Text(
+                text = error,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(vertical = 4.dp),
+            )
+        }
+
+        if (state.tracks.isNotEmpty()) {
+            Spacer(Modifier.height(8.dp))
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(RailSpacing)) {
+                items(state.tracks, key = { "wave-${it.id}" }) { track ->
+                    TrackTile(track = track, onClick = { onTrackClick(track) })
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            OutlinedButton(
+                onClick = onLoadMore,
+                enabled = !state.loadingMore && !state.loading,
+            ) {
+                if (state.loadingMore) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Rounded.Add,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+                Spacer(Modifier.width(6.dp))
+                Text("Ещё рекомендации")
+            }
+            Spacer(Modifier.height(14.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Button(onClick = onPlay, modifier = Modifier.weight(1f)) {
+                    Icon(
+                        imageVector = Icons.Rounded.PlayArrow,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text("Играть волну")
+                }
+                OutlinedButton(onClick = onEnqueue) {
+                    Icon(
+                        imageVector = Icons.Rounded.QueueMusic,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text("В очередь")
+                }
+            }
+        } else if (!state.loading) {
+            Text(
+                text = "Добавьте треки в библиотеку или включите онлайн-источник.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(vertical = 6.dp),
+            )
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Плитки горизонтальных подборок
+// ---------------------------------------------------------------------------
+
+/**
+ * Карточка трека для подборок: 160dp, обложка 12dp, тональный фон без тени.
+ * Текст живёт на том же тональном контейнере, поэтому тёмная тема выглядит ровно.
+ */
+@Composable
+private fun TrackTile(track: Track, onClick: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .width(TileWidth)
+            .clip(RoundedCornerShape(CardRadius))
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .clickable(onClick = onClick)
+            .padding(8.dp),
+    ) {
+        CoverArtBox(
+            url = track.artworkUrl ?: track.artworkUri,
+            cornerRadius = ArtworkRadius,
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(1f),
+        )
+        Spacer(Modifier.height(10.dp))
+        Text(
+            text = track.title,
+            style = MaterialTheme.typography.titleMedium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(horizontal = 2.dp),
+        )
+        Spacer(Modifier.height(2.dp))
+        Text(
+            text = track.artist,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(horizontal = 2.dp),
+        )
+        Spacer(Modifier.height(6.dp))
+    }
+}
+
+/** Плитка плейлиста в том же ритме, что и карточки треков. */
+@Composable
+private fun PlaylistTile(playlist: Playlist, onClick: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .width(TileWidth)
+            .clip(RoundedCornerShape(CardRadius))
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .clickable(onClick = onClick)
+            .padding(8.dp),
+    ) {
+        CoverArtBox(
+            url = playlist.artworkUrl,
+            cornerRadius = ArtworkRadius,
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(1f),
+        )
+        Spacer(Modifier.height(10.dp))
+        Text(
+            text = playlist.name,
+            style = MaterialTheme.typography.titleMedium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(horizontal = 2.dp),
+        )
+        Spacer(Modifier.height(2.dp))
+        Text(
+            text = "${playlist.trackIds.size} трек(ов)",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(horizontal = 2.dp),
+        )
+        Spacer(Modifier.height(6.dp))
+    }
+}
+
+/** Плитка «создать плейлист» — тональная карточка с тонкой обводкой. */
+@Composable
+private fun CreatePlaylistTile(onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(TileWidth)
+            .clip(RoundedCornerShape(CardRadius))
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .border(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.outlineVariant,
+                shape = RoundedCornerShape(CardRadius),
+            )
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Box(
+                modifier = Modifier
+                    .size(46.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Add,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+            }
+            Spacer(Modifier.height(10.dp))
+            Text("Создать", style = MaterialTheme.typography.labelLarge)
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// WARP и импорт музыки на главном экране
+// ---------------------------------------------------------------------------
+
+/** Быстрое подключение WARP прямо с главного экрана. */
+@Composable
+private fun WarpHomeCard(
+    status: WarpStatus,
+    configsCount: Int,
+    externalVpn: Boolean,
+    error: String?,
+    onOpenSettings: () -> Unit,
+    onEnable: () -> Unit,
+    onDisable: () -> Unit,
+) {
+    val connected = status.state == WarpState.CONNECTED ||
+        status.state == WarpState.CONNECTING
+    val stateText = when {
+        configsCount == 0 -> "Конфигурация не импортирована"
+        externalVpn -> "Активен другой VPN — туннель не включён"
+        status.state == WarpState.CONNECTED -> "Подключён"
+        status.state == WarpState.CONNECTING -> "Подключение…"
+        status.state == WarpState.DISCONNECTING -> "Отключение…"
+        status.state == WarpState.ERROR -> "Ошибка подключения"
+        else -> "Выключен"
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(CardRadius))
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(42.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(
+                    if (connected) {
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
+                    } else {
+                        MaterialTheme.colorScheme.surfaceContainerHighest
+                    },
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.VpnKey,
+                contentDescription = null,
+                tint = if (connected) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text("WARP", style = MaterialTheme.typography.titleMedium)
+            Text(
+                text = stateText,
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (connected) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            error?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.error,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        if (configsCount == 0) {
+            TextButton(onClick = onOpenSettings) { Text("Настроить") }
+        } else if (externalVpn) {
+            TextButton(onClick = onOpenSettings) { Text("Подробнее") }
+        } else {
+            TextButton(onClick = if (connected) onDisable else onEnable) {
+                Text(if (connected) "Выключить" else "Подключить")
+            }
+        }
+    }
+}
+
+/** Импорт своей музыки файлами + короткая инструкция. */
+@Composable
+private fun ImportMusicCard(
+    importing: Boolean,
+    imported: Int,
+    failed: Int,
+    done: Boolean,
+    onPickFiles: () -> Unit,
+    onShowGuide: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(CardRadius))
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .padding(16.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(42.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.UploadFile,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text("Своя музыка файлами", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    text = "MP3, FLAC, M4A, OGG, OPUS — как «Local files» в Spotify",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        if (done) {
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = "Импортировано: $imported" +
+                    if (failed > 0) " · не удалось: $failed" else "",
+                style = MaterialTheme.typography.labelMedium,
+                color = if (imported > 0) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.error
+                },
+            )
+        }
+        Spacer(Modifier.height(10.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Button(
+                onClick = onPickFiles,
+                enabled = !importing,
+                modifier = Modifier.weight(1f),
+            ) {
+                if (importing) {
+                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                } else {
+                    Icon(
+                        imageVector = Icons.Rounded.UploadFile,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+                Spacer(Modifier.width(6.dp))
+                Text(if (importing) "Импорт…" else "Выбрать файлы")
+            }
+            OutlinedButton(onClick = onShowGuide) {
+                Icon(
+                    imageVector = Icons.Rounded.Info,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(Modifier.width(6.dp))
+                Text("Инструкция")
+            }
+        }
+    }
+}
+
+/** Инструкция по импорту: что подготовить и как назвать файлы. */
+@Composable
+private fun ImportGuideDialog(onDismiss: () -> Unit, onPickFiles: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Как импортировать свою музыку") },
+        text = {
+            Column {
+                Text("1. Подготовьте файлы", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    "Подойдут MP3, FLAC, M4A/AAC, OGG, OPUS, WAV. Файлы без DRM-защиты " +
+                        "(скачанные из стриминговых сервисов не подойдут).",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Spacer(Modifier.height(8.dp))
+                Text("2. Назовите и заполните теги", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    "Идеально: «Исполнитель - Название.mp3» и теги title/artist/album " +
+                        "через Mp3tag, foobar2000 или MusicBrainz Picard. Обложку можно " +
+                        "вложить в тег — приложение покажет её без интернета.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Spacer(Modifier.height(8.dp))
+                Text("3. Пример папки", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    "Sonora Music/\n" +
+                        "  Queen - Bohemian Rhapsody.mp3\n" +
+                        "  Michael Jackson - Billie Jean.flac\n" +
+                        "  Daft Punk - Get Lucky.m4a",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(8.dp))
+                Text("4. Импорт", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    "Нажмите «Выбрать файлы», отметьте одну или несколько песен. " +
+                        "Они скопируются в папку приложения, появятся в Медиатеке, " +
+                        "а обложки и тексты подтянутся из онлайн-каталогов.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onPickFiles) { Text("Выбрать файлы") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Закрыть") }
+        },
+    )
+}

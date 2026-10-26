@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Документация и сборка
+    url: https://github.com/
+    about: README, docs/SETUP.md, docs/ARCHITECTURE.md — начните отсюда
+  - name: Вопросы и обсуждения
+    url: https://github.com/
+    about: Задавайте вопросы в Discussions, а не в Issue

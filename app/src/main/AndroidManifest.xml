@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Локальная фонотека -->
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+
+    <!-- Приложения, которые мы умеем открывать по deep link -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
+        </intent>
+        <package android:name="com.spotify.music" />
+        <package android:name="com.google.android.apps.youtube.music" />
+        <package android:name="com.soundcloud.android" />
+        <package android:name="com.google.android.youtube" />
+    </queries>
+
+    <application
+        android:name=".SonoraApp"
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Sonora">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:theme="@style/Theme.Sonora"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!-- OAuth callback: app.sonora://oauth/... -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="sonora" android:host="oauth" />
+            </intent-filter>
+        </activity>
+
+        <service
+            android:name=".playback.PlaybackService"
+            android:exported="true"
+            android:foregroundServiceType="mediaPlayback">
+            <intent-filter>
+                <action android:name="androidx.media3.session.MediaSessionService" />
+            </intent-filter>
+        </service>
+
+        <!--
+            WARP: foreground-координатор встроенного per-app WireGuard-туннеля.
+            Сам VPN-интерфейс создаёт com.wireguard.android.backend.GoBackend$VpnService
+            из AAR-библиотеки WireGuard — его <service> и нативные .so приходят в итоговый
+            манифест/APK из зависимости автоматически, дублировать их вручную не нужно.
+            Тип specialUse выбран потому, что отдельного foregroundServiceType для VPN нет
+            (targetSdk 34 требует именно specialUse + FOREGROUND_SERVICE_SPECIAL_USE).
+        -->
+        <service
+            android:name=".net.warp.WarpVpnService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="per_app_wireguard_tunnel" />
+        </service>
+
+        <receiver
+            android:name=".widget.SonoraWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="app.sonora.widget.PLAY_PAUSE" />
+                <action android:name="app.sonora.widget.NEXT" />
+                <action android:name="app.sonora.widget.PREVIOUS" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/sonora_widget_info" />
+        </receiver>
+
+        <!-- Фиксированные виджеты: каждый со своей раскладкой и своим info-XML. -->
+        <receiver
+            android:name=".widget.SonoraWidget2x2Provider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="app.sonora.widget.PLAY_PAUSE" />
+                <action android:name="app.sonora.widget.NEXT" />
+                <action android:name="app.sonora.widget.PREVIOUS" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/sonora_widget_2x2" />
+        </receiver>
+
+        <receiver
+            android:name=".widget.SonoraWidget4x1Provider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="app.sonora.widget.PLAY_PAUSE" />
+                <action android:name="app.sonora.widget.NEXT" />
+                <action android:name="app.sonora.widget.PREVIOUS" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/sonora_widget_4x1" />
+        </receiver>
+
+        <receiver
+            android:name=".widget.SonoraWidget4x2Provider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="app.sonora.widget.PLAY_PAUSE" />
+                <action android:name="app.sonora.widget.NEXT" />
+                <action android:name="app.sonora.widget.PREVIOUS" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/sonora_widget_4x2" />
+        </receiver>
+
+        <receiver
+            android:name=".widget.SonoraWidget4x4Provider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="app.sonora.widget.PLAY_PAUSE" />
+                <action android:name="app.sonora.widget.NEXT" />
+                <action android:name="app.sonora.widget.PREVIOUS" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/sonora_widget_4x4" />
+        </receiver>
+
+    </application>
+
+</manifest>

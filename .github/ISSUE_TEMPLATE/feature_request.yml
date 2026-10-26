@@ -1,0 +1,45 @@
+name: Feature request
+description: Идея или улучшение
+title: "[feat]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Какую задачу решает
+      description: Опишите ситуацию, а не только готовое решение
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Предложение
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Альтернативы
+  - type: dropdown
+    id: area
+    attributes:
+      label: Область
+      options:
+        - Плеер / очередь
+        - Медиатека
+        - Виджет
+        - Тексты песен
+        - Google-аккаунт
+        - Импорт Takeout
+        - Веб-плеер YouTube Music
+        - Обзор
+        - Настройки / тема
+        - Документация / CI
+        - Другое
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Подтверждения
+      options:
+        - label: Я понимаю, что проект не реализует обход DRM/ToS
+          required: true

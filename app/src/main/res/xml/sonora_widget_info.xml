@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Описание провайдера виджета.
+
+    targetCellWidth / targetCellHeight (API 31) задают стартовый размер 4×1,
+    previewLayout (API 31) — превью в списке выбора виджетов, чтобы вместо
+    иконки приложения рисовалась настоящая раскладка. На старых версиях эти
+    атрибуты игнорируются, поэтому tools:targetApi подавляет предупреждение.
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:description="@string/widget_description"
+    android:initialLayout="@layout/widget_sonora"
+    android:minWidth="320dp"
+    android:minHeight="70dp"
+    android:minResizeWidth="110dp"
+    android:minResizeHeight="70dp"
+    android:maxResizeWidth="520dp"
+    android:maxResizeHeight="420dp"
+    android:previewLayout="@layout/widget_sonora"
+    android:resizeMode="horizontal|vertical"
+    android:targetCellWidth="4"
+    android:targetCellHeight="1"
+    android:updatePeriodMillis="0"
+    android:widgetCategory="home_screen"
+    tools:targetApi="s" />

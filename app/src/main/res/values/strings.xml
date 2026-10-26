@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Sonora</string>
+
+    <!-- Виджет рабочего стола (app.sonora.widget) -->
+    <string name="widget_description">Текущий трек и управление воспроизведением</string>
+    <string name="widget_description_2x2">Компактный плеер 2×2</string>
+    <string name="widget_description_4x1">Плеер 4×1</string>
+    <string name="widget_description_4x2">Плеер 4×2 с обложкой</string>
+    <string name="widget_description_4x4">Большой плеер 4×4</string>
+    <string name="widget_empty_subtitle">Нажмите, чтобы открыть</string>
+    <string name="widget_cover_desc">Обложка альбома</string>
+    <string name="widget_play">Воспроизвести</string>
+    <string name="widget_pause">Пауза</string>
+    <string name="widget_prev">Предыдущий трек</string>
+    <string name="widget_next">Следующий трек</string>
+</resources>

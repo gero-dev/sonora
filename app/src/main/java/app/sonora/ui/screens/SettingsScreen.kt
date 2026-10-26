@@ -1,0 +1,1031 @@
+package app.sonora.ui.screens
+
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredWidth
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Cloud
+import androidx.compose.material.icons.rounded.GraphicEq
+import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.LibraryMusic
+import androidx.compose.material.icons.rounded.Palette
+import androidx.compose.material.icons.rounded.Public
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.UploadFile
+import androidx.compose.material.icons.rounded.VpnKey
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import app.sonora.core.model.Source
+import app.sonora.core.settings.Accent
+import app.sonora.core.settings.AppSettings
+import app.sonora.core.settings.ThemeMode
+import app.sonora.net.warp.WarpState
+import app.sonora.ui.MainViewModel
+import app.sonora.ui.nav.Routes
+import app.sonora.ui.theme.paletteFor
+import java.util.Locale
+
+private val SPEED_PRESETS = listOf(0.75f, 1f, 1.25f, 1.5f, 2f)
+
+private const val LEGAL_TEXT =
+    "Sonora работает через официальные API сервисов и InnerTube — тот же открытый протокол " +
+        "YouTube Music, что использует Metrolist.\n\n" +
+        "• YouTube Music: поиск, плейлисты, очередь, тексты и аудиопоток идут через InnerTube " +
+        "без API-ключей. Можно войти в Google и скачать трек в приватную папку приложения " +
+        "для личного офлайна; файлы не публикуются.\n" +
+        "• Spotify: Web API отдаёт метаданные и 30-секундные превью. Полные треки " +
+        "воспроизводятся только в приложении Spotify — Sonora открывает их там.\n" +
+        "• SoundCloud: поиск и метаданные по официальному client_id, воспроизведение " +
+        "разрешённых треков и переход в приложение SoundCloud.\n" +
+        "• Обход DRM не поддерживается. Скачивание с YouTube нарушает условия сервиса — " +
+        "ответственность за использование лежит на пользователе.\n" +
+        "• Локальные файлы (свои записи, покупки с правом скачивания) проигрываются " +
+        "в приложении без ограничений."
+
+/**
+ * Настройки: оформление, аудио, библиотека, аккаунты и правовая информация.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) -> Unit) {
+    val settings by vm.settings.collectAsState()
+    val connections by vm.connections.collectAsState()
+    val scanning by vm.scanning.collectAsState()
+    val enriching by vm.enriching.collectAsState()
+    val enrichProgress by vm.enrichProgress.collectAsState()
+    val google by vm.googleAccount.collectAsState()
+
+    var legalExpanded by rememberSaveable { mutableStateOf(false) }
+    var showPlaylistImportHelp by rememberSaveable { mutableStateOf(false) }
+    var jamendoClientId by rememberSaveable(settings.jamendoClientId) {
+        mutableStateOf(settings.jamendoClientId)
+    }
+
+    val importLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri != null) vm.importFile(uri)
+    }
+    val takeout by vm.takeout.collectAsState()
+    val metadataCacheSize by vm.metadataCacheSize.collectAsState()
+    val warpStatus by vm.warpStatus.collectAsState()
+    val warpConfigs by vm.warpConfigs.collectAsState()
+    val warpAutoRotate by vm.warpAutoRotate.collectAsState()
+    val warpExternalVpn by vm.warpExternalVpn.collectAsState()
+    val warpImportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenMultipleDocuments(),
+    ) { uris ->
+        if (uris.isNotEmpty()) vm.importWarpConfigs(uris)
+    }
+    val vpnPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult(),
+    ) {
+        vm.startWarp()
+    }
+    LaunchedEffect(Unit) { vm.refreshWarp() }
+    val takeoutLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri != null) vm.importTakeout(uri)
+    }
+    val playlistFileLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri != null) vm.importPlaylistFile(uri)
+    }
+    val playlistImport by vm.playlistFileImport.collectAsState()
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(
+                start = 20.dp,
+                end = 20.dp,
+                top = padding.calculateTopPadding() + 8.dp,
+                bottom = padding.calculateBottomPadding() + 32.dp,
+            ),
+    ) {
+        Text("Настройки", style = MaterialTheme.typography.headlineLarge)
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = "Внешний вид, звук, фонотека и подключённые сервисы.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(18.dp))
+
+        // ---------- Оформление ----------
+        SettingsSection(title = "Оформление", icon = Icons.Rounded.Palette) {
+            SettingsLabel("Тема оформления")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ThemeMode.entries.forEach { mode ->
+                    FilterChip(
+                        selected = settings.themeMode == mode,
+                        onClick = { vm.setThemeMode(mode) },
+                        label = { Text(themeLabel(mode)) },
+                    )
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            SettingsLabel("Акцентный цвет · ${settings.accent.label}")
+            Row(
+                modifier = Modifier.padding(vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Accent.entries.forEach { accent ->
+                    AccentSwatch(
+                        accent = accent,
+                        selected = settings.accent == accent,
+                        onClick = { vm.setAccent(accent) },
+                    )
+                }
+            }
+            Spacer(Modifier.height(4.dp))
+            SwitchRow(
+                title = "Динамический цвет",
+                subtitle = "Android 12+: палитра обоев вместо акцентного цвета",
+                checked = settings.dynamicColor,
+                onCheckedChange = vm::setDynamicColor,
+            )
+        }
+
+        // ---------- Руководство ----------
+        SettingsSection(title = "Руководство", icon = Icons.Rounded.Info) {
+            ActionRow(
+                title = "Показать обучение заново",
+                subtitle = "Где какие кнопки: вкладки, плеер, жесты, виджеты",
+                onClick = { vm.replayOnboarding() },
+            )
+        }
+
+        // ---------- Аудио ----------
+        SettingsSection(title = "Аудио", icon = Icons.Rounded.GraphicEq) {
+            SwitchRow(
+                title = "Пропускать тишину",
+                subtitle = "Убирать длинные паузы в записях",
+                checked = settings.skipSilence,
+                onCheckedChange = vm::setSkipSilence,
+            )
+            SwitchRow(
+                title = "Бесшовное воспроизведение",
+                subtitle = "Без паузы между треками альбома",
+                checked = settings.gapless,
+                onCheckedChange = vm::setGapless,
+            )
+            SwitchRow(
+                title = "Эквалайзер",
+                subtitle = "5 полос, от −12 до +12 дБ",
+                checked = settings.eqEnabled,
+                onCheckedChange = vm::setEqEnabled,
+            )
+            if (settings.eqEnabled) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.Bottom,
+                ) {
+                    AppSettings.bandFrequencies.forEachIndexed { index, hz ->
+                        EqBand(
+                            hz = hz,
+                            value = settings.eqBands.getOrElse(index) { 0f },
+                            onValueChange = { gain -> vm.setEqBand(index, gain) },
+                        )
+                    }
+                }
+                TextButton(
+                    onClick = { vm.setEqBands(List(AppSettings.BANDS_COUNT) { 0f }) },
+                    modifier = Modifier.align(Alignment.End),
+                ) {
+                    Text("Сбросить эквалайзер")
+                }
+            }
+            Spacer(Modifier.height(6.dp))
+            SettingsLabel("Скорость воспроизведения")
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(SPEED_PRESETS.size) { index ->
+                    val speed = SPEED_PRESETS[index]
+                    FilterChip(
+                        selected = kotlin.math.abs(settings.playbackSpeed - speed) < 0.01f,
+                        onClick = { vm.setSpeedPreset(speed) },
+                        label = { Text(speedLabel(speed)) },
+                    )
+                }
+            }
+        }
+
+        // ---------- Библиотека ----------
+        SettingsSection(title = "Библиотека", icon = Icons.Rounded.LibraryMusic) {
+            SwitchRow(
+                title = "Сканировать при запуске",
+                subtitle = "Искать новые файлы при каждом открытии приложения",
+                checked = settings.scanOnStart,
+                onCheckedChange = vm::setScanOnStart,
+            )
+            Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                OutlinedButton(
+                    onClick = { vm.scanLibrary() },
+                    enabled = !scanning,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    if (scanning) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Rounded.Refresh,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+                    Spacer(Modifier.width(6.dp))
+                    Text("Пересканировать", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                OutlinedButton(
+                    onClick = { importLauncher.launch(arrayOf("audio/*")) },
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.UploadFile,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text("Импортировать", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            OutlinedButton(
+                onClick = { takeoutLauncher.launch(arrayOf("*/*")) },
+                enabled = !takeout.importing,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                if (takeout.importing) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Rounded.UploadFile,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = if (takeout.importing) {
+                        "Импорт Takeout…"
+                    } else {
+                        "Импорт библиотеки из Google Takeout"
+                    },
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            val takeoutSummary = buildList {
+                if (takeout.importedTracks > 0) add("Треков: ${takeout.importedTracks}")
+                if (takeout.importedPlaylists > 0) add("Плейлистов: ${takeout.importedPlaylists}")
+                takeout.error?.let { add(it) }
+                if (takeout.warnings.isNotEmpty()) add(takeout.warnings.first())
+            }.joinToString(" · ")
+            if (takeoutSummary.isNotBlank()) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = takeoutSummary,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (takeout.error != null) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                )
+            }
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = "Кэш метаданных: $metadataCacheSize записей — хранятся на устройстве постоянно",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            TextButton(
+                onClick = { vm.clearMetadataCache() },
+                enabled = metadataCacheSize > 0,
+            ) {
+                Text("Очистить кэш метаданных")
+            }
+            Spacer(Modifier.height(4.dp))
+            SwitchRow(
+                title = "Искать метаданные и тексты онлайн",
+                subtitle = "MusicBrainz, Cover Art Archive, iTunes, Deezer, TheAudioDB, " +
+                    "Wikipedia и InnerTube: альбом, год, обложка, фото и биография автора, текст",
+                checked = settings.enrichMetadataOnScan,
+                onCheckedChange = vm::setEnrichOnScan,
+            )
+            SwitchRow(
+                title = "Автоматическая очередь",
+                subtitle = "При запуске трека добавлять похожие: альбом → исполнитель → фонотека",
+                checked = settings.autoQueue,
+                onCheckedChange = vm::setAutoQueue,
+            )
+            SwitchRow(
+                title = "Бесконечная очередь",
+                subtitle = "Когда очередь заканчивается — подкидывать случайные треки",
+                checked = settings.infiniteQueue,
+                onCheckedChange = vm::setInfiniteQueue,
+            )
+            Spacer(Modifier.height(8.dp))
+            val progress = enrichProgress
+            if (enriching) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        text = "Обогащение… ${progress?.first ?: 0} / ${progress?.second ?: 0}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            } else {
+                OutlinedButton(
+                    onClick = { vm.enrichLibrary() },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.AutoAwesome,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = "Обогатить метаданные сейчас",
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            if (!enriching && progress != null) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = if (progress.second == 0) {
+                        "Все треки уже заполнены"
+                    } else {
+                        "Готово: ${progress.first} из ${progress.second}"
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+
+        // ---------- Импорт из других платформ ----------
+        SettingsSection(title = "Импорт из других платформ", icon = Icons.Rounded.UploadFile) {
+            Text(
+                text = "Перенесите плейлист из Spotify, Apple Music, YouTube Music или " +
+                    "любого сервиса, который умеет экспортировать список треков.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(
+                onClick = { playlistFileLauncher.launch(arrayOf("*/*")) },
+                enabled = !playlistImport.importing,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                if (playlistImport.importing) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Rounded.UploadFile,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = if (playlistImport.importing) {
+                        "Импорт: ${playlistImport.processed} из ${playlistImport.total}"
+                    } else {
+                        "Импортировать плейлист из файла"
+                    },
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            TextButton(onClick = { showPlaylistImportHelp = true }) {
+                Text("Как это работает")
+            }
+            val summary = when {
+                playlistImport.error != null -> playlistImport.error
+                playlistImport.done && playlistImport.matched > 0 -> buildString {
+                    append("Готово: ${playlistImport.matched} треков")
+                    playlistImport.playlistName?.let { append(" → «$it»") }
+                    if (playlistImport.notFound > 0) {
+                        append(" · не найдено: ${playlistImport.notFound}")
+                    }
+                }
+
+                playlistImport.done -> "Не удалось найти треки"
+                playlistImport.importing -> "Ищем совпадения в библиотеке и YouTube…"
+                else -> null
+            }
+            if (!summary.isNullOrBlank()) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = summary,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (playlistImport.error != null) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                )
+            }
+            if (playlistImport.warnings.isNotEmpty()) {
+                Text(
+                    text = playlistImport.warnings.first(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (playlistImport.done) {
+                TextButton(onClick = vm::dismissPlaylistImport) {
+                    Text("Скрыть")
+                }
+            }
+
+            if (showPlaylistImportHelp) {
+                AlertDialog(
+                    onDismissRequest = { showPlaylistImportHelp = false },
+                    title = { Text("Импорт из других платформ") },
+                    text = {
+                        Text(
+                            "1. Экспортируйте плейлист в файл:\n" +
+                                "• Spotify — Exportify или CSV-экспорт;\n" +
+                                "• Apple Music — CSV/JSON-экспорт;\n" +
+                                "• YouTube Music — CSV или Google Takeout;\n" +
+                                "• вручную — TXT/M3U, по строке «Артист — Название».\n\n" +
+                                "2. Нажмите «Импортировать плейлист из файла» и выберите файл.\n" +
+                                "3. Sonora найдёт совпадения в вашей библиотеке и YouTube Music " +
+                                "и создаст плейлист «Импорт: имя файла».\n\n" +
+                                "Поддерживаются CSV/TSV, JSON, M3U/M3U8 и TXT. " +
+                                "За один раз обрабатывается до 150 треков; поиск может занять время.",
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { showPlaylistImportHelp = false }) {
+                            Text("Понятно")
+                        }
+                    },
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                )
+            }
+        }
+
+        // ---------- Аккаунты ----------
+        SettingsSection(title = "Аккаунты и сервисы", icon = Icons.Rounded.Cloud) {
+            val connectedCount = connections.count { it.connected }
+            val servicesCount = Source.entries.count { it.isRemote }
+            ClickRow(
+                title = "Подключённые сервисы",
+                subtitle = "Подключено: $connectedCount из $servicesCount",
+                onClick = { navigate(Routes.CONNECTIONS) },
+            )
+            ClickRow(
+                title = "InnerTube и сервисы",
+                subtitle = "YouTube Music без ключей · Spotify · SoundCloud",
+                onClick = { navigate(Routes.CONNECTIONS) },
+            )
+            ClickRow(
+                title = "Google-аккаунт",
+                subtitle = if (google.connected) {
+                    "Подключён: ${google.accountName ?: "Google-аккаунт"}"
+                } else {
+                    "Вход для плейлистов и «Понравившихся» YouTube Music"
+                },
+                onClick = { navigate(Routes.CONNECTIONS) },
+            )
+            ClickRow(
+                title = "YouTube Music",
+                subtitle = "Веб-плеер music.youtube.com: вход и личная библиотека",
+                onClick = { navigate(Routes.YOUTUBE_WEB) },
+            )
+        }
+
+        // ---------- Туннель WARP ----------
+        SettingsSection(title = "Туннель WARP (только Sonora)", icon = Icons.Rounded.VpnKey) {
+            Text(
+                text = "Необязательный WireGuard-туннель Cloudflare WARP: через него идёт " +
+                    "только трафик Sonora, остальные приложения ходят напрямую. Если один " +
+                    "конфиг не подключается, приложение само пробует следующий.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(8.dp))
+            InfoRow(
+                title = "Состояние",
+                value = when (warpStatus.state) {
+                    WarpState.NOT_CONFIGURED -> "Конфигурация не импортирована"
+                    WarpState.DISCONNECTED -> "Выключен"
+                    WarpState.CONNECTING -> "Подключение…"
+                    WarpState.CONNECTED -> "Подключён"
+                    WarpState.DISCONNECTING -> "Отключение…"
+                    WarpState.ERROR -> "Ошибка"
+                },
+            )
+            if (warpStatus.totalAttempts > 0) {
+                InfoRow(
+                    title = "Попытка",
+                    value = "${warpStatus.attempt} из ${warpStatus.totalAttempts}" +
+                        if (warpStatus.triedConfigIds.isNotEmpty()) {
+                            " · использовано ${warpStatus.triedConfigIds.size}"
+                        } else {
+                            ""
+                        },
+                )
+            }
+            warpStatus.endpoint?.let { InfoRow(title = "Сервер", value = it) }
+            if (warpExternalVpn) {
+                Text(
+                    text = "На устройстве уже активен другой VPN/WARP — туннель Sonora " +
+                        "не включён, чтобы не мешать.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+            vm.warpError.collectAsState().value?.let { message ->
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+            warpStatus.error?.let { message ->
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+            Spacer(Modifier.height(6.dp))
+            Button(
+                onClick = { warpImportLauncher.launch(arrayOf("*/*")) },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("Импортировать .conf (можно несколько)")
+            }
+            if (warpConfigs.isNotEmpty()) {
+                Spacer(Modifier.height(8.dp))
+                SettingsLabel("Конфигурации · выбрана одна")
+                warpConfigs.forEach { entry ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(MaterialTheme.shapes.medium)
+                            .clickable { vm.selectWarpConfig(entry.id) }
+                            .padding(vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RadioButton(
+                            selected = entry.selected,
+                            onClick = { vm.selectWarpConfig(entry.id) },
+                        )
+                        Column(Modifier.weight(1f)) {
+                            Text(entry.name, style = MaterialTheme.typography.titleSmall)
+                            Text(
+                                text = entry.endpoint ?: "endpoint неизвестен",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        IconButton(onClick = { vm.removeWarpConfig(entry.id) }) {
+                            Icon(
+                                imageVector = Icons.Rounded.Delete,
+                                contentDescription = "Удалить конфигурацию",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.height(4.dp))
+                val running = warpStatus.state == WarpState.CONNECTED ||
+                    warpStatus.state == WarpState.CONNECTING
+                SwitchRow(
+                    title = "Включить туннель",
+                    subtitle = "Только трафик приложения Sonora",
+                    checked = running,
+                    onCheckedChange = { enable ->
+                        if (enable) {
+                            if (warpExternalVpn) {
+                                vm.startWarp()
+                            } else {
+                                val permission = vm.warpVpnPermissionIntent()
+                                if (permission != null) {
+                                    vpnPermissionLauncher.launch(permission)
+                                } else {
+                                    vm.startWarp()
+                                }
+                            }
+                        } else {
+                            vm.stopWarp()
+                        }
+                    },
+                )
+                SwitchRow(
+                    title = "Автоматически перебирать конфиги",
+                    subtitle = "Если конфиг не поднялся за 12 секунд — пробовать следующий",
+                    checked = warpAutoRotate,
+                    onCheckedChange = { vm.setWarpAutoRotate(it) },
+                )
+                SwitchRow(
+                    title = "Подключать при запуске",
+                    subtitle = "Если разрешение VPN уже выдано и чужой VPN не активен",
+                    checked = settings.warpAutoConnect,
+                    onCheckedChange = { vm.setWarpAutoConnect(it) },
+                )
+                TextButton(onClick = { vm.clearWarpConfig() }) {
+                    Text("Удалить все конфигурации")
+                }
+            }
+        }
+
+        // ---------- Открытые каталоги ----------
+        SettingsSection(title = "Открытые каталоги", icon = Icons.Rounded.Public) {
+            Text(
+                text = "Internet Archive работает без ключа. Для Jamendo нужен бесплатный client_id.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(10.dp))
+            OutlinedTextField(
+                value = jamendoClientId,
+                onValueChange = { jamendoClientId = it },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                label = { Text("Jamendo client_id") },
+                shape = RoundedCornerShape(16.dp),
+                trailingIcon = {
+                    TextButton(onClick = { vm.setJamendoClientId(jamendoClientId) }) {
+                        Text("Сохранить")
+                    }
+                },
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = "Бесплатный ключ: devportal.jamendo.com. Каталог Creative Commons.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        // ---------- Правовая информация ----------
+        SettingsSection(title = "Правовая информация", icon = Icons.Rounded.Info) {
+            ClickRow(
+                title = "Как Sonora работает с сервисами",
+                subtitle = if (legalExpanded) "Свернуть" else "Показать подробности",
+                onClick = { legalExpanded = !legalExpanded },
+            )
+            if (legalExpanded) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = LEGAL_TEXT,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+
+        // ---------- О приложении ----------
+        SettingsSection(title = "О приложении", icon = Icons.Rounded.Info) {
+            InfoRow(title = "Версия", value = "0.9.4")
+            InfoRow(title = "Стек", value = "Kotlin · Compose · Media3")
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = "Sonora — открытый клиент для своей музыки: локальная фонотека, " +
+                    "плейлисты и официальные API сервисов.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+/** Карточка раздела с заголовком и иконкой. */
+@Composable
+private fun SettingsSection(
+    title: String,
+    icon: ImageVector,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Column(Modifier.fillMaxWidth().padding(bottom = 14.dp)) {
+        Row(
+            modifier = Modifier.padding(start = 6.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(title, style = MaterialTheme.typography.titleLarge)
+        }
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(24.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                .padding(16.dp),
+            content = content,
+        )
+    }
+}
+
+/** Мелкий заголовок внутри раздела. */
+@Composable
+private fun SettingsLabel(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(bottom = 6.dp),
+    )
+}
+
+/** Строка с переключателем. */
+@Composable
+private fun SwitchRow(
+    title: String,
+    subtitle: String?,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(
+            Modifier
+                .weight(1f)
+                .padding(end = 12.dp),
+        ) {
+            Text(title, style = MaterialTheme.typography.titleMedium)
+            if (subtitle != null) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
+    }
+}
+
+/** Строка-переход. */
+@Composable
+private fun ClickRow(title: String, subtitle: String?, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .clickable(onClick = onClick)
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleMedium)
+            if (subtitle != null) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        Icon(
+            imageVector = Icons.Rounded.ChevronRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** Строка «параметр — значение». */
+@Composable
+private fun InfoRow(title: String, value: String) {    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(title, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** Строка-действие: заголовок, подпись и стрелка. */
+@Composable
+private fun ActionRow(title: String, subtitle: String?, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.medium)
+            .clickable(onClick = onClick)
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(
+            Modifier
+                .weight(1f)
+                .padding(end = 12.dp),
+        ) {
+            Text(title, style = MaterialTheme.typography.titleMedium)
+            if (subtitle != null) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        Icon(
+            imageVector = Icons.Rounded.ChevronRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** Кружок акцентного цвета. */
+@Composable
+private fun AccentSwatch(accent: Accent, selected: Boolean, onClick: () -> Unit) {
+    val palette = paletteFor(accent)
+    val selectionBorder = if (selected) {
+        Modifier.border(2.dp, MaterialTheme.colorScheme.onSurface, CircleShape)
+    } else {
+        Modifier
+    }
+    Box(
+        modifier = Modifier
+            .size(36.dp)
+            .clip(CircleShape)
+            .background(Brush.linearGradient(listOf(palette.gradientStart, palette.gradientEnd)))
+            .then(selectionBorder)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (selected) {
+            Icon(
+                imageVector = Icons.Rounded.Check,
+                contentDescription = "Выбрано",
+                tint = Color.White,
+                modifier = Modifier.size(18.dp),
+            )
+        }
+    }
+}
+
+/** Одна полоса эквалайзера: значение, вертикальный слайдер, частота. */
+@Composable
+private fun EqBand(hz: Int, value: Float, onValueChange: (Float) -> Unit) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            text = formatDb(value),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        VerticalFader(value = value, onValueChange = onValueChange)
+        Text(
+            text = formatHz(hz),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/**
+ * Вертикальный слайдер: обычный Slider поворачиваем на −90°.
+ * requiredWidth игнорирует узкую рамку контейнера, иначе слайдер сожмётся.
+ */
+@Composable
+private fun VerticalFader(value: Float, onValueChange: (Float) -> Unit) {
+    Box(
+        modifier = Modifier
+            .width(44.dp)
+            .height(150.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Slider(
+            value = value,
+            onValueChange = onValueChange,
+            valueRange = -12f..12f,
+            modifier = Modifier
+                .requiredWidth(150.dp)
+                .rotate(-90f),
+        )
+    }
+}
+
+private fun themeLabel(mode: ThemeMode): String = when (mode) {
+    ThemeMode.SYSTEM -> "Системная"
+    ThemeMode.DARK -> "Тёмная"
+    ThemeMode.LIGHT -> "Светлая"
+}
+
+private fun speedLabel(speed: Float): String = when (speed) {
+    0.75f -> "0.75×"
+    1f -> "1×"
+    1.25f -> "1.25×"
+    1.5f -> "1.5×"
+    else -> "2×"
+}
+
+private fun formatDb(value: Float): String = String.format(Locale.US, "%+.1f", value)
+
+private fun formatHz(hz: Int): String = if (hz >= 1000) {
+    String.format(Locale.US, "%.1fк", hz / 1000f).replace(".0к", "к")
+} else {
+    hz.toString()
+}
