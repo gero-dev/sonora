@@ -74,6 +74,7 @@ import app.sonora.core.model.Artist
 import app.sonora.core.model.Playlist
 import app.sonora.core.model.Source
 import app.sonora.core.model.Track
+import app.sonora.data.download.TrackSaveState
 import app.sonora.playback.PlayerUiState
 import app.sonora.ui.MainViewModel
 import app.sonora.ui.components.CoverArt
@@ -88,7 +89,7 @@ import app.sonora.ui.nav.Routes
 import kotlin.math.roundToInt
 
 private val LIBRARY_TABS =
-    listOf("Треки", "Альбомы", "Исполнители", "Плейлисты", "Избранное", "YouTube")
+    listOf("Треки", "Альбомы", "Артисты", "Плейлисты", "Избранное", "YouTube")
 
 /**
  * Медиатека: треки, альбомы, исполнители, плейлисты и избранное.
@@ -105,23 +106,30 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
 
     var tabIndex by rememberSaveable { mutableStateOf(0) }
     var sortByArtist by rememberSaveable { mutableStateOf(false) }
+    var onlySaved by rememberSaveable { mutableStateOf(false) }
     var showCreateDialog by remember { mutableStateOf(false) }
     var showYouTubeImport by remember { mutableStateOf(false) }
     var actionTrack by remember { mutableStateOf<Track?>(null) }
     var playlistForNewTrack by remember { mutableStateOf<Track?>(null) }
 
     val localTracks = remember(tracks) { tracks.filter { it.source == Source.LOCAL } }
-    val sortedTracks = remember(localTracks, sortByArtist) {
+    val savedFromStreaming = remember(localTracks) { localTracks.count { it.savedFromStreaming } }
+    val sortedTracks = remember(localTracks, sortByArtist, onlySaved) {
+        val filtered = if (onlySaved) localTracks.filter { it.savedFromStreaming } else localTracks
         if (sortByArtist) {
-            localTracks.sortedBy { it.artist.lowercase() }
+            filtered.sortedBy { it.artist.lowercase() }
         } else {
-            localTracks.sortedBy { it.title.lowercase() }
+            filtered.sortedBy { it.title.lowercase() }
         }
     }
     val albums = remember(localTracks) { vm.albums() }
     val artists = remember(localTracks) { vm.artists() }
     val favoriteTracks = remember(tracks, favorites) { tracks.filter { it.id in favorites } }
-    val importedTracks = remember(tracks) { tracks.filter { it.source == Source.YOUTUBE } }
+    val importedTracks = remember(tracks) {
+        vm.withoutSavedCopies(
+            tracks.filter { it.source == Source.YOUTUBE && !it.isVideoContent },
+        )
+    }
     val bottomPadding = padding.calculateBottomPadding()
 
     Box(Modifier.fillMaxSize()) {
@@ -139,7 +147,12 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
                 Column(Modifier.weight(1f)) {
                     Text("Медиатека", style = MaterialTheme.typography.headlineLarge)
                     Text(
-                        text = "Треков на устройстве: ${localTracks.size}",
+                        text = buildString {
+                            append("На устройстве: ${localTracks.size}")
+                            if (savedFromStreaming > 0) {
+                                append(" · сохранено из стриминга: $savedFromStreaming")
+                            }
+                        },
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -157,8 +170,10 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
                     favorites = favorites,
                     player = player,
                     sortByArtist = sortByArtist,
+                    onlySaved = onlySaved,
                     scanning = scanning,
                     onToggleSort = { sortByArtist = !sortByArtist },
+                    onToggleSaved = { onlySaved = !onlySaved },
                     onScan = { vm.scanLibrary() },
                     onClick = { vm.playOrOpen(it) },
                     onLongClick = { actionTrack = it },
@@ -183,7 +198,7 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
                     onImport = { navigate(Routes.SETTINGS) },
                     onImportLink = { showYouTubeImport = true },
                     importError = vm.playlistImportError.collectAsState().value,
-                    downloadStatus = vm.youtubeDownloads.collectAsState().value,
+                    saveStates = vm.saveStates.collectAsState().value,
                     bottomPadding = bottomPadding,
                 )
                 else -> FavoritesTab(
@@ -237,7 +252,7 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
                 } else {
                     null
                 },
-                downloadLabel = "Скачать",
+                downloadLabel = "Сохранить на устройство",
             )
         }
 
@@ -281,8 +296,10 @@ private fun TracksTab(
     favorites: Set<String>,
     player: PlayerUiState,
     sortByArtist: Boolean,
+    onlySaved: Boolean,
     scanning: Boolean,
     onToggleSort: () -> Unit,
+    onToggleSaved: () -> Unit,
     onScan: () -> Unit,
     onClick: (Track) -> Unit,
     onLongClick: (Track) -> Unit,
@@ -312,6 +329,21 @@ private fun TracksTab(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.weight(1f),
                 )
+                IconButton(onClick = onToggleSaved) {
+                    Icon(
+                        imageVector = Icons.Rounded.DownloadDone,
+                        contentDescription = if (onlySaved) {
+                            "Показать все треки"
+                        } else {
+                            "Только сохранённые из стриминга"
+                        },
+                        tint = if (onlySaved) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                    )
+                }
                 FilterChip(
                     selected = sortByArtist,
                     onClick = onToggleSort,
@@ -337,8 +369,13 @@ private fun TracksTab(
             item {
                 EmptyState(
                     icon = Icons.Rounded.LibraryMusic,
-                    title = "Треков нет",
-                    subtitle = "Нажмите «Сканировать» — найдём аудиофайлы на устройстве.",
+                    title = if (onlySaved) "Нет сохранённых треков" else "Треков нет",
+                    subtitle = if (onlySaved) {
+                        "Нажмите кнопку загрузки у онлайн-трека — он сохранится сюда, " +
+                            "рядом с музыкой на устройстве."
+                    } else {
+                        "Нажмите «Сканировать» — найдём аудиофайлы на устройстве."
+                    },
                 )
             }
         } else {
@@ -640,7 +677,7 @@ private fun YouTubeTab(
     onImport: () -> Unit,
     onImportLink: () -> Unit,
     importError: String?,
-    downloadStatus: Map<String, String>,
+    saveStates: Map<String, TrackSaveState>,
     bottomPadding: Dp,
 ) {
     LazyColumn(
@@ -703,29 +740,7 @@ private fun YouTubeTab(
                     onClick = { onClick(track) },
                     onLongClick = { onLongClick(track) },
                     onFavorite = { onFavorite(track) },
-                    trailing = {
-                        when (val status = downloadStatus[track.id]) {
-                            null -> Unit
-                            "Скачивание" -> CircularProgressIndicator(
-                                modifier = Modifier.size(18.dp),
-                                strokeWidth = 2.dp,
-                            )
-
-                            "Готово" -> Icon(
-                                imageVector = Icons.Rounded.DownloadDone,
-                                contentDescription = "Скачано",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(18.dp),
-                            )
-
-                            else -> Text(
-                                text = status,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.error,
-                                maxLines = 1,
-                            )
-                        }
-                    },
+                    saveState = saveStates[track.id],
                 )
             }
         }
@@ -795,7 +810,7 @@ private fun LibraryTabBar(
                                 .height(TabHeight)
                                 .clip(RoundedCornerShape(12.dp))
                                 .clickable { onSelect(index) }
-                                .padding(horizontal = 14.dp),
+                                .padding(horizontal = 11.dp),
                             contentAlignment = Alignment.Center,
                         ) {
                             Text(

@@ -143,8 +143,10 @@ fun AlbumDetailScreen(
     val player by vm.player.collectAsState()
 
     val actions = remember { DetailActions() }
-    val albumTracks = remember(tracks, albumName, artist) {
-        tracks.filter { it.album == albumName && ArtistNames.matches(it.artist, artist) }
+    // Онлайн-версия сохранённого трека не должна дублировать локальную копию.
+    val visibleTracks = remember(tracks) { vm.withoutSavedCopies(tracks) }
+    val albumTracks = remember(visibleTracks, albumName, artist) {
+        visibleTracks.filter { it.album == albumName && ArtistNames.matches(it.artist, artist) }
     }
     val artwork = remember(albumTracks) {
         albumTracks.firstOrNull { !it.artworkUrl.isNullOrBlank() }?.artworkUrl
@@ -194,8 +196,9 @@ fun ArtistDetailScreen(vm: MainViewModel, artistName: String, navigate: (String)
     val player by vm.player.collectAsState()
 
     val actions = remember { DetailActions() }
-    val artistTracks = remember(tracks, artistName) {
-        tracks.filter { ArtistNames.matches(it.artist, artistName) }
+    val visibleTracks = remember(tracks) { vm.withoutSavedCopies(tracks) }
+    val artistTracks = remember(visibleTracks, artistName) {
+        visibleTracks.filter { ArtistNames.matches(it.artist, artistName) }
     }
     val artwork = remember(artistTracks) {
         artistTracks.firstNotNullOfOrNull { it.extra["artistImageUri"]?.takeIf(String::isNotBlank) }
@@ -309,7 +312,7 @@ private fun DetailActionHost(
             } else {
                 null
             },
-            downloadLabel = "Скачать",
+            downloadLabel = "Сохранить на устройство",
         )
     }
     actions.createFor?.let { track ->

@@ -1,8 +1,10 @@
 package app.sonora.ui
 
 import android.content.Intent
+import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.util.Log
+import android.widget.Toast
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -11,24 +13,39 @@ import app.sonora.core.model.ConnectionState
 import app.sonora.core.model.Playlist
 import app.sonora.core.model.Source
 import app.sonora.core.model.Track
+import app.sonora.core.model.TrackMetadata
 import app.sonora.core.settings.Accent
 import app.sonora.core.settings.AppSettings
+import app.sonora.core.settings.PlaybackMode
 import app.sonora.core.settings.ThemeMode
+import app.sonora.core.settings.WaveSettings
 import app.sonora.core.util.AppLinks
+import app.sonora.data.download.SaveStatus
+import app.sonora.data.download.TrackSaveState
 import app.sonora.data.metadata.ArtistNames
+import app.sonora.data.metadata.MetadataFileEntry
+import app.sonora.data.metadata.MetadataFiles
+import app.sonora.data.library.LibraryRepository
 import app.sonora.data.remote.youtube.innertube.StreamInfo
+import app.sonora.data.wave.WaveEngine
+import app.sonora.data.wave.WaveHistoryEntry
 import app.sonora.net.warp.WarpConfigEntry
 import app.sonora.net.warp.WarpConfigSummary
+import app.sonora.net.warp.WarpState
 import app.sonora.net.warp.WarpStatus
 import app.sonora.data.import.ImportedTrackEntry
 import app.sonora.playback.PlayerUiState
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.random.Random
 
 data class SearchUiState(
@@ -75,6 +92,26 @@ data class FileImportUiState(
     val done: Boolean = false,
 )
 
+/** Прогресс поиска обложек для локальных треков, у которых их нет. */
+data class CoverSearchUiState(
+    val searching: Boolean = false,
+    val total: Int = 0,
+    val processed: Int = 0,
+    val found: Int = 0,
+    val failed: Int = 0,
+    val message: String? = null,
+)
+
+/** Результат импорта метаданных («телеметрии») из выбранных файлов. */
+data class MetadataImportUiState(
+    val importing: Boolean = false,
+    val files: Int = 0,
+    val matched: Int = 0,
+    val updated: Int = 0,
+    val failed: Int = 0,
+    val message: String? = null,
+)
+
 /** Прогресс/результат импорта плейлиста из CSV/JSON/M3U/TXT. */
 data class PlaylistImportUiState(
     val importing: Boolean = false,
@@ -105,12 +142,16 @@ private const val WAVE_LOAD_MORE_LIMIT = 20
 /** Максимум треков за один импорт списка: каждый неизвестный ищется в InnerTube. */
 private const val MAX_PLAYLIST_IMPORT = 150
 
-// «Моя волна» — только музыка: границы длительности и скобочные пометки.
-private const val WAVE_MIN_TRACK_MS = 45_000L
-private const val WAVE_MAX_TRACK_MS = 12 * 60_000L
-private const val WAVE_MIN_LOCAL_TRACK_MS = 20_000L
-private val PARENS_REGEX_WAVE = Regex("""[\(\[][^\)\]]*[\)\]]""")
-private val WHITESPACE_REGEX_WAVE = Regex("""\s+""")
+/** Через сколько секунд прослушивания трек считается «дослушанным» для истории. */
+private const val HISTORY_MIN_LISTEN_MS = 20_000L
+/** Максимальная прибавка к прослушанному за один тик: перемотку не учитываем. */
+private const val MAX_HISTORY_TICK_MS = 2_000L
+/** Сколько треков проверять за один запуск «Найти пропущенные обложки». */
+private const val MAX_COVER_SEARCH = 40
+
+private val MATCH_PARENS_REGEX = Regex("""[\(\[][^\)\]]*[\)\]]""")
+private val MATCH_FEAT_REGEX = Regex("""\b(feat\.?|ft\.?|featuring)\b.*$""")
+private val MATCH_WHITESPACE_REGEX = Regex("""\s+""")
 
 /**
  * Единая ViewModel приложения. Экраны получают от неё состояние и действия,
@@ -141,6 +182,7 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
     init {
         viewModelScope.launch {
             graph.library.initialize()
+            repairSavedTrackTitles()
             // Миграция: старая версия могла пометить треки «проверенными» после сетевого
             // сбоя, и метаданные больше не запрашивались. Один раз сбрасываем отметки.
             if (graph.settings.current.metadataSchemaVersion < METADATA_SCHEMA_VERSION) {
@@ -150,6 +192,8 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
             refreshConnections()
             refreshGoogleAccount()
             refreshMetadataCacheStats()
+            // История прослушиваний нужна и «Моей волне», и экрану настроек.
+            graph.playHistory.load()
             // Автопоиск метаданных: если включён, обогащаем библиотеку сразу после старта.
             if (graph.settings.current.enrichMetadataOnScan &&
                 graph.library.metadataCandidates().isNotEmpty()
@@ -169,6 +213,8 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
         }
         observeInfiniteQueue()
         observeCurrentYouTubeTrack()
+        observePlaybackHistory()
+        observeWarpKeepAlive()
         // Страховка для кнопки «вперёд»: если очередь кончилась, PlaybackController
         // сам попросит новую пачку и переключит трек (только при включённой бесконечной очереди).
         graph.playback.queueExtender = {
@@ -210,10 +256,133 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
         }
     }
 
+    /**
+     * История прослушиваний для «Моей волны». Трек считается дослушанным, если
+     * звучал ≥20 секунд или половину длительности; иначе это пропуск — он снижает
+     * вес артиста в рекомендациях.
+     */
+    private fun observePlaybackHistory() {
+        viewModelScope.launch {
+            var lastTrack: Track? = null
+            var listenedMs = 0L
+            var lastPositionMs = 0L
+            graph.playback.state.collect { state ->
+                val track = state.current
+                if (track?.id != lastTrack?.id) {
+                    val previous = lastTrack
+                    if (previous != null && listenedMs > 0L &&
+                        graph.settings.current.saveHistory
+                    ) {
+                        val completed = listenedMs >= maxOf(
+                            HISTORY_MIN_LISTEN_MS,
+                            (previous.durationMs * 0.5).toLong(),
+                        )
+                        val duration = previous.durationMs
+                            .takeIf { it > 0L }
+                            ?: state.durationMs
+                        graph.playHistory.record(
+                            track = previous,
+                            completed = completed,
+                            listenedMs = listenedMs,
+                            durationMs = duration,
+                        )
+                    }
+                    lastTrack = track
+                    listenedMs = 0L
+                    lastPositionMs = state.positionMs
+                    // Текущий трек появляется в истории сразу, не дожидаясь
+                    // переключения: так список «Недавние» ведёт себя как Spotify.
+                    if (track != null && graph.settings.current.saveHistory &&
+                        graph.playHistory.entries.value.lastOrNull()?.trackId != track.id
+                    ) {
+                        graph.playHistory.record(track, completed = false, listenedMs = 0L)
+                    }
+                } else if (track != null) {
+                    val position = state.positionMs
+                    if (state.isPlaying && position > lastPositionMs) {
+                        // Перемотку вперёд не считаем прослушиванием: берём не больше 2 секунд за тик.
+                        listenedMs += minOf(position - lastPositionMs, MAX_HISTORY_TICK_MS)
+                    }
+                    lastPositionMs = position
+                }
+            }
+        }
+    }
+
+    // ---------- Режим проигрывания ----------
+
+    /** Режим разрешает стриминг вообще (без учёта выключателя очереди). */
+    private fun modeAllowsStreaming(): Boolean =
+        graph.settings.current.playbackMode == PlaybackMode.STREAMING
+
+    /** Стриминг разрешён и в очереди: режим «Онлайн + устройство» и включённый выключатель. */
+    private fun streamingAllowed(): Boolean =
+        modeAllowsStreaming() && graph.settings.current.streamingInQueue
+
+    /** Трек играется без сети: это файл на устройстве. */
+    fun offlinePlayable(track: Track): Boolean =
+        track.source == Source.LOCAL && !track.uri.isNullOrBlank()
+
+    /** Фильтр для пополнения очереди: учитывает режим, стриминг и запрет видео. */
+    private fun queueable(tracks: List<Track>): List<Track> {
+        val playable = tracks.filter {
+            it.playable && !it.uri.isNullOrBlank() && !it.isVideoContent
+        }
+        return if (streamingAllowed()) playable else playable.filter(::offlinePlayable)
+    }
+
+    /**
+     * Фильтр для прямого воспроизведения выбранного списка: выключатель «Стриминг
+     * в очереди» намеренно не действует — он про автодополнение, а не про прямой запуск.
+     */
+    private fun playableNow(tracks: List<Track>): List<Track> {
+        val playable = tracks.filter {
+            it.playable && !it.uri.isNullOrBlank() && !it.isVideoContent
+        }
+        return if (modeAllowsStreaming()) playable else playable.filter(::offlinePlayable)
+    }
+
+    private fun toast(message: String) {
+        runCatching { Toast.makeText(graph.appContext, message, Toast.LENGTH_SHORT).show() }
+    }
+
+    /** Sonora — музыкальный плеер: видео/клипы/подкасты не запускаем. */
+    private fun blockedVideo(track: Track): Boolean {
+        if (!track.isVideoContent) return false
+        toast("Видео отключено: Sonora играет только музыку.")
+        return true
+    }
+
+    /** Если включён режим «Только загруженное», стриминговый трек не запускаем. */
+    private fun blockedByMode(track: Track): Boolean {
+        if (track.source == Source.LOCAL || modeAllowsStreaming()) return false
+        toast("Стриминг выключен. Включите его в плеере — долгое нажатие на кнопку перемешивания.")
+        return true
+    }
+
+    /** Убирает из очереди стриминговые треки (текущий не трогаем). */
+    private fun pruneStreamingQueue(showEmptyMessage: Boolean) {
+        val removed = graph.playback.removeWhere { track -> offlinePlayable(track) }
+        when {
+            removed > 0 -> toast("Стриминг убран из очереди: $removed")
+            showEmptyMessage -> {
+                val current = graph.playback.state.value.current
+                val onlyCurrent = current != null && !offlinePlayable(current)
+                toast(
+                    if (onlyCurrent) {
+                        "Текущий стриминговый трек доигрывает, остальных в очереди нет"
+                    } else {
+                        "В очереди нет стриминговых треков"
+                    },
+                )
+            }
+        }
+    }
+
     private suspend fun maybeExtendQueue(state: PlayerUiState) {
         if (!graph.settings.current.infiniteQueue) return
         val queue = state.queue
-        if (queue.size < 2) return
+        if (queue.isEmpty()) return
         if (state.index < queue.size - 2) return
         if (extendingQueue) return
         extendingQueue = true
@@ -226,10 +395,8 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
     }
 
     private fun buildRandomBatch(queue: List<Track>, current: Track?): List<Track> {
-        val pool = graph.library.tracks.value.filter {
-            (it.source == Source.LOCAL || it.source == Source.YOUTUBE) &&
-                it.playable && !it.uri.isNullOrBlank()
-        }
+        // Режим «Только загруженное»: в пул попадают лишь локальные файлы.
+        val pool = queueable(graph.library.tracks.value)
         if (pool.isEmpty()) return emptyList()
         val recentIds = queue.takeLast(8).map { it.id }.toSet()
         val sameArtist = if (current == null) {
@@ -247,6 +414,39 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
     }
 
     // ---------- Библиотека ----------
+
+    /**
+     * Одноразовый ремонт названий сохранённых из стриминга треков: в старых
+     * версиях сканер брал имя файла «Исполнитель - Название» (иногда ещё и
+     * percent-encoded) вместо метаданных стриминга. Возвращаем красивое название.
+     */
+    private suspend fun repairSavedTrackTitles() {
+        val all = graph.library.tracks.value
+        if (all.isEmpty()) return
+        val byId = all.associateBy { it.id }
+        val fixes = all.mapNotNull { local ->
+            if (local.source != Source.LOCAL) return@mapNotNull null
+            val remoteId = local.extra["downloadedTrackId"] ?: return@mapNotNull null
+            val remote = byId[remoteId] ?: return@mapNotNull null
+            val fileStem = "${remote.artist} - ${remote.title}"
+            if (!local.title.equals(fileStem, ignoreCase = true)) return@mapNotNull null
+            local.copy(
+                title = remote.title.ifBlank { local.title },
+                artist = remote.artist.ifBlank { local.artist },
+                album = local.album ?: remote.album,
+            )
+        }
+        if (fixes.isNotEmpty()) {
+            graph.library.upsertLocalTracks(fixes)
+            graph.playback.applyMetadata(fixes)
+        }
+        // Заодно переносим старые ссылки избранного/плейлистов на локальные копии.
+        all.forEach { local ->
+            if (local.source != Source.LOCAL) return@forEach
+            val remoteId = local.extra["downloadedTrackId"] ?: return@forEach
+            graph.library.transferTrackReferences(remoteId, local.id)
+        }
+    }
 
     fun scanLibrary() {
         viewModelScope.launch {
@@ -325,11 +525,15 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
      * треков (тот же альбом → тот же исполнитель → случайные из фонотеки).
      */
     fun playOrOpen(track: Track): Boolean {
-        if (track.playable && !track.uri.isNullOrBlank()) {
-            graph.playback.playQueue(buildQueueFor(track), 0)
-            if (track.source == Source.YOUTUBE) {
-                cacheAndEnrichYouTube(track)
-                appendYouTubeRelated(track)
+        if (blockedVideo(track)) return false
+        // Если онлайн-трек уже сохранён — играем локальную копию, а не стрим.
+        val playableTrack = localCopyOf(track) ?: track
+        if (playableTrack.playable && !playableTrack.uri.isNullOrBlank()) {
+            if (blockedByMode(playableTrack)) return false
+            graph.playback.playQueue(buildQueueFor(playableTrack), 0)
+            if (playableTrack.source == Source.YOUTUBE) {
+                cacheAndEnrichYouTube(playableTrack)
+                appendYouTubeRelated(playableTrack)
             }
             return true
         }
@@ -384,110 +588,259 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
         }
     }
 
-    // ---------- Скачивание из InnerTube ----------
+    // ---------- Сохранение треков из стриминга ----------
 
-    private val _youtubeDownloads = MutableStateFlow<Map<String, String>>(emptyMap())
+    private val _saveStates = MutableStateFlow<Map<String, TrackSaveState>>(emptyMap())
 
-    /** Состояние скачивания YouTube-трека: track.id -> «Скачивание»/«Готово»/ошибка. */
-    val youtubeDownloads: StateFlow<Map<String, String>> = _youtubeDownloads.asStateFlow()
+    /** Прогресс сохранения: track.id -> состояние (очередь, проценты, готово, ошибка). */
+    val saveStates: StateFlow<Map<String, TrackSaveState>> = _saveStates.asStateFlow()
 
-    /** Есть ли уже локальная копия этого трека (YouTube или прямого источника). */
-    fun isTrackDownloaded(track: Track): Boolean {
-        if (track.source == Source.LOCAL) return true
+    /** Очередь сохранений: треки скачиваются по одному, без конкуренции за сеть. */
+    private val saveQueue = ArrayDeque<Track>()
+    private val saveQueuedIds = mutableSetOf<String>()
+    private var saveWorker: Job? = null
+
+    /** Состояние сохранения конкретного трека (null — ещё не сохраняли). */
+    fun saveState(trackId: String): TrackSaveState? = _saveStates.value[trackId]
+
+    /** Сколько треков сейчас ждёт или сохраняется — для бейджа/подсказки. */
+    fun saveQueueSize(): Int = saveQueue.size + if (saveWorker?.isActive == true) 1 else 0
+
+    /** Локальная копия онлайн-трека, если он уже сохранён на устройство. */
+    fun localCopyOf(track: Track): Track? {
+        if (track.source == Source.LOCAL) return track
         val videoId = youtubeVideoId(track)
-        return graph.library.tracks.value.any { local ->
-            if (local.source != Source.LOCAL) return@any false
+        return graph.library.tracks.value.firstOrNull { local ->
+            if (local.source != Source.LOCAL) return@firstOrNull false
             local.extra["downloadedTrackId"] == track.id ||
                 (videoId != null && local.extra["youtubeId"] == videoId)
         }
+    }
+
+    /** Есть ли уже локальная копия этого трека (YouTube или прямого источника). */
+    fun isTrackDownloaded(track: Track): Boolean = localCopyOf(track) != null
+
+    /**
+     * Убирает из списка онлайн-версии треков, у которых уже есть локальная копия:
+     * иначе сохранённый трек показывался бы дважды — в поиске, у артиста и в YouTube.
+     */
+    fun withoutSavedCopies(tracks: List<Track>): List<Track> {
+        val savedRemoteIds = graph.library.tracks.value.mapNotNull { local ->
+            if (local.source == Source.LOCAL) local.extra["downloadedTrackId"] else null
+        }.toSet()
+        if (savedRemoteIds.isEmpty()) return tracks
+        return tracks.filterNot { it.source != Source.LOCAL && it.id in savedRemoteIds }
     }
 
     /** Есть ли уже локальная копия этого YouTube-трека. */
     fun isYouTubeDownloaded(track: Track): Boolean = isTrackDownloaded(track)
 
     /**
-     * Скачивает аудио через InnerTube/InnerTubeX, сохраняет обложку рядом с
-     * файлом и регистрирует трек как локальный с альбомом/артистом/текстом —
-     * после этого он виден во вкладках «Треки», «Альбомы», «Исполнители»
-     * и «Избранное».
-     *
-     * Ссылки InnerTubeX иногда отдаются только bounded-range кусками. Если
-     * первый поток отклонён (403/410/416) или сервер не принял Range, берём
-     * резервный player-поток и повторяем — как делает Metrolist.
+     * Ставит трек из стриминга в очередь сохранения. Файл, обложка и метаданные
+     * попадают в общую библиотеку — трек сразу виден во вкладках «Треки», «Альбомы»,
+     * «Исполнители» и «Избранное», рядом с файлами устройства.
      */
-    fun downloadYouTube(track: Track) {
-        val videoId = youtubeVideoId(track)
-        if (videoId == null) {
-            _youtubeDownloads.update { it + (track.id to "Ошибка: нет videoId") }
-            _trackDownloads.update { it + (track.id to "Ошибка: нет videoId") }
+    fun downloadTrack(track: Track) {
+        if (track.source == Source.LOCAL) {
+            _saveStates.update { it + (track.id to TrackSaveState.done()) }
             return
         }
-        if (isYouTubeDownloaded(track)) {
-            _youtubeDownloads.update { it + (track.id to "Уже скачано") }
-            _trackDownloads.update { it + (track.id to "Уже скачано") }
+        if (isTrackDownloaded(track)) {
+            _saveStates.update { it + (track.id to TrackSaveState.done()) }
+            toast("Уже сохранено на устройстве")
             return
         }
-        if (_trackDownloads.value[track.id] == "Скачивание") return
-        _youtubeDownloads.update { it + (track.id to "Скачивание") }
-        _trackDownloads.update { it + (track.id to "Скачивание") }
-        viewModelScope.launch {
-            runCatching {
-                val (_, file) = downloadInnerTubeFile(track, videoId)
+        val state = _saveStates.value[track.id]
+        if (state?.isActive == true || track.id in saveQueuedIds) return
+        if (!canSave(track)) {
+            _saveStates.update {
+                it + (track.id to TrackSaveState.unavailable("Недоступно для сохранения"))
+            }
+            return
+        }
+        _saveStates.update { it + (track.id to TrackSaveState.queued()) }
+        saveQueuedIds += track.id
+        saveQueue.addLast(track)
+        startSaveWorker()
+    }
+
+    /** Совместимый вход для кнопок, которые исторически звали downloadYouTube. */
+    fun downloadYouTube(track: Track) = downloadTrack(track)
+
+    fun retrySave(track: Track) {
+        _saveStates.update { it - track.id }
+        downloadTrack(track)
+    }
+
+    private fun canSave(track: Track): Boolean {
+        val youtube = track.source == Source.YOUTUBE || track.uri?.startsWith("innertube:") == true
+        val direct = track.uri?.startsWith("http", ignoreCase = true) == true
+        return track.playable && (youtube || direct)
+    }
+
+    private fun startSaveWorker() {
+        if (saveWorker?.isActive == true) return
+        saveWorker = viewModelScope.launch {
+            try {
+            while (saveQueue.isNotEmpty()) {
+                val track = saveQueue.removeFirst()
+                saveQueuedIds -= track.id
+                val videoId = youtubeVideoId(track)
+                // Сразу показываем «Сохранение…», не дожидаясь онлайн-метаданных:
+                // поиск обложки/альбома может занять несколько секунд.
+                reportSave(track.id, TrackSaveState.downloading())
                 val metadata = runCatching { graph.metadata.lookup(track) }.getOrNull()
-                val innertubeLyrics = runCatching { graph.youtube.lyrics(videoId) }.getOrNull()
-                val synced = metadata?.syncedLyrics
-                val cover = graph.youtube.largeArtworkUrl(
-                    metadata?.coverUrl ?: track.artworkUrl,
-                )?.let { url -> graph.downloads.downloadArtwork(url, videoId) }
-                val artistImage = metadata?.artistImageUrl?.let { url ->
-                    graph.downloads.downloadArtwork(url, "artist_${ArtistNames.key(track.artist)}")
+                val innertubeLyrics = if (videoId != null) {
+                    runCatching { graph.youtube.lyrics(videoId) }.getOrNull()
+                } else {
+                    null
                 }
-                val local = track.copy(
-                    id = "file:${file.absolutePath}",
-                    uri = file.toURI().toString(),
-                    artist = if (ArtistNames.isSuspicious(track.artist)) {
-                        ArtistNames.clean(metadata?.artist ?: track.artist)
-                    } else {
-                        ArtistNames.clean(track.artist)
-                    },
-                    album = track.album ?: metadata?.album,
-                    artworkUri = cover?.toURI()?.toString(),
-                    artworkUrl = graph.youtube.largeArtworkUrl(track.artworkUrl)
-                        ?: metadata?.coverUrl,
-                    lyrics = metadata?.lyrics?.takeIf { it.isNotBlank() }
-                        ?: innertubeLyrics ?: track.lyrics,
-                    syncedLyrics = synced ?: track.syncedLyrics,
-                    source = Source.LOCAL,
-                    playable = true,
-                    downloadAllowed = true,
-                    deepLink = null,
-                    extra = track.extra + buildMap {
-                        put("youtubeId", videoId)
-                        put("downloadedTrackId", track.id)
-                        put("downloadedAt", System.currentTimeMillis().toString())
-                        metadata?.artistImageUrl?.let { put("artistImageUrl", it) }
-                        artistImage?.let { put("artistImageUri", it.toURI().toString()) }
-                        metadata?.artistBio?.let { put("artistBio", it) }
-                        metadata?.genre?.let { put("genre", it) }
-                    },
-                )
-                graph.library.upsertLocalTracks(listOf(local))
-                graph.library.scanLocal()
-                _youtubeDownloads.update { it + (track.id to "Готово") }
-                _trackDownloads.update { it + (track.id to "Готово") }
-            }.onFailure { error ->
-                val message = downloadErrorMessage(error)
-                _youtubeDownloads.update { it + (track.id to "Ошибка: $message") }
-                _trackDownloads.update { it + (track.id to "Ошибка: $message") }
+                runCatching {
+                    val file = when {
+                        videoId != null -> {
+                            downloadInnerTubeFile(track, videoId) { written, total ->
+                                reportProgress(track.id, written, total)
+                            }.second
+                        }
+
+                        track.uri?.startsWith("http", ignoreCase = true) == true -> {
+                            // Прямые ссылки каталогов иногда отдают 5xx/обрыв;
+                            // один повтор заметно повышает шанс сохранения.
+                            var downloaded: java.io.File? = null
+                            var lastError: Throwable? = null
+                            for (attempt in 0..1) {
+                                val result = graph.downloads.download(
+                                    url = track.uri,
+                                    suggestedFileName = downloadFileName(track),
+                                    mime = track.extra["mime"],
+                                    tag = track.id,
+                                    onProgress = { written, total ->
+                                        reportProgress(track.id, written, total)
+                                    },
+                                )
+                                if (result.isSuccess) {
+                                    downloaded = result.getOrThrow()
+                                    break
+                                }
+                                lastError = result.exceptionOrNull()
+                                if (attempt == 0) delay(700)
+                            }
+                            downloaded ?: throw (lastError
+                                ?: IllegalStateException("Не удалось скачать файл"))
+                        }
+
+                        else -> throw IllegalStateException("Нет доступного потока")
+                    }
+                    ensureAudioFile(file)
+                    val coverUrl = graph.youtube.largeArtworkUrl(
+                        metadata?.coverUrl ?: track.artworkUrl,
+                    ) ?: track.artworkUrl
+                    val cover = coverUrl?.let { url ->
+                        graph.downloads.downloadArtwork(url, videoId ?: track.id)
+                    }
+                    val artistImage = metadata?.artistImageUrl?.let { url ->
+                        graph.downloads.downloadArtwork(
+                            url,
+                            "artist_${ArtistNames.key(metadata.artist ?: track.artist)}",
+                        )
+                    }
+                    val local = track.copy(
+                        id = "file:${file.absolutePath}",
+                        uri = file.toURI().toString(),
+                        artist = if (ArtistNames.isSuspicious(track.artist)) {
+                            ArtistNames.clean(metadata?.artist ?: track.artist)
+                        } else {
+                            ArtistNames.clean(track.artist)
+                        },
+                        album = track.album ?: metadata?.album,
+                        artworkUri = cover?.toURI()?.toString(),
+                        artworkUrl = coverUrl,
+                        lyrics = metadata?.lyrics?.takeIf { it.isNotBlank() }
+                            ?: innertubeLyrics ?: track.lyrics,
+                        syncedLyrics = metadata?.syncedLyrics ?: track.syncedLyrics,
+                        source = Source.LOCAL,
+                        playable = true,
+                        downloadAllowed = true,
+                        deepLink = null,
+                        extra = track.extra + buildMap {
+                            videoId?.let { put("youtubeId", it) }
+                            put("downloadedTrackId", track.id)
+                            put("downloadedFrom", track.source.name)
+                            put("downloadedAt", System.currentTimeMillis().toString())
+                            metadata?.artistImageUrl?.let { put("artistImageUrl", it) }
+                            artistImage?.let { put("artistImageUri", it.toURI().toString()) }
+                            metadata?.artistBio?.let { put("artistBio", it) }
+                            metadata?.genre?.let { put("genre", it) }
+                            metadata?.provider?.let { put("metadataProvider", it) }
+                        },
+                    )
+                    // Сначала регистрируем трек в библиотеке, затем пересканируем папку:
+                    // так он появляется в списке мгновенно и не дублируется после скана.
+                    graph.library.upsertLocalTracks(listOf(local))
+                    // Избранное и плейлисты переводим на локальную копию.
+                    graph.library.transferTrackReferences(track.id, local.id)
+                    graph.playback.applyMetadata(listOf(local))
+                    // Пересканирование — вспомогательное: файл уже в библиотеке,
+                    // и сбой сканера не должен превращать успех в «не удалось».
+                    runCatching { graph.library.scanLocal() }
+                    reportSave(track.id, TrackSaveState.done())
+                    toast("«${track.title}» сохранён на устройство")
+                }.onFailure { error ->
+                    reportSave(track.id, TrackSaveState.error(downloadErrorMessage(error)))
+                }
+            }
+            } finally {
+                saveWorker = null
+                // Если воркер упал/отменён, не оставляем вечное «Сохранение…».
+                val stuck = _saveStates.value.filterValues { it.isActive }.keys
+                if (stuck.isNotEmpty()) {
+                    _saveStates.update { current ->
+                        current.mapValues { (id, state) ->
+                            if (id in stuck) {
+                                TrackSaveState.error("Загрузка прервана — попробуйте ещё раз")
+                            } else {
+                                state
+                            }
+                        }
+                    }
+                }
+                saveQueuedIds.clear()
+                if (saveQueue.isNotEmpty()) startSaveWorker()
             }
         }
+    }
+
+    private fun reportProgress(trackId: String, written: Long, total: Long) {
+        // 100 % оставляем для состояния DONE: пока идёт финальная обработка
+        // (обложка, метаданные), показываем не больше 99 %.
+        val percent = if (total > 0L) {
+            ((written.toDouble() / total) * 100.0).toInt().coerceIn(0, 99)
+        } else {
+            -1
+        }
+        _saveStates.update { current ->
+            val state = current[trackId]
+            if (state?.status == SaveStatus.DOWNLOADING && state.percent == percent) {
+                current
+            } else {
+                current + (trackId to TrackSaveState.downloading(percent))
+            }
+        }
+    }
+
+    private fun reportSave(trackId: String, state: TrackSaveState) {
+        _saveStates.update { it + (trackId to state) }
     }
 
     /**
      * Пробует MP4-поток InnerTubeX, затем резервный player-поток InnerTube.
      * Скачивает файл и возвращает поток + готовый файл.
      */
-    private suspend fun downloadInnerTubeFile(track: Track, videoId: String): Pair<StreamInfo, java.io.File> {
+    private suspend fun downloadInnerTubeFile(
+        track: Track,
+        videoId: String,
+        onProgress: ((Long, Long) -> Unit)? = null,
+    ): Pair<StreamInfo, java.io.File> {
         var lastError: Throwable? = null
         val plans = listOf(
             "InnerTubeX MP4" to suspend { graph.youtube.downloadStream(videoId) },
@@ -515,24 +868,37 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
             }
             val baseName = "${sanitizeFileName(ArtistNames.clean(track.artist))} - " +
                 sanitizeFileName(track.title)
-            val result = graph.downloads.download(
-                url = stream.url,
-                suggestedFileName = baseName + extension,
-                headers = stream.headers,
-                mime = stream.mimeType,
-                contentLengthHint = stream.contentLength,
-                rangeChunkSizeBytes = stream.rangeChunkSizeBytes,
-                requireBoundedRange = stream.requireBoundedRange,
-            )
-            if (result.isSuccess) return stream to result.getOrThrow()
-            lastError = result.exceptionOrNull()
-            Log.w(
-                "SonoraDownload",
-                "InnerTube download attempt failed: video=$videoId mime=${stream.mimeType} " +
-                    "range=${stream.requireBoundedRange}/${stream.rangeChunkSizeBytes} " +
-                    "error=${lastError?.message}",
-                lastError,
-            )
+            // Сначала штатный режим потока (range/bounded), затем — обычный GET:
+            // часть CDN отвечает 200 на Range и ломает пошаговую загрузку.
+            val attempts = buildList {
+                add(Triple(stream.rangeChunkSizeBytes, stream.requireBoundedRange, "range"))
+                if (stream.rangeChunkSizeBytes > 0L || stream.requireBoundedRange) {
+                    add(Triple(0L, false, "full"))
+                }
+            }
+            for ((chunkSize, requireRange, mode) in attempts) {
+                val result = graph.downloads.download(
+                    url = stream.url,
+                    suggestedFileName = baseName + extension,
+                    headers = stream.headers,
+                    mime = stream.mimeType,
+                    contentLengthHint = stream.contentLength,
+                    rangeChunkSizeBytes = chunkSize,
+                    requireBoundedRange = requireRange,
+                    tag = track.id,
+                    onProgress = onProgress,
+                )
+                if (result.isSuccess) return stream to result.getOrThrow()
+                lastError = result.exceptionOrNull()
+                Log.w(
+                    "SonoraDownload",
+                    "InnerTube download attempt failed: video=$videoId mime=${stream.mimeType} " +
+                        "mode=$mode range=$requireRange/$chunkSize " +
+                        "error=${lastError?.message}",
+                    lastError,
+                )
+                if (!isRetryableDownloadError(lastError)) break
+            }
             if (!isRetryableDownloadError(lastError)) break
         }
         throw lastError ?: IllegalStateException("Не удалось скачать поток InnerTube")
@@ -551,6 +917,37 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
             current = current.cause
         }
         return false
+    }
+
+    /**
+     * Проверяет, что сохранённый файл действительно аудио и не пустой.
+     * Если сервер отдал muxed-видео, файл удаляется: Sonora хранит только музыку.
+     */
+    private suspend fun ensureAudioFile(file: java.io.File) {
+        if (file.length() < 1024L) {
+            runCatching { graph.downloads.delete(file.name) }
+            throw IllegalStateException("Сервер вернул пустой или слишком короткий файл")
+        }
+        val retriever = MediaMetadataRetriever()
+        try {
+            retriever.setDataSource(file.absolutePath)
+            val hasVideo = retriever
+                .extractMetadata(MediaMetadataRetriever.METADATA_KEY_HAS_VIDEO)
+                ?.equals("yes", ignoreCase = true) == true
+            if (hasVideo) {
+                runCatching { graph.downloads.delete(file.name) }
+                throw IllegalStateException(
+                    "Сервер вернул видеофайл — Sonora сохраняет только музыку",
+                )
+            }
+        } catch (error: IllegalStateException) {
+            throw error
+        } catch (_: Exception) {
+            // Некоторые контейнеры (webm/opus) MediaMetadataRetriever не читает,
+            // но ExoPlayer их играет: не считаем это ошибкой сохранения.
+        } finally {
+            runCatching { retriever.release() }
+        }
     }
 
     private fun downloadErrorMessage(error: Throwable): String {
@@ -587,10 +984,13 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
      */
     private fun appendYouTubeRelated(track: Track) {
         if (!graph.settings.current.autoQueue) return
+        // В офлайн-режиме «похожие» из стриминга не нужны.
+        if (!streamingAllowed()) return
         val videoId = track.id.removePrefix("youtube:")
         if (videoId.isBlank()) return
         viewModelScope.launch {
             val related = graph.youtube.related(videoId, RELATED_LIMIT)
+                .let(::queueable)
             if (related.isNotEmpty()) graph.playback.appendToQueue(related)
         }
     }
@@ -600,10 +1000,8 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
         if (!graph.settings.current.autoQueue) {
             return listOf(seed)
         }
-        val pool = graph.library.tracks.value.filter {
-            (it.source == Source.LOCAL || it.source == Source.YOUTUBE) &&
-                it.playable && !it.uri.isNullOrBlank() && it.id != seed.id
-        }
+        val pool = queueable(graph.library.tracks.value)
+            .filter { it.id != seed.id }
         if (pool.isEmpty()) return listOf(seed)
 
         val sameAlbum = pool.filter {
@@ -623,12 +1021,20 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
     }
 
     fun playQueue(tracks: List<Track>, startIndex: Int = 0) {
-        graph.playback.playQueue(tracks, startIndex)
+        // Прямой запуск списка: выключатель «Стриминг в очереди» здесь не мешает.
+        val allowed = playableNow(tracks)
+        if (allowed.isEmpty()) {
+            toast("Режим «Только загруженное»: здесь нет треков с устройства.")
+            return
+        }
+        val startId = tracks.getOrNull(startIndex)?.id
+        val index = allowed.indexOfFirst { it.id == startId }.coerceAtLeast(0)
+        graph.playback.playQueue(allowed, index)
     }
 
     fun playAlbum(albumName: String, artist: String) {
         val list = graph.library.tracks.value.filter { it.album == albumName && it.artist == artist }
-        if (list.isNotEmpty()) graph.playback.playQueue(list, 0)
+        playQueue(list)
     }
 
     fun togglePlayPause() = graph.playback.togglePlayPause()
@@ -639,8 +1045,17 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
     fun toggleShuffle() = graph.playback.setShuffle(!graph.playback.state.value.shuffle)
     fun cycleRepeat() = graph.playback.cycleRepeatMode()
     fun setSpeed(speed: Float) = graph.playback.setSpeed(speed)
-    fun addToQueue(track: Track) = graph.playback.addToQueue(track)
-    fun playNext(track: Track) = graph.playback.playNext(track)
+    fun addToQueue(track: Track) {
+        if (blockedVideo(track)) return
+        if (blockedByMode(track)) return
+        graph.playback.addToQueue(track)
+    }
+
+    fun playNext(track: Track) {
+        if (blockedVideo(track)) return
+        if (blockedByMode(track)) return
+        graph.playback.playNext(track)
+    }
     fun removeFromQueue(index: Int) = graph.playback.removeAt(index)
     fun moveInQueue(from: Int, to: Int) = graph.playback.move(from, to)
     fun clearQueue() = graph.playback.clearQueue()
@@ -654,41 +1069,83 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
 
     // ---------- Поиск ----------
 
+    /** Номер поколения поиска: ответ старого запроса не перетирает новый. */
+    private var searchGeneration = 0
+
     fun onSearchQueryChanged(query: String) {
         _search.update { it.copy(query = query) }
         searchJob?.cancel()
-        if (query.isBlank()) {
-            _search.update { SearchUiState() }
+        val normalized = query.trim()
+        if (normalized.isBlank()) {
+            searchGeneration++
+            _search.value = SearchUiState(query = query)
             return
         }
+        val generation = ++searchGeneration
         searchJob = viewModelScope.launch {
             _search.update { it.copy(loading = true, error = null) }
-            delay(250)
-            val local = graph.library.searchLocal(query)
-            // YouTube Music теперь на InnerTube: поиск идёт без ключа и сразу
-            // возвращает играбельные треки.
-            val remote = runCatching { graph.youtube.search(query, REMOTE_SEARCH_LIMIT) }
+            delay(280)
+            if (generation != searchGeneration) return@launch
+            val local = graph.library.searchLocal(normalized)
+            val remoteResult = try {
+                Result.success(graph.youtube.search(normalized, REMOTE_SEARCH_LIMIT))
+            } catch (cancelled: CancellationException) {
+                // Отмена — не ошибка: новый запрос уже в пути.
+                throw cancelled
+            } catch (error: Exception) {
+                Result.failure(error)
+            }
+            if (generation != searchGeneration) return@launch
+            val remote = remoteResult.getOrDefault(emptyList())
+                .filterNot { it.isVideoContent }
+                .filter { matchesSearchQuery(it, normalized) }
+                .distinctBy { it.id }
             _search.update {
                 it.copy(
                     local = local,
-                    remote = remote.getOrDefault(emptyList()),
+                    remote = remote,
                     loading = false,
-                    error = remote.exceptionOrNull()?.let { error ->
-                        graph.youtube.lastError ?: error.message
+                    error = when {
+                        remoteResult.isFailure && local.isEmpty() && remote.isEmpty() ->
+                            graph.youtube.lastError
+                                ?: remoteResult.exceptionOrNull()?.message
+                                ?: "Поиск временно недоступен"
+                        else -> null
                     },
                 )
             }
         }
     }
 
+    /**
+     * YouTube иногда возвращает далёкие «похожие» результаты на опечатку.
+     * Оставляем только треки, где есть хотя бы одно слово запроса (от 3 букв).
+     */
+    private fun matchesSearchQuery(track: Track, query: String): Boolean {
+        val tokens = query.lowercase()
+            .replace('ё', 'е')
+            .split(Regex("[^\\p{L}\\p{N}]+"))
+            .filter { it.length >= 3 }
+        if (tokens.isEmpty()) return true
+        val haystack = buildString {
+            append(track.title).append(' ')
+            append(track.artist).append(' ')
+            append(track.album.orEmpty())
+        }.lowercase().replace('ё', 'е')
+        return tokens.any { haystack.contains(it) }
+    }
+
     fun clearSearch() {
+        searchGeneration++
         searchJob?.cancel()
         _search.value = SearchUiState()
     }
 
     // ---------- Моя волна ----------
 
-    private val _wave = MutableStateFlow(WaveUiState())
+    // loading=true с первого кадра: до окончания сканирования библиотеки нельзя
+    // показывать «0 треков, добавьте музыку» — это выглядит как потеря фонотеки.
+    private val _wave = MutableStateFlow(WaveUiState(loading = true))
     val wave: StateFlow<WaveUiState> = _wave.asStateFlow()
     private var waveJob: Job? = null
 
@@ -708,28 +1165,53 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
         _wave.update { state -> state.copy(tracks = sortWave(state.tracks, state.sort)) }
     }
 
+    private var waveGeneration = 0
+    private var loadMoreJob: Job? = null
+
     fun refreshWave() {
         waveJob?.cancel()
+        loadMoreJob?.cancel()
+        loadMoreJob = null
+        waveGeneration++
         waveSeenIds.clear()
         waveSeenKeys.clear()
         _wave.update { it.copy(loading = true, loadingMore = false, error = null) }
         waveJob = viewModelScope.launch {
             delay(250)
+            val generation = waveGeneration
             val state = _wave.value
-            val result = runCatching { buildWave(state) }
+            val result = try {
+                Result.success(buildWave(state))
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                Result.failure(error)
+            }
+            // Пока волна собиралась, пользователь мог нажать «Обновить» ещё раз:
+            // устаревший результат не должен перезаписывать новую подборку.
+            if (generation != waveGeneration) return@launch
             _wave.update { current ->
                 val data = result.getOrNull()
                 current.copy(
-                    tracks = data?.first ?: current.tracks,
+                    tracks = data?.first?.distinctBy { it.id } ?: current.tracks,
                     seedLabel = data?.second ?: current.seedLabel,
                     loading = false,
                     error = result.exceptionOrNull()?.message
-                        ?: if (data == null || data.first.isEmpty()) "Не удалось собрать волну" else null,
+                        ?: if (data == null || data.first.isEmpty()) emptyWaveHint() else null,
                     generatedAt = System.currentTimeMillis(),
                 )
             }
             result.getOrNull()?.first?.let { markWaveSeen(it) }
         }
+    }
+
+    /** Почему волна может быть пустой — подсказка вместо общей ошибки. */
+    private fun emptyWaveHint(): String = when {
+        !modeAllowsStreaming() ->
+            "Стриминг выключен: включите его в плеере или добавьте музыку на устройство."
+        !streamingAllowed() ->
+            "Стриминг в очереди выключен — волна собирается только из музыки на устройстве."
+        else -> "Не удалось собрать волну"
     }
 
     /**
@@ -741,25 +1223,37 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
         val current = _wave.value
         if (current.loading || current.loadingMore) return
         _wave.update { it.copy(loadingMore = true) }
-        viewModelScope.launch {
+        loadMoreJob?.cancel()
+        val generation = waveGeneration
+        loadMoreJob = viewModelScope.launch {
             val state = _wave.value
-            val result = runCatching {
-                buildWave(
-                    state = state,
-                    excludeIds = waveSeenIds.toSet(),
-                    excludeKeys = waveSeenKeys.toSet(),
-                    limit = WAVE_LOAD_MORE_LIMIT,
+            val result = try {
+                Result.success(
+                    buildWave(
+                        state = state,
+                        excludeIds = waveSeenIds.toSet(),
+                        excludeKeys = waveSeenKeys.toSet(),
+                        limit = WAVE_LOAD_MORE_LIMIT,
+                    ),
                 )
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                Result.failure(error)
             }
-            val more = result.getOrNull()?.first ?: emptyList()
+            if (generation != waveGeneration) return@launch
+            val more = result.getOrNull()?.first.orEmpty()
             _wave.update { latest ->
                 latest.copy(
-                    tracks = latest.tracks + more,
+                    tracks = (latest.tracks + more).distinctBy { it.id },
                     loadingMore = false,
                     error = result.exceptionOrNull()?.message,
                 )
             }
             markWaveSeen(more)
+            if (more.isEmpty() && result.exceptionOrNull() == null) {
+                toast("Больше рекомендаций пока нет — обновите волну.")
+            }
         }
     }
 
@@ -775,99 +1269,251 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
     }
 
     fun playWave() {
-        val tracks = _wave.value.tracks
-        if (tracks.isEmpty()) return
+        val tracks = playableNow(_wave.value.tracks)
+        if (tracks.isEmpty()) {
+            toast("Волна пуста: добавьте музыку на устройство или включите стриминг.")
+            return
+        }
         graph.playback.playQueue(tracks, 0)
-        tracks.firstOrNull { it.source == Source.YOUTUBE }?.let(::appendYouTubeRelated)
+        // «Похожие» подтягиваем для того трека, который реально заиграл.
+        tracks.firstOrNull()?.takeIf { it.source == Source.YOUTUBE }?.let(::appendYouTubeRelated)
     }
 
     fun enqueueWave() {
-        val tracks = _wave.value.tracks
+        val tracks = queueable(_wave.value.tracks)
         if (tracks.isEmpty()) return
         graph.playback.appendToQueue(tracks)
     }
 
+    /** Сколько прослушиваний учтено в рекомендациях (показывается в настройках волны). */
+    val waveHistorySize: StateFlow<Int> = graph.playHistory.size
+
+    /** Сырые записи истории — экран «История» пересобирает из них списки. */
+    val historyEntries: StateFlow<List<WaveHistoryEntry>> = graph.playHistory.entries
+
+    /** Сохраняет настройки «Моей волны» и сразу пересобирает подборку. */
+    fun updateWaveSettings(transform: (WaveSettings) -> WaveSettings) {
+        graph.settings.updateWave(transform)
+        refreshWave()
+    }
+
+    fun clearWaveHistory() {
+        viewModelScope.launch {
+            graph.playHistory.clear()
+            refreshWave()
+        }
+    }
+
+    // ---------- История прослушиваний ----------
+
+    /** Один трек в истории: последняя запись + сколько раз он играл. */
+    data class HistoryTrackEntry(
+        val track: Track,
+        val playedAtMs: Long,
+        val completed: Boolean,
+        val playCount: Int,
+        val listenedMs: Long,
+    )
+
+    /** Исполнитель в истории: сколько раз играл и когда в последний раз. */
+    data class HistoryArtistEntry(
+        val name: String,
+        val artworkUrl: String?,
+        val artworkUri: String?,
+        val playCount: Int,
+        val lastPlayedMs: Long,
+        val trackIds: List<String>,
+    )
+
+    /**
+     * История треков, новые сверху. Повторы одного трека свёрнуты в одну
+     * строку (как «Недавно игравшее» в Spotify), но счётчик прослушиваний
+     * сохраняется для статистики.
+     */
+    fun historyTracks(limit: Int = 150): List<HistoryTrackEntry> {
+        val entries = graph.playHistory.entries.value
+        if (entries.isEmpty()) return emptyList()
+        val allTracks = graph.library.tracks.value
+        val library = allTracks.associateBy { it.id }
+        // Если стриминговый трек уже сохранён, в истории показываем локальную
+        // копию: она играет офлайн и лежит рядом с остальными файлами.
+        val savedCopies = allTracks
+            .filter { it.source == Source.LOCAL && it.extra["downloadedTrackId"] != null }
+            .associateBy { it.extra["downloadedTrackId"] }
+        val counts = entries.groupingBy { it.trackId }.eachCount()
+        return entries.asReversed()
+            .distinctBy { it.trackId }
+            .take(limit)
+            .map { entry ->
+                val track = savedCopies[entry.trackId]
+                    ?: library[entry.trackId]
+                    ?: Track(
+                        id = entry.trackId,
+                        title = entry.title,
+                        artist = entry.artist,
+                        source = Source.fromKey(entry.source),
+                        playable = false,
+                    )
+                HistoryTrackEntry(
+                    track = track,
+                    playedAtMs = entry.playedAtMs,
+                    completed = entry.completed,
+                    playCount = counts[entry.trackId] ?: 1,
+                    listenedMs = entry.listenedMs,
+                )
+            }
+            .filterNot { it.track.isVideoContent }
+    }
+
+    /** Топ исполнителей по числу прослушиваний за всё время. */
+    fun historyArtists(limit: Int = 60): List<HistoryArtistEntry> {
+        val entries = graph.playHistory.entries.value
+        if (entries.isEmpty()) return emptyList()
+        val libraryTracks = graph.library.tracks.value
+        return entries
+            .groupBy { it.artist.trim().ifBlank { "Неизвестный исполнитель" } }
+            .map { (name, plays) ->
+                val tracks = libraryTracks.filter { it.artist.equals(name, ignoreCase = true) }
+                val imageUrl = tracks.firstNotNullOfOrNull {
+                    it.extra["artistImageUrl"]?.takeIf { url -> url.isNotBlank() }
+                } ?: tracks.firstOrNull { !it.artworkUrl.isNullOrBlank() }?.artworkUrl
+                val imageUri = tracks.firstNotNullOfOrNull {
+                    it.extra["artistImageUri"]?.takeIf { uri -> uri.isNotBlank() }
+                } ?: tracks.firstOrNull { !it.artworkUri.isNullOrBlank() }?.artworkUri
+                HistoryArtistEntry(
+                    name = name,
+                    artworkUrl = imageUrl,
+                    artworkUri = imageUri,
+                    playCount = plays.size,
+                    lastPlayedMs = plays.maxOf { it.playedAtMs },
+                    trackIds = plays.map { it.trackId }.distinct(),
+                )
+            }
+            .sortedByDescending { it.playCount }
+            .take(limit)
+    }
+
+    /** Суммарное прослушанное время по истории (для шапки экрана). */
+    fun historyListenedMs(): Long = graph.playHistory.entries.value.sumOf { it.listenedMs }
+
+    fun clearPlayHistory() {
+        viewModelScope.launch {
+            graph.playHistory.clear()
+            refreshWave()
+            toast("История прослушиваний очищена")
+        }
+    }
+
+    fun setSaveHistory(enabled: Boolean) {
+        updateSettings { it.copy(saveHistory = enabled) }
+        toast(if (enabled) "История включена" else "История больше не записывается")
+    }
+
+    /**
+     * Собирает «Мою волну»: локальные треки + онлайн (если режим проигрывания разрешает
+     * стриминг), только музыка, с учётом истории прослушиваний и настроек волны.
+     */
     private suspend fun buildWave(
         state: WaveUiState,
         excludeIds: Set<String> = emptySet(),
         excludeKeys: Set<String> = emptySet(),
         limit: Int = WAVE_LIMIT,
-    ): Pair<List<Track>, String> {
+    ): Pair<List<Track>, String> = withContext(Dispatchers.Default) {
+        val tuning = graph.settings.current.wave
         val sourceMode = state.filters.source
-        val allLocal = graph.library.tracks.value.filter {
-            (it.source == Source.LOCAL || it.source == Source.YOUTUBE) &&
-                it.playable && !it.uri.isNullOrBlank()
-        }.filter { isWaveMusic(it, strict = false) }
+        val history = graph.playHistory.entries.value
+        val now = System.currentTimeMillis()
+        val useHistory = tuning.useHistory
+        val recent = if (useHistory) WaveEngine.recentKeys(history, now) else emptySet()
+        val affinity = if (useHistory) WaveEngine.artistAffinity(history, now) else emptyMap()
 
-        val favorites = if (state.filters.includeFavorites) favoriteTracks() else emptyList()
+        val allTracks = graph.library.tracks.value
+        val localCandidates = allTracks.filter { track ->
+            track.source == Source.LOCAL && track.playable && !track.uri.isNullOrBlank() &&
+                WaveEngine.isMusic(track, tuning)
+        }
+        val favorites = if (tuning.includeFavorites) favoriteTracks() else emptyList()
         val favoriteIds = favorites.map { it.id }.toSet()
         val favoriteArtists = favorites.map { it.artist.trim().lowercase() }
             .filter { it.isNotBlank() }
+            .distinct()
             .toSet()
-
-        val artistPopularity = graph.library.tracks.value
+        val artistCounts = allTracks
             .map { it.artist.trim().lowercase() }
             .filter { it.isNotBlank() }
             .groupingBy { it }
             .eachCount()
 
-        // Вес: любимые треки/исполнители и часто слушаемые артисты получают
-        // больше шансов, локальные файлы — небольшой бонус перед стримингом.
-        fun weightOf(track: Track): Double {
-            var weight = 1.0
-            val artist = track.artist.trim().lowercase()
-            if (track.id in favoriteIds) weight += 2.5
-            if (artist in favoriteArtists) weight += 1.8
-            weight += minOf(artistPopularity[artist] ?: 0, 6) * 0.15
-            if (track.source == Source.LOCAL) weight += 0.3
-            if (track.artist.isBlank()) weight -= 0.2
-            return weight.coerceAtLeast(0.1)
-        }
-
         val localPool = if (sourceMode == WaveSourceMode.ONLINE) {
             emptyList()
         } else {
-            weightedShuffle(allLocal, ::weightOf)
+            WaveEngine.rank(
+                candidates = localCandidates,
+                favoriteIds = favoriteIds,
+                favoriteArtists = favoriteArtists,
+                artistCounts = artistCounts,
+                history = history,
+                tuning = tuning,
+                localBias = true,
+                nowMs = now,
+            )
         }
 
-        val online = if (sourceMode == WaveSourceMode.LOCAL) {
+        val onlineAllowed = sourceMode != WaveSourceMode.LOCAL && streamingAllowed()
+        val online = if (!onlineAllowed) {
             emptyList()
         } else {
-            // Каждая порция — новый запрос: любимые артисты, частые артисты, общие миксы.
-            val queries = buildList {
-                if (state.filters.mood != WaveMood.ANY && state.filters.mood.query.isNotBlank()) {
-                    add(state.filters.mood.query)
-                }
-                favoriteArtists.take(3).forEach { add("$it mix") }
-                artistPopularity.entries
+            // Каждая порция — новый запрос: любимые артисты, частые артисты, миксы.
+            val queries = WaveEngine.queries(
+                moodQuery = state.filters.mood.takeIf { it != WaveMood.ANY }?.query,
+                favoriteArtists = favoriteArtists.toList(),
+                popularArtists = artistCounts.entries
                     .sortedByDescending { it.value }
-                    .take(4)
-                    .forEach { add("${it.key} mix") }
-                add("new music mix")
-                add("chill mix")
+                    .map { it.key }
+                    .take(6),
+                affinity = affinity,
+                tuning = tuning,
+            )
+            val query = queries.getOrNull(waveQueryCursor++ % queries.size.coerceAtLeast(1))
+            if (query.isNullOrBlank()) {
+                emptyList()
+            } else {
+                graph.youtube.search(query, REMOTE_SEARCH_LIMIT)
+                    .filter { it.playable && !it.uri.isNullOrBlank() }
+                    .filter { WaveEngine.isMusic(it, tuning) }
+                    .let { candidates ->
+                        WaveEngine.rank(
+                            candidates = candidates,
+                            favoriteIds = favoriteIds,
+                            favoriteArtists = favoriteArtists,
+                            artistCounts = artistCounts,
+                            history = history,
+                            tuning = tuning,
+                            localBias = false,
+                            nowMs = now,
+                        )
+                    }
             }
-            val query = queries[waveQueryCursor++ % queries.size]
-            graph.youtube.search(query, 30)
-                .filter { it.playable }
-                .filter { isWaveMusic(it, strict = true) }
-                .let { weightedShuffle(it, ::weightOf) }
         }
 
-        val merged = mergeWave(localPool, online, limit * 2)
-        // Исключаем всё, что уже показано: и по id, и по «исполнитель|название».
-        val filtered = dedupeWave(merged).filter { track ->
-            track.id !in excludeIds && waveKey(track) !in excludeKeys
+        val merged = WaveEngine.mix(localPool, online, tuning, limit * 2)
+        // Исключаем показанное и недавно игравшее: и по id, и по «исполнитель|название».
+        val filtered = WaveEngine.dedupe(merged).filter { track ->
+            val key = WaveEngine.waveKey(track)
+            track.id !in excludeIds && key !in excludeKeys && key !in recent
         }
-        val diversified = diversifyWave(filtered, limit)
+        val diversified = WaveEngine.diversify(filtered, limit, tuning.artistDiversity.coerceIn(1, 5))
         val sorted = sortWave(diversified, state.sort)
         val label = when {
-            state.filters.mood != WaveMood.ANY ->
-                "Настроение: ${state.filters.mood.label}"
-            favoriteArtists.isNotEmpty() ->
-                "На основе ${favoriteArtists.size} любимых исполнителей"
+            state.filters.mood != WaveMood.ANY -> "Настроение: ${state.filters.mood.label}"
+            !streamingAllowed() -> "Только устройство: стриминг выключен"
+            sourceMode == WaveSourceMode.LOCAL -> "Только музыка с устройства"
+            sourceMode == WaveSourceMode.ONLINE -> "Только музыка онлайн"
+            useHistory && history.isNotEmpty() -> "На основе ${history.size} прослушиваний"
+            favoriteArtists.isNotEmpty() -> "На основе ${favoriteArtists.size} любимых исполнителей"
             else -> "Только музыка: без видео и концертов"
         }
-        return sorted to label
+        return@withContext sorted to label
     }
 
     private fun sortWave(tracks: List<Track>, sort: WaveSort): List<Track> = when (sort) {
@@ -878,136 +1524,10 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
         WaveSort.SHUFFLE -> tracks.shuffled()
     }
 
-    // ---------- Моя волна: только музыка ----------
-
-    /** Маркеры видеоконтента в названии: клипы, концерты, интервью, стримы. */
-    private val waveVideoMarkers = listOf(
-        "official video", "official music video", "music video", "video clip",
-        "официальный клип", "клип", "lyric video", "lyrics video", "visualizer",
-        "full album", "полный альбом", "live concert", "концерт", "live stream",
-        "live performance", "interview", "интервью", "podcast", "подкаст",
-        "shorts", "#shorts", "making of", "backstage", "reaction", "trailer", "тизер",
-    )
-
-    /**
-     * Пропускает только музыку: отсекает клипы/концерты/интервью по названию,
-     * слишком короткие ролики и длинные записи (концерты, «full album», миксы).
-     * Для онлайн-результатов фильтр строже, локальные файлы не режем по верхней границе.
-     */
-    private fun isWaveMusic(track: Track, strict: Boolean): Boolean {
-        val duration = track.durationMs
-        if (strict) {
-            if (duration in 1 until WAVE_MIN_TRACK_MS) return false
-            if (duration > WAVE_MAX_TRACK_MS) return false
-        } else if (duration in 1 until WAVE_MIN_LOCAL_TRACK_MS) {
-            return false
-        }
-        val title = track.title.lowercase()
-        return waveVideoMarkers.none { title.contains(it) }
-    }
+    // ---------- Моя волна: служебное ----------
 
     /** Ключ для дедупликации: исполнитель + название без скобочных пометок. */
-    private fun waveKey(track: Track): String {
-        val title = track.title.lowercase()
-            .replace(PARENS_REGEX_WAVE, " ")
-            .replace(WHITESPACE_REGEX_WAVE, " ")
-            .trim()
-        return "${track.artist.lowercase().trim()}|$title"
-    }
-
-    private fun dedupeWave(tracks: List<Track>): List<Track> {
-        val ids = HashSet<String>()
-        val keys = HashSet<String>()
-        return tracks.filter { track ->
-            if (!ids.add(track.id)) return@filter false
-            keys.add(waveKey(track))
-        }
-    }
-
-    /** Взвешенный случайный порядок: без повторов, вес из [weightOf]. */
-    private fun weightedShuffle(
-        tracks: List<Track>,
-        weightOf: (Track) -> Double,
-    ): List<Track> {
-        val remaining = tracks
-            .map { it to weightOf(it).coerceAtLeast(0.1) }
-            .toMutableList()
-        val result = ArrayList<Track>(remaining.size)
-        while (remaining.isNotEmpty()) {
-            val total = remaining.sumOf { it.second }
-            var roll = Random.nextDouble(total)
-            var index = 0
-            for (i in remaining.indices) {
-                roll -= remaining[i].second
-                if (roll <= 0.0) {
-                    index = i
-                    break
-                }
-            }
-            result += remaining.removeAt(index).first
-        }
-        return result
-    }
-
-    /** Смешивает локальную фонотеку и онлайн в пропорции ~60/40. */
-    private fun mergeWave(local: List<Track>, online: List<Track>, limit: Int): List<Track> {
-        val out = ArrayList<Track>(limit)
-        var localIndex = 0
-        var onlineIndex = 0
-        while (out.size < limit && (localIndex < local.size || onlineIndex < online.size)) {
-            val takeLocal = when {
-                localIndex >= local.size -> false
-                onlineIndex >= online.size -> true
-                else -> out.size % 5 < 3
-            }
-            if (takeLocal) {
-                out += local[localIndex++]
-            } else {
-                out += online[onlineIndex++]
-            }
-        }
-        return out
-    }
-
-    /**
-     * Не больше двух треков одного исполнителя в начале волны — иначе подборка
-     * превращается в один альбом. Остальные треки артиста уходят в конец.
-     */
-    private fun diversifyWave(tracks: List<Track>, limit: Int): List<Track> {
-        val out = ArrayList<Track>(limit)
-        val deferred = ArrayList<Track>()
-        val perArtist = HashMap<String, Int>()
-        for (track in tracks) {
-            if (out.size >= limit) break
-            val artist = track.artist.lowercase().trim()
-            val count = perArtist[artist] ?: 0
-            if (count >= 2) {
-                deferred += track
-                continue
-            }
-            out += track
-            perArtist[artist] = count + 1
-        }
-        var index = 0
-        while (out.size < limit && index < deferred.size) {
-            out += deferred[index++]
-        }
-        return out
-    }
-
-    private fun interleave(local: List<Track>, online: List<Track>, limit: Int): List<Track> {
-        val out = ArrayList<Track>(limit)
-        var localIndex = 0
-        var onlineIndex = 0
-        while (out.size < limit && (localIndex < local.size || onlineIndex < online.size)) {
-            if (localIndex < local.size && (out.size % 2 == 0 || onlineIndex >= online.size)) {
-                out += local[localIndex++]
-            } else if (onlineIndex < online.size) {
-                out += online[onlineIndex++]
-            }
-        }
-        return out
-    }
+    private fun waveKey(track: Track): String = WaveEngine.waveKey(track)
 
     // ---------- Подключения ----------
 
@@ -1146,7 +1666,7 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
 
     /** Добавить избранное устройства в конец очереди. */
     fun enqueueFavorites() {
-        val tracks = favoriteTracks()
+        val tracks = queueable(favoriteTracks())
         if (tracks.isNotEmpty()) graph.playback.appendToQueue(tracks)
     }
 
@@ -1161,7 +1681,8 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
             if (tracks.isNotEmpty()) {
                 graph.library.cacheRemoteTracks(tracks)
                 graph.library.addToPlaylist(playlist.id, tracks.map { it.id })
-                graph.playback.appendToQueue(tracks)
+                val allowed = queueable(tracks)
+                if (allowed.isNotEmpty()) graph.playback.appendToQueue(allowed)
             }
         }
     }
@@ -1173,7 +1694,8 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
                 .filter { it.playable && !it.uri.isNullOrBlank() }
             if (tracks.isNotEmpty()) {
                 graph.library.cacheRemoteTracks(tracks)
-                graph.playback.appendToQueue(tracks)
+                val allowed = queueable(tracks)
+                if (allowed.isNotEmpty()) graph.playback.appendToQueue(allowed)
             }
         }
     }
@@ -1457,6 +1979,150 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
         viewModelScope.launch { graph.downloads.delete(fileName) }
     }
 
+    // ---------- Обложки и метаданные из файлов ----------
+
+    private val _coverSearch = MutableStateFlow(CoverSearchUiState())
+    val coverSearch: StateFlow<CoverSearchUiState> = _coverSearch.asStateFlow()
+    private var coverSearchJob: Job? = null
+
+    /**
+     * Ищет обложки для локальных треков, у которых их нет. Запросы идут
+     * последовательно и с лимитом за запуск: каталоги (iTunes/Deezer/
+     * MusicBrainz) не любят пачки параллельных запросов.
+     */
+    fun findMissingCovers() {
+        if (_coverSearch.value.searching) return
+        coverSearchJob?.cancel()
+        val targets = graph.library.tracks.value
+            .filter { track ->
+                if (track.source != Source.LOCAL) return@filter false
+                val noRealCover = track.artworkUrl.isNullOrBlank() &&
+                    (track.artworkUri.isNullOrBlank() || isMediaStoreAlbumArt(track.artworkUri))
+                val lowResCover = !track.artworkUrl.isNullOrBlank() &&
+                    LibraryRepository.isLowResolutionArtwork(track.artworkUrl.orEmpty())
+                noRealCover || lowResCover
+            }
+            .take(MAX_COVER_SEARCH)
+        if (targets.isEmpty()) {
+            _coverSearch.value = CoverSearchUiState(
+                message = "У всех локальных треков уже есть обложки",
+            )
+            toast("У всех локальных треков уже есть обложки")
+            return
+        }
+        _coverSearch.value = CoverSearchUiState(searching = true, total = targets.size)
+        coverSearchJob = viewModelScope.launch {
+            var found = 0
+            var failed = 0
+            var processed = 0
+            for (track in targets) {
+                if (!isActive) break
+                val metadata = runCatching { graph.metadata.lookup(track) }.getOrNull()
+                val cover = metadata?.coverUrl
+                if (metadata == null || cover.isNullOrBlank()) {
+                    failed++
+                } else {
+                    runCatching { graph.library.updateTrackMetadata(track.id, metadata) }
+                    found++
+                }
+                processed++
+                _coverSearch.update { state ->
+                    state.copy(processed = processed, found = found, failed = failed)
+                }
+            }
+            val message = "Готово: найдено обложек — $found"
+            _coverSearch.update { it.copy(searching = false, message = message) }
+            toast(message)
+        }
+    }
+
+    fun cancelCoverSearch() {
+        coverSearchJob?.cancel()
+        _coverSearch.update { it.copy(searching = false) }
+    }
+
+    private val _metadataImport = MutableStateFlow(MetadataImportUiState())
+    val metadataImport: StateFlow<MetadataImportUiState> = _metadataImport.asStateFlow()
+
+    /**
+     * Импорт «телеметрии» из файлов пользователя (JSON/CSV/NFO): альбом, год,
+     * обложка и текст для уже сохранённых локальных треков. Совпадение — по
+     * нормализованным «исполнитель + название», при отсутствии — по названию.
+     */
+    fun importMetadataFiles(uris: List<Uri>) {
+        if (uris.isEmpty() || _metadataImport.value.importing) return
+        _metadataImport.value = MetadataImportUiState(importing = true, files = uris.size)
+        viewModelScope.launch {
+            val entries = mutableListOf<MetadataFileEntry>()
+            var failed = 0
+            uris.forEach { uri ->
+                val parsed = runCatching { MetadataFiles.parse(graph.appContext, uri) }
+                    .getOrDefault(emptyList())
+                if (parsed.isEmpty()) failed++ else entries += parsed
+            }
+            val localTracks = graph.library.tracks.value.filter { it.source == Source.LOCAL }
+            val byKey = localTracks.groupBy { metadataMatchKey(it.artist, it.title) }
+            var matched = 0
+            var updated = 0
+            entries.forEach { entry ->
+                val track = findTrackForEntry(entry, byKey, localTracks) ?: return@forEach
+                matched++
+                val hasData = !entry.album.isNullOrBlank() || (entry.year ?: 0) > 0 ||
+                    !entry.coverUrl.isNullOrBlank() || !entry.lyrics.isNullOrBlank()
+                if (!hasData) return@forEach
+                runCatching {
+                    graph.library.applyImportedMetadata(
+                        trackId = track.id,
+                        album = entry.album,
+                        year = entry.year,
+                        coverUrl = entry.coverUrl,
+                        lyrics = entry.lyrics,
+                    )
+                }
+                updated++
+            }
+            _metadataImport.value = MetadataImportUiState(
+                files = uris.size,
+                matched = matched,
+                updated = updated,
+                failed = failed,
+                message = "Совпало: $matched, обновлено: $updated",
+            )
+            toast("Метаданные: совпало $matched, обновлено $updated")
+        }
+    }
+
+    private fun findTrackForEntry(
+        entry: MetadataFileEntry,
+        byKey: Map<String, List<Track>>,
+        tracks: List<Track>,
+    ): Track? {
+        val entryTitle = entry.title?.takeIf { it.isNotBlank() } ?: return null
+        if (!entry.artist.isNullOrBlank()) {
+            byKey[metadataMatchKey(entry.artist, entryTitle)]?.firstOrNull()?.let { return it }
+        }
+        val titleKey = normalizeForMatch(entryTitle)
+        return tracks.firstOrNull { normalizeForMatch(it.title) == titleKey }
+            ?: tracks.firstOrNull {
+                titleKey.length >= 4 && normalizeForMatch(it.title).contains(titleKey)
+            }
+    }
+
+    private fun metadataMatchKey(artist: String?, title: String?): String =
+        "${normalizeForMatch(artist.orEmpty())}|${normalizeForMatch(title.orEmpty())}"
+
+    /** «Битая» обложка MediaStore: такой URI часто не открывается и блокирует онлайн-обложку. */
+    private fun isMediaStoreAlbumArt(uri: String?): Boolean =
+        !uri.isNullOrBlank() && uri.startsWith("content://media/external/audio/albumart")
+
+    /** Нормализация для сопоставления: без регистра, скобок, feat. и лишних пробелов. */
+    private fun normalizeForMatch(value: String): String = value
+        .lowercase()
+        .replace(MATCH_PARENS_REGEX, " ")
+        .replace(MATCH_FEAT_REGEX, " ")
+        .replace(MATCH_WHITESPACE_REGEX, " ")
+        .trim()
+
     // ---------- Настройки ----------
 
     fun updateSettings(transform: (AppSettings) -> AppSettings) = graph.settings.update(transform)
@@ -1468,6 +2134,14 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
     fun setSkipSilence(enabled: Boolean) = updateSettings { it.copy(skipSilence = enabled) }
     fun setScanOnStart(enabled: Boolean) = updateSettings { it.copy(scanOnStart = enabled) }
     fun setDownloadWifiOnly(enabled: Boolean) = updateSettings { it.copy(downloadWifiOnly = enabled) }
+
+    fun setReadSidecarMetadata(enabled: Boolean) =
+        updateSettings { it.copy(readSidecarMetadata = enabled) }
+
+    fun setUseEmbeddedArtwork(enabled: Boolean) {
+        updateSettings { it.copy(useEmbeddedArtwork = enabled) }
+        if (enabled) toast("Обложки из файлов подхватятся при следующем сканировании")
+    }
 
     fun setEqEnabled(enabled: Boolean) {
         updateSettings { it.copy(eqEnabled = enabled) }
@@ -1513,6 +2187,44 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
         updateSettings { it.copy(infiniteQueue = enabled) }
     }
 
+    // ---------- Режим проигрывания (онлайн / только устройство) ----------
+
+    fun setPlaybackMode(mode: PlaybackMode) {
+        updateSettings { it.copy(playbackMode = mode) }
+        if (mode == PlaybackMode.LOCAL_ONLY) pruneStreamingQueue(showEmptyMessage = false)
+        refreshWave()
+    }
+
+    fun setStreamingInQueue(enabled: Boolean) {
+        updateSettings { it.copy(streamingInQueue = enabled) }
+        if (!enabled) pruneStreamingQueue(showEmptyMessage = false)
+        refreshWave()
+    }
+
+    /**
+     * Главный переключатель стриминга из плеера (кнопка перемешивания).
+     * Выключение — это офлайн-режим Spotify: играем только сохранённое.
+     */
+    fun setStreamingEnabled(enabled: Boolean) {
+        val mode = if (enabled) PlaybackMode.STREAMING else PlaybackMode.LOCAL_ONLY
+        // Одно обновление настроек, чтобы не пересобирать волну дважды.
+        updateSettings { it.copy(playbackMode = mode, streamingInQueue = enabled) }
+        if (!enabled) pruneStreamingQueue(showEmptyMessage = false)
+        refreshWave()
+        toast(
+            if (enabled) {
+                "Стриминг включён: онлайн-треки снова в очереди"
+            } else {
+                "Офлайн-режим: только музыка на устройстве"
+            },
+        )
+    }
+
+
+    fun removeStreamingFromQueue() {
+        pruneStreamingQueue(showEmptyMessage = true)
+    }
+
     // ---------- Открытые каталоги: поиск и скачивание ----------
 
     private val _discover = MutableStateFlow(DiscoverUiState(source = Source.ARCHIVE))
@@ -1556,45 +2268,42 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
     }
 
     /**
-     * Скачивает трек из открытого каталога в папку приложения и сразу добавляет
-     * его в фонотеку (пересканирование папки загрузок).
+     * Сохраняет трек из открытого каталога через общую очередь сохранений:
+     * прогресс, обложка, метаданные и появление в фонотеке — как у стриминга.
      */
     fun downloadDiscoverTrack(track: Track) {
-        val url = track.uri ?: return
         if (_discover.value.downloadingIds.contains(track.id)) return
-        _discover.update { it.copy(downloadingIds = it.downloadingIds + track.id) }
+        if (isTrackDownloaded(track)) {
+            _discover.update { it.copy(downloadedIds = it.downloadedIds + track.id) }
+            return
+        }
+        _discover.update {
+            it.copy(downloadingIds = it.downloadingIds + track.id, error = null)
+        }
+        downloadTrack(track)
         viewModelScope.launch {
-            val fileName = track.extra["fileName"]
-                ?: "${sanitizeFileName(track.artist)} - ${sanitizeFileName(track.title)}.mp3"
-            val result = graph.downloads.download(url, fileName)
-            result.onSuccess { file ->
-                val cover = track.artworkUrl?.let { artwork ->
-                    graph.downloads.downloadArtwork(artwork, track.id)
+            var done = false
+            var failed = false
+            kotlinx.coroutines.withTimeoutOrNull(20 * 60 * 1000L) {
+                while (!done && !failed) {
+                    when (saveState(track.id)?.status) {
+                        SaveStatus.DONE -> done = true
+                        SaveStatus.ERROR, SaveStatus.UNAVAILABLE -> failed = true
+                        else -> delay(500)
+                    }
                 }
-                val local = track.copy(
-                    id = "file:${file.absolutePath}",
-                    uri = file.toURI().toString(),
-                    artworkUri = cover?.toURI()?.toString(),
-                    artworkUrl = track.artworkUrl,
-                    source = Source.LOCAL,
-                    playable = true,
-                    downloadAllowed = true,
-                    deepLink = null,
-                    extra = track.extra + mapOf(
-                        "downloadedFrom" to track.source.name,
-                        "downloadedTrackId" to track.id,
-                        "downloadedAt" to System.currentTimeMillis().toString(),
-                    ),
-                )
-                graph.library.upsertLocalTracks(listOf(local))
-                graph.library.scanLocal()
             }
             _discover.update {
                 it.copy(
                     downloadingIds = it.downloadingIds - track.id,
-                    downloadedIds = if (result.isSuccess) it.downloadedIds + track.id else it.downloadedIds,
-                    error = result.exceptionOrNull()?.let { error -> "Не удалось скачать: ${error.message}" }
-                        ?: it.error,
+                    downloadedIds = if (done) it.downloadedIds + track.id else it.downloadedIds,
+                    error = if (failed) {
+                        saveState(track.id)?.message?.let { message ->
+                            "Не удалось скачать: $message"
+                        } ?: it.error
+                    } else {
+                        it.error
+                    },
                 )
             }
         }
@@ -1703,91 +2412,6 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
         graph.settings.update { it.copy(onboardingDone = false) }
     }
 
-    // ---------- Скачивание треков из открытых каталогов ----------
-
-    private val _trackDownloads = MutableStateFlow<Map<String, String>>(emptyMap())
-    val trackDownloads: StateFlow<Map<String, String>> = _trackDownloads.asStateFlow()
-
-    /**
-     * Сохраняет любой играемый трек в приватную папку и добавляет его в
-     * локальную фонотеку. Для InnerTube используется MP4-поток InnerTubeX,
-     * для открытых каталогов и превью — прямой URL.
-     */
-    fun downloadTrack(track: Track) {
-        if (track.source == Source.LOCAL) {
-            _trackDownloads.update { it + (track.id to "Уже на устройстве") }
-            return
-        }
-        if (track.source == Source.YOUTUBE || track.uri?.startsWith("innertube:") == true) {
-            downloadYouTube(track)
-            return
-        }
-        if (!track.playable || track.uri.isNullOrBlank() || !track.uri.startsWith("http")) {
-            _trackDownloads.update { it + (track.id to "Недоступно") }
-            return
-        }
-        if (isTrackDownloaded(track)) {
-            _trackDownloads.update { it + (track.id to "Уже скачано") }
-            return
-        }
-        if (_trackDownloads.value[track.id] == "Скачивание") return
-        _trackDownloads.update { it + (track.id to "Скачивание") }
-        viewModelScope.launch {
-            val url = track.uri ?: return@launch
-            val fileName = downloadFileName(track)
-            graph.downloads.download(
-                url = url,
-                suggestedFileName = fileName,
-                mime = track.extra["mime"],
-            )
-                .onSuccess { file ->
-                    val metadata = runCatching { graph.metadata.lookup(track) }.getOrNull()
-                    val coverUrl = metadata?.coverUrl ?: track.artworkUrl
-                    val cover = coverUrl?.let { graph.downloads.downloadArtwork(it, track.id) }
-                    val artistImage = metadata?.artistImageUrl?.let { url ->
-                        graph.downloads.downloadArtwork(
-                            url,
-                            "artist_${ArtistNames.key(metadata.artist ?: track.artist)}",
-                        )
-                    }
-                    val local = track.copy(
-                        id = "file:${file.absolutePath}",
-                        uri = file.toURI().toString(),
-                        artist = if (ArtistNames.isSuspicious(track.artist)) {
-                            ArtistNames.clean(metadata?.artist ?: track.artist)
-                        } else {
-                            ArtistNames.clean(track.artist)
-                        },
-                        album = track.album ?: metadata?.album,
-                        artworkUri = cover?.toURI()?.toString(),
-                        artworkUrl = coverUrl,
-                        source = Source.LOCAL,
-                        playable = true,
-                        downloadAllowed = true,
-                        deepLink = null,
-                        extra = track.extra + buildMap {
-                            put("downloadedFrom", track.source.name)
-                            put("downloadedTrackId", track.id)
-                            put("downloadedAt", System.currentTimeMillis().toString())
-                            metadata?.artistImageUrl?.let { put("artistImageUrl", it) }
-                            artistImage?.let { put("artistImageUri", it.toURI().toString()) }
-                            metadata?.artistBio?.let { put("artistBio", it) }
-                            metadata?.genre?.let { put("genre", it) }
-                            metadata?.provider?.let { put("metadataProvider", it) }
-                        },
-                    )
-                    graph.library.upsertLocalTracks(listOf(local))
-                    graph.library.scanLocal()
-                    _trackDownloads.update { it + (track.id to "Готово") }
-                }
-                .onFailure { error ->
-                    _trackDownloads.update {
-                        it + (track.id to "Ошибка: ${downloadErrorMessage(error)}")
-                    }
-                }
-        }
-    }
-
     private fun downloadFileName(track: Track): String {
         track.extra["fileName"]?.takeIf { it.isNotBlank() }?.let { return it }
         val extension = track.uri
@@ -1821,6 +2445,52 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
 
     private val _warpError = MutableStateFlow<String?>(null)
     val warpError: StateFlow<String?> = _warpError.asStateFlow()
+
+    private val _warpKeepAlive = MutableStateFlow(graph.settings.current.warpKeepAlive)
+    val warpKeepAlive: StateFlow<Boolean> = _warpKeepAlive.asStateFlow()
+
+    /** Пользователь включал WARP: держим туннель включённым, в том числе после
+     *  перезапуска процесса (но только пока не нажал «Выключить»). */
+    private val _warpDesired = MutableStateFlow(
+        graph.settings.current.warpAutoConnect || graph.settings.current.warpUserEnabled,
+    )
+
+    /**
+     * Автовосстановление WARP. Если пользователь выключил свой VPN/WARP
+     * во время активной сессии, Sonora поднимает собственный туннель, как
+     * только внешний VPN исчезает. Явное «Выключить» в Sonora снимает флаг.
+     */
+    private fun observeWarpKeepAlive() {
+        viewModelScope.launch {
+            var lastAttemptAt = 0L
+            while (isActive) {
+                delay(3_000)
+                _warpExternalVpn.value = graph.warp.externalVpnActive()
+                if (!_warpKeepAlive.value || !_warpDesired.value) continue
+                val status = graph.warp.status.value
+                if (status.state == WarpState.CONNECTED ||
+                    status.state == WarpState.CONNECTING ||
+                    status.state == WarpState.DISCONNECTING
+                ) {
+                    continue
+                }
+                if (graph.warp.externalVpnActive()) continue
+                if (_warpConfigs.value.isEmpty()) continue
+                if (!graph.warp.hasVpnPermission()) continue
+                val now = System.currentTimeMillis()
+                // После ошибки не долбим сервер каждые 3 секунды.
+                if (status.state == WarpState.ERROR && now - lastAttemptAt < 15_000L) continue
+                lastAttemptAt = now
+                val result = graph.warp.startIfNoExternalVpn()
+                if (result.isFailure) {
+                    _warpError.value = result.exceptionOrNull()?.message
+                } else {
+                    _warpError.value = null
+                }
+                refreshWarp()
+            }
+        }
+    }
 
     fun clearWarpError() {
         _warpError.value = null
@@ -1878,6 +2548,10 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
      * Разрешение VPN должно быть уже выдано (иначе использовать [warpVpnPermissionIntent]).
      */
     fun startWarp(): Boolean {
+        // Запоминаем намерение: если сейчас активен чужой VPN, автоподхват
+        // включит Sonora WARP, как только пользователь его выключит.
+        _warpDesired.value = true
+        graph.settings.update { it.copy(warpUserEnabled = true) }
         val result = graph.warp.startIfNoExternalVpn()
         if (result.isFailure) {
             _warpError.value = result.exceptionOrNull()?.message
@@ -1889,8 +2563,16 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
     }
 
     fun stopWarp() {
+        // Явное выключение в Sonora отключает автоподхват до следующего включения.
+        _warpDesired.value = false
+        graph.settings.update { it.copy(warpUserEnabled = false) }
         graph.warp.stop()
         refreshWarp()
+    }
+
+    fun setWarpKeepAlive(enabled: Boolean) {
+        _warpKeepAlive.value = enabled
+        graph.settings.update { it.copy(warpKeepAlive = enabled) }
     }
 
     fun clearWarpConfig() {
@@ -1898,9 +2580,27 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
         refreshWarp()
     }
 
+    /** Возвращает в список встроенные WARP-конфиги, если пользователь их удалил. */
+    fun restoreBundledWarpConfigs() {
+        val added = runCatching { graph.warp.restoreBundled() }.getOrDefault(0)
+        refreshWarp()
+        toast(
+            if (added > 0) {
+                "Добавлено встроенных конфигов: $added"
+            } else {
+                "Встроенные конфиги уже в списке"
+            },
+        )
+    }
+
     override fun onCleared() {
         searchJob?.cancel()
         discoverJob?.cancel()
+        waveJob?.cancel()
+        loadMoreJob?.cancel()
+        // Колбэк держит ссылку на ViewModel, а PlaybackController живёт в AppGraph —
+        // без сброса после пересоздания Activity остался бы старый экземпляр.
+        graph.playback.queueExtender = null
         super.onCleared()
     }
 }

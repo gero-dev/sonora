@@ -5,10 +5,13 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -34,8 +37,10 @@ import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material.icons.rounded.Palette
+import androidx.compose.material.icons.rounded.PlayCircle
 import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.UploadFile
 import androidx.compose.material.icons.rounded.VpnKey
 import androidx.compose.material3.AlertDialog
@@ -73,6 +78,7 @@ import androidx.compose.ui.unit.dp
 import app.sonora.core.model.Source
 import app.sonora.core.settings.Accent
 import app.sonora.core.settings.AppSettings
+import app.sonora.core.settings.PlaybackMode
 import app.sonora.core.settings.ThemeMode
 import app.sonora.net.warp.WarpState
 import app.sonora.ui.MainViewModel
@@ -100,10 +106,11 @@ private const val LEGAL_TEXT =
 /**
  * Настройки: оформление, аудио, библиотека, аккаунты и правовая информация.
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) -> Unit) {
     val settings by vm.settings.collectAsState()
+    val waveHistorySize by vm.waveHistorySize.collectAsState()
     val connections by vm.connections.collectAsState()
     val scanning by vm.scanning.collectAsState()
     val enriching by vm.enriching.collectAsState()
@@ -112,6 +119,7 @@ fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
 
     var legalExpanded by rememberSaveable { mutableStateOf(false) }
     var showPlaylistImportHelp by rememberSaveable { mutableStateOf(false) }
+    var showWaveSettings by remember { mutableStateOf(false) }
     var jamendoClientId by rememberSaveable(settings.jamendoClientId) {
         mutableStateOf(settings.jamendoClientId)
     }
@@ -127,6 +135,7 @@ fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
     val warpConfigs by vm.warpConfigs.collectAsState()
     val warpAutoRotate by vm.warpAutoRotate.collectAsState()
     val warpExternalVpn by vm.warpExternalVpn.collectAsState()
+    val warpKeepAlive by vm.warpKeepAlive.collectAsState()
     val warpImportLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenMultipleDocuments(),
     ) { uris ->
@@ -149,6 +158,13 @@ fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
         if (uri != null) vm.importPlaylistFile(uri)
     }
     val playlistImport by vm.playlistFileImport.collectAsState()
+    val metadataImport by vm.metadataImport.collectAsState()
+    val coverSearch by vm.coverSearch.collectAsState()
+    val metadataLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenMultipleDocuments(),
+    ) { uris ->
+        if (uris.isNotEmpty()) vm.importMetadataFiles(uris)
+    }
 
     Column(
         modifier = Modifier
@@ -184,9 +200,11 @@ fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
             }
             Spacer(Modifier.height(12.dp))
             SettingsLabel("Акцентный цвет · ${settings.accent.label}")
-            Row(
+            FlowRow(
                 modifier = Modifier.padding(vertical = 6.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                maxItemsInEachRow = 8,
             ) {
                 Accent.entries.forEach { accent ->
                     AccentSwatch(
@@ -269,6 +287,49 @@ fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
                     )
                 }
             }
+        }
+
+        // ---------- Воспроизведение ----------
+        SettingsSection(title = "Воспроизведение", icon = Icons.Rounded.PlayCircle) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                    .padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Shuffle,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp),
+                )
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = when {
+                            settings.playbackMode != PlaybackMode.STREAMING ->
+                                "Только на устройстве"
+                            settings.streamingInQueue -> "Стриминг включён"
+                            else -> "Стриминг в очереди выключен"
+                        },
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    Text(
+                        text = "Переключается в плеере: долгое нажатие на кнопку перемешивания",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            Spacer(Modifier.height(4.dp))
+            SwitchRow(
+                title = "Сохранять историю прослушиваний",
+                subtitle = "Треки, исполнители и статистика — только на этом устройстве",
+                checked = settings.saveHistory,
+                onCheckedChange = vm::setSaveHistory,
+            )
         }
 
         // ---------- Библиотека ----------
@@ -385,6 +446,63 @@ fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
                 onCheckedChange = vm::setEnrichOnScan,
             )
             SwitchRow(
+                title = "Читать метаданные из файлов рядом с треками",
+                subtitle = "JSON/NFO/LRC и cover.jpg в папке с музыкой",
+                checked = settings.readSidecarMetadata,
+                onCheckedChange = vm::setReadSidecarMetadata,
+            )
+            SwitchRow(
+                title = "Брать обложки из аудиофайлов",
+                subtitle = "Встроенные ID3/FLAC/MP4-обложки — офлайн и точнее",
+                checked = settings.useEmbeddedArtwork,
+                onCheckedChange = vm::setUseEmbeddedArtwork,
+            )
+            ActionRow(
+                title = "Импортировать метаданные из файла",
+                subtitle = "JSON/CSV/NFO: альбом, год, обложка, текст",
+                onClick = { metadataLauncher.launch(arrayOf("*/*")) },
+                enabled = !metadataImport.importing,
+            )
+            val importNote = metadataImport.message
+            val metadataImportText = when {
+                metadataImport.importing -> "Импорт…"
+                metadataImport.files > 0 || metadataImport.matched > 0 ||
+                    metadataImport.updated > 0 || metadataImport.failed > 0 -> buildString {
+                    append("Совпало: ${metadataImport.matched}, обновлено: ${metadataImport.updated}")
+                    if (metadataImport.failed > 0) {
+                        append(" · ошибок: ${metadataImport.failed}")
+                    }
+                    if (!importNote.isNullOrBlank()) {
+                        append(" · ")
+                        append(importNote)
+                    }
+                }
+                else -> importNote?.takeIf { it.isNotBlank() }
+            }
+            if (metadataImportText != null) {
+                Text(
+                    text = metadataImportText,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (!metadataImport.importing && metadataImport.failed > 0) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                )
+            }
+            val coverSearchSubtitle = when {
+                coverSearch.searching -> "Ищу… ${coverSearch.processed} из ${coverSearch.total}"
+                coverSearch.total > 0 ->
+                    "Готово: найдено ${coverSearch.found} ${coverWord(coverSearch.found)}"
+                else -> "Обложки есть не у всех локальных треков — попробовать найти"
+            }
+            ActionRow(
+                title = "Найти пропущенные обложки",
+                subtitle = coverSearchSubtitle,
+                onClick = { vm.findMissingCovers() },
+                enabled = !coverSearch.searching,
+            )
+            SwitchRow(
                 title = "Автоматическая очередь",
                 subtitle = "При запуске трека добавлять похожие: альбом → исполнитель → фонотека",
                 checked = settings.autoQueue,
@@ -446,6 +564,21 @@ fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+        }
+
+        // ---------- Рекомендации ----------
+        SettingsSection(title = "Рекомендации", icon = Icons.Rounded.AutoAwesome) {
+            ActionRow(
+                title = "Настройки «Моей волны»",
+                subtitle = "История, новизна, доля устройства и только музыка",
+                onClick = { showWaveSettings = true },
+            )
+            SwitchRow(
+                title = "Только музыка в волне",
+                subtitle = "Без клипов, концертов и подкастов",
+                checked = settings.wave.musicOnly,
+                onCheckedChange = { vm.updateWaveSettings { w -> w.copy(musicOnly = it) } },
+            )
         }
 
         // ---------- Импорт из других платформ ----------
@@ -641,6 +774,11 @@ fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
                 )
             }
             Spacer(Modifier.height(6.dp))
+            ActionRow(
+                title = "Восстановить встроенные конфиги",
+                subtitle = "3 конфига уже в комплекте; импорт дополнительных — ниже",
+                onClick = { vm.restoreBundledWarpConfigs() },
+            )
             Button(
                 onClick = { warpImportLauncher.launch(arrayOf("*/*")) },
                 modifier = Modifier.fillMaxWidth(),
@@ -704,6 +842,12 @@ fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
                             vm.stopWarp()
                         }
                     },
+                )
+                SwitchRow(
+                    title = "Автовосстановление",
+                    subtitle = "Поднять WARP, если вы выключили свой VPN/WARP во время сессии",
+                    checked = warpKeepAlive,
+                    onCheckedChange = { vm.setWarpKeepAlive(it) },
                 )
                 SwitchRow(
                     title = "Автоматически перебирать конфиги",
@@ -771,7 +915,7 @@ fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
 
         // ---------- О приложении ----------
         SettingsSection(title = "О приложении", icon = Icons.Rounded.Info) {
-            InfoRow(title = "Версия", value = "0.9.4")
+            InfoRow(title = "Версия", value = "1.0.0")
             InfoRow(title = "Стек", value = "Kotlin · Compose · Media3")
             Spacer(Modifier.height(8.dp))
             Text(
@@ -779,6 +923,19 @@ fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
                     "плейлисты и официальные API сервисов.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        if (showWaveSettings) {
+            WaveSettingsSheet(
+                settings = settings.wave,
+                historySize = waveHistorySize,
+                onDismiss = { showWaveSettings = false },
+                onApply = { draft ->
+                    vm.updateWaveSettings { _ -> draft }
+                    showWaveSettings = false
+                },
+                onClearHistory = { vm.clearWaveHistory() },
             )
         }
     }
@@ -905,14 +1062,19 @@ private fun InfoRow(title: String, value: String) {    Row(
     }
 }
 
-/** Строка-действие: заголовок, подпись и стрелка. */
+/** Строка-действие: заголовок, подпись и стрелка; [enabled] гасит повторные нажатия. */
 @Composable
-private fun ActionRow(title: String, subtitle: String?, onClick: () -> Unit) {
+private fun ActionRow(
+    title: String,
+    subtitle: String?,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.medium)
-            .clickable(onClick = onClick)
+            .clickable(enabled = enabled, onClick = onClick)
             .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -921,19 +1083,29 @@ private fun ActionRow(title: String, subtitle: String?, onClick: () -> Unit) {
                 .weight(1f)
                 .padding(end = 12.dp),
         ) {
-            Text(title, style = MaterialTheme.typography.titleMedium)
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface.copy(
+                    alpha = if (enabled) 1f else 0.6f,
+                ),
+            )
             if (subtitle != null) {
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(
+                        alpha = if (enabled) 1f else 0.6f,
+                    ),
                 )
             }
         }
         Icon(
             imageVector = Icons.Rounded.ChevronRight,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(
+                alpha = if (enabled) 1f else 0.6f,
+            ),
         )
     }
 }
@@ -1028,4 +1200,11 @@ private fun formatHz(hz: Int): String = if (hz >= 1000) {
     String.format(Locale.US, "%.1fк", hz / 1000f).replace(".0к", "к")
 } else {
     hz.toString()
+}
+
+/** Склонение слова «обложка» для подписи результата поиска. */
+private fun coverWord(count: Int): String = when {
+    count % 10 == 1 && count % 100 != 11 -> "обложка"
+    count % 10 in 2..4 && count % 100 !in 12..14 -> "обложки"
+    else -> "обложек"
 }

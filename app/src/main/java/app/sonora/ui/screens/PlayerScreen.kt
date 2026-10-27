@@ -1,7 +1,9 @@
 package app.sonora.ui.screens
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -23,7 +25,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Bedtime
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Cloud
+import androidx.compose.material.icons.rounded.CloudOff
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
@@ -48,6 +53,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -82,7 +88,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.Player
 import app.sonora.core.model.Source
+import app.sonora.core.settings.PlaybackMode
 import app.sonora.core.util.Formatters
+import app.sonora.data.download.SaveStatus
+import app.sonora.data.download.TrackSaveState
 import app.sonora.ui.MainViewModel
 import app.sonora.ui.components.CoverArtBox
 import app.sonora.ui.components.EmptyState
@@ -111,18 +120,21 @@ private const val LYRICS_WAIT_MS = 8_000L
  * Полноэкранный плеер: размытая обложка на фоне, крупный арт, кастомный слайдер,
  * транспорт и одна строка иконочных действий (избранное, таймер, очередь, текст, скачивание).
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun PlayerScreen(vm: MainViewModel, onBack: () -> Unit, navigate: (String) -> Unit) {
     val player by vm.player.collectAsState()
     val favorites by vm.favorites.collectAsState()
-    val downloads by vm.trackDownloads.collectAsState()
+    val saveStates by vm.saveStates.collectAsState()
+    val settings by vm.settings.collectAsState()
 
     var menuExpanded by remember { mutableStateOf(false) }
+    var sourceMenuExpanded by remember { mutableStateOf(false) }
     var sleepDialogVisible by remember { mutableStateOf(false) }
     var lyricsVisible by remember { mutableStateOf(false) }
     var lyricsRequestedFor by remember { mutableStateOf<String?>(null) }
     var hint by remember { mutableStateOf<String?>(null) }
+    val streamingEnabled = settings.playbackMode == PlaybackMode.STREAMING
 
     // Жесты: горизонтальный свайп — трек, вниз — закрыть, вверх — очередь.
     var dragOffset by remember { mutableStateOf(Offset.Zero) }
@@ -293,8 +305,8 @@ fun PlayerScreen(vm: MainViewModel, onBack: () -> Unit, navigate: (String) -> Un
                 val isFavorite = current.id in favorites
                 val hasLyrics = !current.lyrics.isNullOrBlank() ||
                     !current.syncedLyrics.isNullOrBlank()
-                val downloadState = downloads[current.id]
-                    ?: if (vm.isTrackDownloaded(current)) "Готово" else null
+                val saveState = saveStates[current.id]
+                    ?: if (vm.isTrackDownloaded(current)) TrackSaveState.done() else null
                 val sleepEndsAt = player.sleepEndsAt
                 val sleepDescription = if (sleepEndsAt != null) {
                     "Таймер сна, осталось ${remainingLabel(sleepEndsAt)}"
@@ -334,16 +346,24 @@ fun PlayerScreen(vm: MainViewModel, onBack: () -> Unit, navigate: (String) -> Un
                     }
                 }
 
-                // Статус скачивания: «Готово»/«Ошибка» показываем только на переходе.
-                var previousDownloadState by remember(current.id) { mutableStateOf(downloadState) }
-                LaunchedEffect(current.id, downloadState) {
-                    if (previousDownloadState == "Скачивание" && downloadState == "Готово") {
-                        hint = "Скачано в библиотеку"
+                // Статус сохранения: «Готово»/«Ошибка» показываем только на переходе.
+                var previousSaveStatus by remember(current.id) {
+                    mutableStateOf(saveState?.status)
+                }
+                LaunchedEffect(current.id, saveState?.status) {
+                    val status = saveState?.status
+                    if (previousSaveStatus == SaveStatus.DOWNLOADING ||
+                        previousSaveStatus == SaveStatus.QUEUED
+                    ) {
+                        when (status) {
+                            SaveStatus.DONE -> hint = "Сохранено на устройство"
+                            SaveStatus.ERROR -> hint = saveState?.message
+                                ?.let { "Не удалось сохранить: $it" }
+                                ?: "Не удалось сохранить трек"
+                            else -> Unit
+                        }
                     }
-                    if (previousDownloadState == "Скачивание" && downloadState == "Ошибка") {
-                        hint = "Не удалось скачать"
-                    }
-                    previousDownloadState = downloadState
+                    previousSaveStatus = status
                 }
 
                 Column(
@@ -392,6 +412,38 @@ fun PlayerScreen(vm: MainViewModel, onBack: () -> Unit, navigate: (String) -> Un
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
+                    if (saveState?.isActive == true) {
+                        Spacer(Modifier.height(10.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            if (saveState.percent in 0..100) {
+                                LinearProgressIndicator(
+                                    progress = saveState.percent / 100f,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(4.dp),
+                                    color = MaterialTheme.colorScheme.primary,
+                                    trackColor = Color.White.copy(alpha = 0.18f),
+                                )
+                            } else {
+                                LinearProgressIndicator(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(4.dp),
+                                    color = MaterialTheme.colorScheme.primary,
+                                    trackColor = Color.White.copy(alpha = 0.18f),
+                                )
+                            }
+                            Spacer(Modifier.width(10.dp))
+                            Text(
+                                text = saveState.label,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color.White.copy(alpha = 0.78f),
+                            )
+                        }
+                    }
                     if (!current.playable) {
                         Spacer(Modifier.height(12.dp))
                         NotPlayableBanner(onOpen = { vm.playOrOpen(current) })
@@ -446,13 +498,113 @@ fun PlayerScreen(vm: MainViewModel, onBack: () -> Unit, navigate: (String) -> Un
                         horizontalArrangement = Arrangement.SpaceEvenly,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        IconButton(onClick = vm::toggleShuffle) {
-                            Icon(
-                                imageVector = Icons.Rounded.Shuffle,
-                                contentDescription = "Перемешать",
-                                tint = if (player.shuffle) MaterialTheme.colorScheme.primary else ActionTint,
-                                modifier = Modifier.size(24.dp),
-                            )
+                        // Перемешивание + переключатель стриминга, как в Spotify:
+                        // обычный тап — shuffle, долгое нажатие — источник воспроизведения.
+                        Box {
+                            Box(
+                                modifier = Modifier
+                                    .size(44.dp)
+                                    .clip(CircleShape)
+                                    .combinedClickable(
+                                        onClick = { vm.toggleShuffle() },
+                                        onLongClick = { sourceMenuExpanded = true },
+                                    ),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Shuffle,
+                                    contentDescription = if (streamingEnabled) {
+                                        "Перемешать. Долгое нажатие — стриминг"
+                                    } else {
+                                        "Перемешать. Стриминг выключен"
+                                    },
+                                    tint = if (player.shuffle) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        ActionTint
+                                    },
+                                    modifier = Modifier.size(24.dp),
+                                )
+                                Icon(
+                                    imageVector = if (streamingEnabled) {
+                                        Icons.Rounded.Cloud
+                                    } else {
+                                        Icons.Rounded.CloudOff
+                                    },
+                                    contentDescription = null,
+                                    tint = if (streamingEnabled) {
+                                        ActionTint
+                                    } else {
+                                        MaterialTheme.colorScheme.error
+                                    },
+                                    modifier = Modifier
+                                        .align(Alignment.BottomEnd)
+                                        .padding(end = 8.dp, bottom = 7.dp)
+                                        .size(11.dp),
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = sourceMenuExpanded,
+                                onDismissRequest = { sourceMenuExpanded = false },
+                            ) {
+                                Text(
+                                    text = "Источник воспроизведения",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Онлайн + устройство") },
+                                    leadingIcon = {
+                                        Icon(Icons.Rounded.Cloud, contentDescription = null)
+                                    },
+                                    trailingIcon = {
+                                        if (streamingEnabled) {
+                                            Icon(Icons.Rounded.Check, contentDescription = null)
+                                        }
+                                    },
+                                    onClick = {
+                                        sourceMenuExpanded = false
+                                        vm.setStreamingEnabled(true)
+                                    },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Только на устройстве") },
+                                    leadingIcon = {
+                                        Icon(Icons.Rounded.CloudOff, contentDescription = null)
+                                    },
+                                    trailingIcon = {
+                                        if (!streamingEnabled) {
+                                            Icon(Icons.Rounded.Check, contentDescription = null)
+                                        }
+                                    },
+                                    onClick = {
+                                        sourceMenuExpanded = false
+                                        vm.setStreamingEnabled(false)
+                                    },
+                                )
+                                HorizontalDivider()
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            if (player.shuffle) "Перемешивание включено"
+                                            else "Перемешивание выключено",
+                                        )
+                                    },
+                                    leadingIcon = {
+                                        Icon(Icons.Rounded.Shuffle, contentDescription = null)
+                                    },
+                                    trailingIcon = {
+                                        if (player.shuffle) {
+                                            Icon(Icons.Rounded.Check, contentDescription = null)
+                                        }
+                                    },
+                                    onClick = {
+                                        sourceMenuExpanded = false
+                                        vm.toggleShuffle()
+                                    },
+                                )
+                            }
                         }
                         IconButton(onClick = vm::previous) {
                             Icon(
@@ -569,34 +721,49 @@ fun PlayerScreen(vm: MainViewModel, onBack: () -> Unit, navigate: (String) -> Un
                                 )
                             }
                         }
-                        // Скачивание — только для треков с разрешённым скачиванием.
-                        if (current.playable && current.source != Source.LOCAL && downloadState != "Недоступно") {
+                        // Сохранение — только для треков, которые ещё не на устройстве.
+                        if (current.playable && current.source != Source.LOCAL &&
+                            saveState?.status != SaveStatus.UNAVAILABLE
+                        ) {
                             ActionSlot {
-                                when (downloadState) {
-                                    "Скачивание" -> Box(
-                                        modifier = Modifier.size(48.dp),
+                                when (saveState?.status) {
+                                    SaveStatus.QUEUED, SaveStatus.DOWNLOADING -> Box(
+                                        modifier = Modifier.size(44.dp),
                                         contentAlignment = Alignment.Center,
                                     ) {
-                                        CircularProgressIndicator(
-                                            modifier = Modifier.size(16.dp),
-                                            strokeWidth = 2.dp,
-                                            color = ActionTint,
-                                        )
+                                        if (saveState.percent in 0..99) {
+                                            CircularProgressIndicator(
+                                                progress = saveState.percent / 100f,
+                                                modifier = Modifier.size(22.dp),
+                                                strokeWidth = 2.5.dp,
+                                                color = MaterialTheme.colorScheme.primary,
+                                            )
+                                        } else {
+                                            CircularProgressIndicator(
+                                                modifier = Modifier.size(18.dp),
+                                                strokeWidth = 2.dp,
+                                                color = ActionTint,
+                                            )
+                                        }
                                     }
 
-                                    "Готово" -> IconButton(onClick = { hint = "Уже скачано" }) {
+                                    SaveStatus.DONE -> IconButton(
+                                        onClick = { hint = "Уже сохранено на устройство" },
+                                    ) {
                                         Icon(
                                             imageVector = Icons.Rounded.CheckCircle,
-                                            contentDescription = "Скачано",
+                                            contentDescription = "Сохранено",
                                             tint = MaterialTheme.colorScheme.primary,
                                             modifier = Modifier.size(24.dp),
                                         )
                                     }
 
-                                    "Ошибка" -> IconButton(onClick = { vm.downloadTrack(current) }) {
+                                    SaveStatus.ERROR -> IconButton(
+                                        onClick = { vm.retrySave(current) },
+                                    ) {
                                         Icon(
                                             imageVector = Icons.Rounded.Download,
-                                            contentDescription = "Повторить скачивание",
+                                            contentDescription = "Повторить сохранение",
                                             tint = MaterialTheme.colorScheme.error,
                                             modifier = Modifier.size(24.dp),
                                         )
@@ -605,7 +772,7 @@ fun PlayerScreen(vm: MainViewModel, onBack: () -> Unit, navigate: (String) -> Un
                                     else -> IconButton(onClick = { vm.downloadTrack(current) }) {
                                         Icon(
                                             imageVector = Icons.Rounded.Download,
-                                            contentDescription = "Скачать",
+                                            contentDescription = "Сохранить на устройство",
                                             tint = ActionTint,
                                             modifier = Modifier.size(24.dp),
                                         )
@@ -616,9 +783,14 @@ fun PlayerScreen(vm: MainViewModel, onBack: () -> Unit, navigate: (String) -> Un
                     }
                     Spacer(Modifier.height(12.dp))
                     Text(
-                        text = "Свайп: ← → трек · ↓ закрыть · ↑ очередь · двойной тап — пауза",
+                        text = "Долгое нажатие на ⤨ — стриминг · " +
+                            if (streamingEnabled) "онлайн включён" else "только устройство",
                         style = MaterialTheme.typography.labelSmall,
-                        color = Color.White.copy(alpha = 0.45f),
+                        color = if (streamingEnabled) {
+                            Color.White.copy(alpha = 0.45f)
+                        } else {
+                            MaterialTheme.colorScheme.error.copy(alpha = 0.85f)
+                        },
                         textAlign = TextAlign.Center,
                         modifier = Modifier.fillMaxWidth(),
                     )

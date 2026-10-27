@@ -44,6 +44,8 @@ class LibraryRepository(
     val scanning: StateFlow<Boolean> = _scanning.asStateFlow()
 
     private val mutex = Mutex()
+    /** Сканирование не должно идти параллельно: сохранение трека и кнопка «Обновить». */
+    private val scanMutex = Mutex()
     private var initialized = false
 
     private val trackSerializer = ListSerializer(Track.serializer())
@@ -67,10 +69,21 @@ class LibraryRepository(
 
     /** Пересканировать устройство и смёржить с кэшем внешних источников. */
     suspend fun scanLocal(): Int {
+        scanMutex.lock()
         _scanning.value = true
         return try {
-            val fromMediaStore = scanner.scan(settings.current.excludeShortTracks)
-            val fromFolders = extraDirs().flatMap { dir -> scanner.scanFolder(dir) }
+            val fromMediaStore = scanner.scan(
+                settings.current.excludeShortTracks,
+                settings.current.useEmbeddedArtwork,
+                settings.current.readSidecarMetadata,
+            )
+            val fromFolders = extraDirs().flatMap { dir ->
+                scanner.scanFolder(
+                    dir,
+                    settings.current.useEmbeddedArtwork,
+                    settings.current.readSidecarMetadata,
+                )
+            }
             // distinctBy: файл мог попасть и в MediaStore, и в папку импорта.
             val scanned = (fromMediaStore + fromFolders).distinctBy { it.uri ?: it.id }
             val previousLocal = _tracks.value
@@ -97,6 +110,7 @@ class LibraryRepository(
             local.size
         } finally {
             _scanning.value = false
+            scanMutex.unlock()
         }
     }
 
@@ -111,7 +125,11 @@ class LibraryRepository(
         val freshAlbumMissing = fresh.album.isNullOrBlank() ||
             fresh.album.lowercase() in PLACEHOLDER_ALBUMS
         val freshTitleIsFileName = fresh.uri?.let { uri ->
-            val name = uri.substringAfterLast('/').substringBeforeLast('.')
+            // URI из MediaStore/scanner бывает percent-encoded: «Nirvana%20-%20…».
+            // Декодируем, иначе скачанный трек теряет красивое название из стриминга
+            // и остаётся с именем файла «Исполнитель - Название».
+            val rawName = uri.substringAfterLast('/').substringBeforeLast('.')
+            val name = runCatching { android.net.Uri.decode(rawName) }.getOrDefault(rawName)
             fresh.title.equals(name, ignoreCase = true) || fresh.title == name
         } == true
         val title = if (freshTitleIsFileName && old.title.isNotBlank()) old.title else fresh.title
@@ -124,7 +142,11 @@ class LibraryRepository(
             artist = artist,
             album = if (freshAlbumMissing) old.album else fresh.album,
             durationMs = fresh.durationMs.takeIf { it > 0L } ?: old.durationMs,
-            artworkUri = old.artworkUri ?: fresh.artworkUri,
+            artworkUri = if (isMediaStoreAlbumArtUri(old.artworkUri)) {
+                fresh.artworkUri ?: old.artworkUri
+            } else {
+                old.artworkUri ?: fresh.artworkUri
+            },
             artworkUrl = fresh.artworkUrl ?: old.artworkUrl,
             lyrics = fresh.lyrics ?: old.lyrics,
             syncedLyrics = fresh.syncedLyrics ?: old.syncedLyrics,
@@ -139,6 +161,13 @@ class LibraryRepository(
         val path = uri.removePrefix("file://").removePrefix("file:")
         return runCatching { java.io.File(path).isFile }.getOrDefault(false)
     }
+
+    /**
+     * `content://media/external/audio/albumart/...` из MediaStore: на Android 10+
+     * такой URI часто не открывается, поэтому его можно заменять свежей обложкой.
+     */
+    private fun isMediaStoreAlbumArtUri(uri: String?): Boolean =
+        uri?.startsWith(MEDIASTORE_ALBUM_ART_PREFIX, ignoreCase = true) == true
 
     /**
      * Регистрирует локальный файл (в том числе скачанный из InnerTube) с полными
@@ -252,6 +281,39 @@ class LibraryRepository(
 
     fun favoriteTracks(): List<Track> = tracksByIds(_favorites.value.toList())
 
+    /**
+     * После сохранения онлайн-трека переносим ссылки на локальную копию:
+     * избранное и плейлисты не должны указывать на стриминговый id, иначе
+     * после перезапуска они откроют сетевую версию вместо файла.
+     */
+    suspend fun transferTrackReferences(oldId: String, newId: String) {
+        if (oldId == newId) return
+        val favorites = _favorites.value
+        if (favorites.contains(oldId)) {
+            val next = (favorites - oldId) + newId
+            _favorites.value = next
+            JsonFile.write(context, FILE_FAVORITES, favoritesSerializer, next.toList())
+        }
+        val playlists = _playlists.value
+        var changed = false
+        val updated = playlists.map { playlist ->
+            if (oldId !in playlist.trackIds) {
+                playlist
+            } else {
+                changed = true
+                playlist.copy(
+                    trackIds = playlist.trackIds
+                        .map { if (it == oldId) newId else it }
+                        .distinct(),
+                )
+            }
+        }
+        if (changed) {
+            _playlists.value = updated
+            persistPlaylists()
+        }
+    }
+
     // ---------- Онлайн-метаданные ----------
 
     /**
@@ -306,7 +368,10 @@ class LibraryRepository(
             // Обложку улучшаем, если текущая — превью YouTube или её нет, но
             // не затираем встроенную обложку локального файла.
             val existingArtworkUrl = track.artworkUrl?.takeIf { it.isNotBlank() }
-            val hasEmbeddedArtwork = !track.artworkUri.isNullOrBlank()
+            // «Битый» content://…/albumart из MediaStore — не настоящая обложка:
+            // он не должен блокировать онлайн-обложку.
+            val hasEmbeddedArtwork = !track.artworkUri.isNullOrBlank() &&
+                !isMediaStoreAlbumArtUri(track.artworkUri)
             val artworkUrl = when {
                 metadata.coverUrl.isNullOrBlank() -> existingArtworkUrl
                 existingArtworkUrl == null && !hasEmbeddedArtwork -> metadata.coverUrl
@@ -333,6 +398,37 @@ class LibraryRepository(
             _tracks.value = updated
             persistTracks()
         }
+    }
+
+    /**
+     * Явное применение «телеметрии» из файла пользователя: перекрывает даже уже
+     * заполненные альбом/год/обложку/текст, потому что это осознанный импорт
+     * подготовленных данных, а не автоматический поиск по каталогам.
+     */
+    suspend fun applyImportedMetadata(
+        trackId: String,
+        album: String?,
+        year: Int?,
+        coverUrl: String?,
+        lyrics: String?,
+    ) {
+        val index = _tracks.value.indexOfFirst { it.id == trackId }
+        if (index < 0) return
+        val track = _tracks.value[index]
+        val extra = track.extra.toMutableMap()
+        if (year != null && year > 0) extra["year"] = year.toString()
+        if (!coverUrl.isNullOrBlank()) extra["coverUrl"] = coverUrl
+        extra["metadataFromFile"] = "1"
+        val updated = track.copy(
+            album = album?.takeIf { it.isNotBlank() } ?: track.album,
+            artworkUrl = coverUrl?.takeIf { it.isNotBlank() } ?: track.artworkUrl,
+            lyrics = lyrics?.takeIf { it.isNotBlank() } ?: track.lyrics,
+            extra = extra,
+        )
+        val list = _tracks.value.toMutableList()
+        list[index] = updated
+        _tracks.value = list
+        persistTracks()
     }
 
     /** Треки, у которых нет обложки/года/текста — кандидаты на обогащение. */
@@ -451,14 +547,43 @@ class LibraryRepository(
     }
 
     fun searchLocal(query: String): List<Track> {
-        if (query.isBlank()) return emptyList()
-        val q = query.trim().lowercase()
-        return _tracks.value.filter {
-            it.title.lowercase().contains(q) ||
-                it.artist.lowercase().contains(q) ||
-                (it.album?.lowercase()?.contains(q) == true)
-        }
+        val q = normalizeSearch(query)
+        if (q.isEmpty()) return emptyList()
+        // Только файлы на устройстве: кэш онлайн-треков не должен попадать
+        // в секцию «На устройстве» и дублировать результаты стриминга.
+        return _tracks.value
+            .asSequence()
+            .filter { it.source == Source.LOCAL && !it.isVideoContent }
+            .mapNotNull { track ->
+                val title = normalizeSearch(track.title)
+                val artist = normalizeSearch(track.artist)
+                val album = normalizeSearch(track.album.orEmpty())
+                val score = when {
+                    title == q -> 100
+                    title.startsWith(q) -> 80
+                    artist == q -> 70
+                    artist.startsWith(q) -> 60
+                    title.contains(q) -> 50
+                    artist.contains(q) -> 40
+                    album.contains(q) -> 30
+                    else -> null
+                }
+                score?.let { it to track }
+            }
+            .sortedWith(
+                compareByDescending<Pair<Int, Track>> { it.first }
+                    .thenBy { it.second.title.lowercase() },
+            )
+            .map { it.second }
+            .toList()
     }
+
+    /** Поиск без регистра, лишних пробелов и различий «ё/е». */
+    private fun normalizeSearch(value: String): String = value
+        .lowercase()
+        .replace('ё', 'е')
+        .replace(Regex("\\s+"), " ")
+        .trim()
 
     // ---------- persistence ----------
 
@@ -468,10 +593,13 @@ class LibraryRepository(
     private suspend fun persistPlaylists() =
         JsonFile.write(context, FILE_PLAYLISTS, playlistSerializer, _playlists.value)
 
-    private companion object {
+    companion object {
         const val FILE_TRACKS = "library_tracks.json"
         const val FILE_PLAYLISTS = "library_playlists.json"
         const val FILE_FAVORITES = "library_favorites.json"
+
+        /** Префикс «битых» обложек альбомов MediaStore (Android 10+ часто пустые). */
+        const val MEDIASTORE_ALBUM_ART_PREFIX = "content://media/external/audio/albumart"
 
         /** Повторная проверка метаданных — не чаще раза в сутки. */
         const val METADATA_RECHECK_MS = 24L * 60 * 60 * 1000

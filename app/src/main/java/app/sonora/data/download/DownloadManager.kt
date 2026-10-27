@@ -27,10 +27,16 @@ data class DownloadItem(
     val totalBytes: Long = 0L,
     val status: String,
     val localPath: String? = null,
+    /** Логический id трека — по нему UI находит прогресс сохранения. */
+    val tag: String? = null,
 ) {
     /** 0f..1f, если сервер сообщил размер; иначе 0f. */
     val progress: Float
         get() = if (totalBytes > 0L) (bytes.toFloat() / totalBytes).coerceIn(0f, 1f) else 0f
+
+    /** Прогресс в процентах; -1, пока сервер не сообщил размер. */
+    val percent: Int
+        get() = if (totalBytes > 0L) (progress * 100f).toInt().coerceIn(0, 100) else -1
 }
 
 /**
@@ -82,13 +88,22 @@ class DownloadManager(
         contentLengthHint: Long? = null,
         rangeChunkSizeBytes: Long = 0L,
         requireBoundedRange: Boolean = false,
+        /** Логический id трека: по нему UI показывает прогресс сохранения. */
+        tag: String? = null,
+        /** Дополнительный колбэк прогресса (байты записи, всего байт; -1 — неизвестно). */
+        onProgress: ((Long, Long) -> Unit)? = null,
     ): Result<File> =
         withContext(Dispatchers.IO) {
             if (url.isBlank()) {
                 return@withContext Result.failure(IOException("Пустая ссылка"))
             }
             if (settings.current.downloadWifiOnly && !isOnWifi()) {
-                return@withContext Result.failure(IllegalStateException("Только Wi-Fi"))
+                return@withContext Result.failure(
+                    IllegalStateException(
+                        "Нет Wi-Fi. Подключитесь к Wi-Fi или отключите «Скачивать только по Wi-Fi» " +
+                            "в настройках.",
+                    ),
+                )
             }
             val dir = downloadDirectory()
             if (!dir.exists() && !dir.mkdirs()) {
@@ -101,19 +116,22 @@ class DownloadManager(
             val partial = File(dir, "$itemName.part")
             val totalHint = contentLengthHint?.takeIf { it > 0L }
             val useRanges = requireBoundedRange || rangeChunkSizeBytes > 0L
-            upsert(DownloadItem(fileName = itemName, status = STATUS_DOWNLOADING))
+            upsert(DownloadItem(fileName = itemName, status = STATUS_DOWNLOADING, tag = tag))
             try {
                 val requestHeaders = mediaHeaders(headers)
                 var lastReported = 0L
-                val onProgress: (Long, Long) -> Unit = { written, total ->
+                val progressSink: (Long, Long) -> Unit = { written, total ->
+                    val safeTotal = total.takeIf { it > 0L } ?: 0L
                     if (written - lastReported >= PROGRESS_STEP_BYTES || written == total) {
                         lastReported = written
+                        onProgress?.invoke(written, safeTotal)
                         upsert(
                             DownloadItem(
                                 fileName = itemName,
                                 bytes = written,
-                                totalBytes = total.takeIf { it > 0L } ?: 0L,
+                                totalBytes = safeTotal,
                                 status = STATUS_DOWNLOADING,
+                                tag = tag,
                             ),
                         )
                     }
@@ -125,14 +143,14 @@ class DownloadManager(
                         partial = partial,
                         contentLengthHint = totalHint,
                         chunkSizeHint = rangeChunkSizeBytes,
-                        onProgress = onProgress,
+                        onProgress = progressSink,
                     )
                 } else {
                     downloadFull(
                         url = url,
                         headers = requestHeaders,
                         partial = partial,
-                        onProgress = onProgress,
+                        onProgress = progressSink,
                     )
                 }
                 val finalSize = partial.length()
@@ -149,12 +167,14 @@ class DownloadManager(
                         totalBytes = size,
                         status = STATUS_DONE,
                         localPath = target.absolutePath,
+                        tag = tag,
                     ),
                 )
+                onProgress?.invoke(size, size)
                 Result.success(target)
             } catch (error: Exception) {
                 runCatching { partial.delete() }
-                failItem(itemName, error)
+                failItem(itemName, error, tag)
                 Result.failure(error)
             }
         }
@@ -474,9 +494,9 @@ class DownloadManager(
         _items.update { current -> current.filterNot { it.fileName == fileName } }
     }
 
-    private fun failItem(fileName: String, error: Throwable) {
+    private fun failItem(fileName: String, error: Throwable, tag: String? = null) {
         val message = error.message?.takeIf { it.isNotBlank() } ?: "неизвестная ошибка"
-        upsert(DownloadItem(fileName = fileName, status = "$STATUS_ERROR: $message"))
+        upsert(DownloadItem(fileName = fileName, status = "$STATUS_ERROR: $message", tag = tag))
     }
 
     private fun uniqueFile(dir: File, fileName: String): File {
@@ -558,10 +578,19 @@ class DownloadManager(
     private fun isOnWifi(): Boolean = runCatching {
         val manager = appContext.getSystemService(Context.CONNECTIVITY_SERVICE)
             as? ConnectivityManager ?: return@runCatching false
-        val capabilities = manager.getNetworkCapabilities(manager.activeNetwork)
-            ?: return@runCatching false
-        capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
-            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
+        fun isWifi(capabilities: NetworkCapabilities?): Boolean =
+            capabilities != null && (
+                capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
+                    capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
+                )
+        // Активная сеть может быть VPN/WARP: у неё транспорт TRANSPORT_VPN,
+        // а не WIFI, поэтому раньше скачивание ошибочно падало с «Только Wi-Fi».
+        if (isWifi(manager.getNetworkCapabilities(manager.activeNetwork))) return@runCatching true
+        manager.allNetworks.any { network ->
+            val capabilities = manager.getNetworkCapabilities(network) ?: return@any false
+            isWifi(capabilities) &&
+                capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+        }
     }.getOrDefault(false)
 
     companion object {

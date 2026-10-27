@@ -23,6 +23,7 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.DownloadDone
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.Lyrics
@@ -34,6 +35,7 @@ import androidx.compose.material.icons.rounded.PlaylistAdd
 import androidx.compose.material.icons.rounded.PlaylistPlay
 import androidx.compose.material.icons.rounded.QueueMusic
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -66,6 +68,8 @@ import androidx.compose.ui.unit.dp
 import app.sonora.core.model.Playlist
 import app.sonora.core.model.Source
 import app.sonora.core.model.Track
+import app.sonora.data.download.SaveStatus
+import app.sonora.data.download.TrackSaveState
 import app.sonora.ui.theme.LocalSonoraColors
 import coil.compose.AsyncImage
 
@@ -274,20 +278,23 @@ fun TrackRow(
     onFavorite: () -> Unit,
     trailing: @Composable (() -> Unit)? = null,
     onDownload: (() -> Unit)? = null,
-    downloadState: String? = null,
+    saveState: TrackSaveState? = null,
     modifier: Modifier = Modifier,
 ) {
     val hasLyrics = !track.lyrics.isNullOrBlank() || !track.syncedLyrics.isNullOrBlank()
-    val canDownload = onDownload != null && track.source != Source.LOCAL && downloadState != "Недоступно"
+    val canDownload = onDownload != null && track.streamingOnly &&
+        saveState?.status != SaveStatus.UNAVAILABLE
+    val saving = saveState?.status == SaveStatus.QUEUED ||
+        saveState?.status == SaveStatus.DOWNLOADING
     var menuOpen by remember { mutableStateOf(false) }
     var lyricsVisible by remember { mutableStateOf(false) }
 
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
+            .clip(RoundedCornerShape(12.dp))
             .background(
-                if (isPlaying) MaterialTheme.colorScheme.surfaceContainerHighest else Color.Transparent,
+                if (isPlaying) MaterialTheme.colorScheme.surfaceContainerHigh else Color.Transparent,
             )
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(horizontal = 8.dp, vertical = 6.dp),
@@ -295,8 +302,8 @@ fun TrackRow(
     ) {
         CoverArt(
             url = track.artworkUrl ?: track.artworkUri,
-            size = 52.dp,
-            cornerRadius = 14.dp,
+            size = 48.dp,
+            cornerRadius = 10.dp,
         )
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
@@ -307,15 +314,55 @@ fun TrackRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+            val saveFailed = saveState?.status == SaveStatus.ERROR
             Text(
-                text = track.displaySubtitle,
+                text = when {
+                    saving -> saveState?.label ?: track.displaySubtitle
+                    saveFailed -> "Ошибка сохранения — нажмите ↻"
+                    else -> track.displaySubtitle
+                },
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = when {
+                    saving -> MaterialTheme.colorScheme.primary
+                    saveFailed -> MaterialTheme.colorScheme.error
+                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                },
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        if (!track.playable) {
+        if (saving) {
+            if (saveState?.percent in 0..99) {
+                CircularProgressIndicator(
+                    progress = (saveState?.percent ?: 0) / 100f,
+                    modifier = Modifier.size(20.dp),
+                    strokeWidth = 2.dp,
+                )
+            } else {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(18.dp),
+                    strokeWidth = 2.dp,
+                )
+            }
+        } else if (saveState?.status == SaveStatus.ERROR && onDownload != null) {
+            IconButton(onClick = onDownload, modifier = Modifier.size(32.dp)) {
+                Icon(
+                    imageVector = Icons.Rounded.Download,
+                    contentDescription = "Повторить сохранение",
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        } else if (track.savedFromStreaming || saveState?.status == SaveStatus.DONE) {
+            Icon(
+                imageVector = Icons.Rounded.DownloadDone,
+                contentDescription = "Сохранено на устройстве",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .size(18.dp)
+                    .padding(end = 2.dp),
+            )
+        } else if (!track.playable) {
             Icon(
                 imageVector = Icons.Rounded.OpenInNew,
                 contentDescription = "Откроется в сервисе",
@@ -367,28 +414,39 @@ fun TrackRow(
                         )
                     }
                     if (canDownload) {
-                        val inProgress = downloadState == "Скачивание"
-                        val done = downloadState == "Готово"
+                        val inProgress = saveState?.status == SaveStatus.QUEUED ||
+                            saveState?.status == SaveStatus.DOWNLOADING
+                        val done = saveState?.status == SaveStatus.DONE
                         DropdownMenuItem(
                             text = {
                                 Text(
                                     when {
-                                        inProgress -> "Скачивание…"
-                                        done -> "Скачано"
-                                        else -> "Скачать"
+                                        inProgress -> saveState?.label ?: "Сохранение…"
+                                        done -> "Сохранено на устройстве"
+                                        saveState?.status == SaveStatus.ERROR ->
+                                            "Повторить сохранение"
+                                        else -> "Сохранить на устройство"
                                     },
                                 )
                             },
                             leadingIcon = {
-                                Icon(
-                                    imageVector = if (done) {
-                                        Icons.Rounded.CheckCircle
-                                    } else {
-                                        Icons.Rounded.Download
-                                    },
-                                    contentDescription = null,
-                                    modifier = Modifier.size(20.dp),
-                                )
+                                if (inProgress && saveState?.percent in 0..99) {
+                                    CircularProgressIndicator(
+                                        progress = (saveState?.percent ?: 0) / 100f,
+                                        modifier = Modifier.size(20.dp),
+                                        strokeWidth = 2.dp,
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = if (done) {
+                                            Icons.Rounded.CheckCircle
+                                        } else {
+                                            Icons.Rounded.Download
+                                        },
+                                        contentDescription = null,
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                }
                             },
                             enabled = !inProgress && !done,
                             onClick = {

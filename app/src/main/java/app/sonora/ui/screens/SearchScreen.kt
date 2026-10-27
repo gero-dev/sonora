@@ -72,6 +72,7 @@ fun SearchScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) -
     val favorites by vm.favorites.collectAsState()
     val playlists by vm.playlists.collectAsState()
     val player by vm.player.collectAsState()
+    val saveStates by vm.saveStates.collectAsState()
 
     var filterIndex by rememberSaveable { mutableStateOf(FILTER_ALL) }
     var actionTrack by remember { mutableStateOf<Track?>(null) }
@@ -84,7 +85,17 @@ fun SearchScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) -
     val showLocal = filterIndex == FILTER_ALL || filterIndex == FILTER_LOCAL
     val showYouTube = filterIndex == FILTER_ALL || filterIndex == FILTER_YOUTUBE
     val localResults = if (showLocal) search.local else emptyList()
-    val remoteResults = if (showYouTube) search.remote else emptyList()
+    // В общем списке сохранённые треки показываем только как локальные — без дубля
+    // из YouTube. В фильтре «YouTube Music» оставляем строку с галочкой «Сохранено»,
+    // чтобы пользователь видел результат сохранения.
+    val remoteResults = remember(search.remote, showYouTube, tracks, filterIndex) {
+        val musicOnly = search.remote.filterNot { it.isVideoContent }
+        when {
+            !showYouTube -> emptyList()
+            filterIndex == FILTER_YOUTUBE -> musicOnly
+            else -> vm.withoutSavedCopies(musicOnly)
+        }
+    }
     val nothingFound = !queryBlank && !search.loading &&
         localResults.isEmpty() && remoteResults.isEmpty()
 
@@ -216,6 +227,12 @@ fun SearchScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) -
                             onLongClick = { actionTrack = track },
                             onFavorite = { vm.toggleFavorite(track.id) },
                             showSource = true,
+                            saveState = saveStates[track.id]
+                                ?: if (vm.isTrackDownloaded(track)) {
+                                    app.sonora.data.download.TrackSaveState.done()
+                                } else {
+                                    null
+                                },
                         )
                     }
                 }
@@ -261,7 +278,7 @@ fun SearchScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) -
             } else {
                 null
             },
-            downloadLabel = "Скачать",
+            downloadLabel = "Сохранить на устройство",
         )
     }
 
@@ -287,6 +304,7 @@ private fun SearchTrackRow(
     onLongClick: () -> Unit,
     onFavorite: () -> Unit,
     showSource: Boolean = false,
+    saveState: app.sonora.data.download.TrackSaveState? = null,
 ) {
     TrackRow(
         track = track,
@@ -295,6 +313,7 @@ private fun SearchTrackRow(
         onClick = onClick,
         onLongClick = onLongClick,
         onFavorite = onFavorite,
+        saveState = saveState,
         trailing = {
             if (showSource) {
                 SourceChip(

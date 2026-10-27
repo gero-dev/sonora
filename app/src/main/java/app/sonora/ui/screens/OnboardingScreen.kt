@@ -28,7 +28,7 @@ import androidx.compose.material.icons.rounded.Bedtime
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Download
-import androidx.compose.material.icons.rounded.Explore
+import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material.icons.rounded.Home
@@ -82,15 +82,16 @@ private val OnboardingPages = listOf(
     OnboardingPage(
         icon = Icons.Rounded.Home,
         title = "Главная и вкладки",
-        body = "Пять вкладок внизу: Главная, Поиск, Обзор, Медиатека и Настройки. " +
-            "Главная собирает «Мою волну» и подборки, а Медиатека — ваши треки, " +
-            "альбомы и плейлисты.",
+        body = "Пять вкладок внизу: Главная, Поиск, История, Медиатека и Настройки. " +
+            "История хранит прослушанные треки и исполнителей, как в Spotify, " +
+            "а Медиатека — ваши файлы, альбомы и плейлисты.",
     ),
     OnboardingPage(
         icon = Icons.Rounded.Headphones,
         title = "Плеер",
         body = "Свайп влево или вправо переключает трек, вниз — закрывает плеер, " +
-            "вверх — открывает очередь. Двойной тап по обложке ставит паузу.",
+            "вверх — открывает очередь. Двойной тап по обложке ставит паузу. " +
+            "Долгое нажатие на кнопку перемешивания включает стриминг или офлайн-режим.",
     ),
     OnboardingPage(
         icon = Icons.Rounded.Widgets,
@@ -110,7 +111,7 @@ private val OnboardingPages = listOf(
 private val OnboardingTabs = listOf(
     Icons.Rounded.Home to "Главная",
     Icons.Rounded.Search to "Поиск",
-    Icons.Rounded.Explore to "Обзор",
+    Icons.Rounded.History to "История",
     Icons.Rounded.LibraryMusic to "Медиатека",
     Icons.Rounded.Settings to "Настройки",
 )

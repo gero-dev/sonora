@@ -8,7 +8,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Explore
+import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material.icons.rounded.Search
@@ -23,6 +23,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -32,13 +33,14 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import app.sonora.AppGraph
-import app.sonora.ui.components.MiniPlayer
+import app.sonora.ui.components.DynamicIsland
 import app.sonora.ui.nav.Routes
 import app.sonora.ui.screens.AlbumDetailScreen
 import app.sonora.ui.screens.ArtistDetailScreen
 import app.sonora.ui.screens.ConnectionsScreen
 import app.sonora.ui.screens.DiscoverScreen
 import app.sonora.ui.screens.GoogleLoginScreen
+import app.sonora.ui.screens.HistoryScreen
 import app.sonora.ui.screens.HomeScreen
 import app.sonora.ui.screens.LibraryScreen
 import app.sonora.ui.screens.OnboardingScreen
@@ -58,7 +60,7 @@ private data class TabItem(
 private val TABS = listOf(
     TabItem(Routes.HOME, "Главная", Icons.Rounded.Home),
     TabItem(Routes.SEARCH, "Поиск", Icons.Rounded.Search),
-    TabItem(Routes.DISCOVER, "Обзор", Icons.Rounded.Explore),
+    TabItem(Routes.HISTORY, "История", Icons.Rounded.History),
     TabItem(Routes.LIBRARY, "Медиатека", Icons.Rounded.LibraryMusic),
     TabItem(Routes.SETTINGS, "Настройки", Icons.Rounded.Settings),
 )
@@ -81,8 +83,11 @@ fun MainScreen(graph: AppGraph) {
     val playerState by viewModel.player.collectAsState()
 
     val showChrome = currentRoute != null && TABS.any { it.route == currentRoute }
-    val navigate: (String) -> Unit = { route ->
-        navController.navigate(route) { launchSingleTop = true }
+    // Стабильная лямбда: иначе экраны пересобираются на каждый тик позиции плеера.
+    val navigate: (String) -> Unit = androidx.compose.runtime.remember(navController) {
+        { route ->
+            navController.navigate(route) { launchSingleTop = true }
+        }
     }
 
     Scaffold(
@@ -90,14 +95,18 @@ fun MainScreen(graph: AppGraph) {
         bottomBar = {
             if (showChrome) {
                 Column {
-                    playerState.current?.let { track ->
-                        MiniPlayer(
-                            state = playerState,
-                            onOpen = { navigate(Routes.PLAYER) },
-                            onTogglePlay = viewModel::togglePlayPause,
-                            onNext = viewModel::next,
-                            onPrevious = viewModel::previous,
-                        )
+                    // Плеер снова внизу, над навигацией. key(route): при переходе
+                    // на другую вкладку раскрытая панель сворачивается.
+                    if (playerState.current != null) {
+                        key(currentRoute) {
+                            DynamicIsland(
+                                state = playerState,
+                                onTogglePlay = viewModel::togglePlayPause,
+                                onNext = viewModel::next,
+                                onPrevious = viewModel::previous,
+                                onOpen = { navigate(Routes.PLAYER) },
+                            )
+                        }
                     }
                     NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
                         TABS.forEach { tab ->
@@ -134,6 +143,7 @@ fun MainScreen(graph: AppGraph) {
         ) {
             composable(Routes.HOME) { HomeScreen(viewModel, padding, navigate) }
             composable(Routes.SEARCH) { SearchScreen(viewModel, padding, navigate) }
+            composable(Routes.HISTORY) { HistoryScreen(viewModel, padding, navigate) }
             composable(Routes.DISCOVER) { DiscoverScreen(viewModel, padding, navigate) }
             composable(Routes.LIBRARY) { LibraryScreen(viewModel, padding, navigate) }
             composable(Routes.SETTINGS) { SettingsScreen(viewModel, padding, navigate) }

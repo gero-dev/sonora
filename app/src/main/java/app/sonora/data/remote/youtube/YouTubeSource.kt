@@ -61,7 +61,7 @@ class YouTubeSource(
     /** «Понравившиеся» из аккаунта — для очереди сохранённых треков. */
     suspend fun likedSongs(limit: Int = 200): List<Track> {
         if (!isGoogleConnected()) return emptyList()
-        return runCatching { api.likedSongs(limit) }
+        return runCatching { api.likedSongs(limit).filterNot { it.isVideoContent } }
             .onFailure { error -> lastError = describe(error) }
             .getOrDefault(emptyList())
     }
@@ -73,7 +73,7 @@ class YouTubeSource(
 
     override suspend fun search(query: String, limit: Int): List<Track> {
         if (query.isBlank()) return emptyList()
-        return runCatching { api.search(query, limit) }
+        return runCatching { api.search(query, limit).filterNot { it.isVideoContent } }
             .onSuccess {
                 cached = it
                 lastError = null
@@ -83,7 +83,7 @@ class YouTubeSource(
     }
 
     override suspend fun playlistTracks(remotePlaylistId: String): List<Track> {
-        return runCatching { api.playlist(remotePlaylistId).tracks }
+        return runCatching { api.playlist(remotePlaylistId).tracks.filterNot { it.isVideoContent } }
             .onSuccess {
                 cached = it
                 lastError = null
@@ -102,7 +102,7 @@ class YouTubeSource(
             lastError = "Не удалось распознать ссылку на плейлист YouTube Music."
             return emptyList()
         }
-        return runCatching { api.playlist(playlistId).tracks }
+        return runCatching { api.playlist(playlistId).tracks.filterNot { it.isVideoContent } }
             .onSuccess {
                 cached = it
                 lastError = null
@@ -115,14 +115,21 @@ class YouTubeSource(
     suspend fun importPlaylistDetails(url: String): app.sonora.data.remote.youtube.innertube.RemotePlaylist? {
         val playlistId = api.normalizePlaylistId(url) ?: return null
         return runCatching { api.playlist(playlistId) }
-            .onSuccess { cached = it.tracks }
+            .onSuccess {
+                cached = it.tracks.filterNot { track -> track.isVideoContent }
+            }
             .onFailure { error -> lastError = describe(error) }
             .getOrNull()
+            ?.let { playlist ->
+                // В деталях плейлиста оставляем только музыку.
+                playlist.copy(tracks = playlist.tracks.filterNot { it.isVideoContent })
+            }
     }
 
     /** Очередь «дальше»: используется для автоочереди YouTube-трека. */
     suspend fun related(videoId: String, limit: Int = 25): List<Track> =
-        runCatching { api.related(videoId, limit) }.getOrDefault(emptyList())
+        runCatching { api.related(videoId, limit).filterNot { it.isVideoContent } }
+            .getOrDefault(emptyList())
 
     /** MP4-поток для сохранения трека на устройство (m4a, без SABR). */
     internal suspend fun downloadStream(videoId: String) =

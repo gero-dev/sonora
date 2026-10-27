@@ -115,6 +115,96 @@ val MonoPalette = AccentPalette(
     tertiary = Color(0xFFD6D3DB),
 )
 
+val RedPalette = AccentPalette(
+    primaryDark = Color(0xFFFFB4AB),
+    onPrimaryDark = Color(0xFF690005),
+    primaryContainerDark = Color(0xFF93000A),
+    onPrimaryContainerDark = Color(0xFFFFDAD6),
+    primaryLight = Color(0xFFB3261E),
+    onPrimaryLight = Color(0xFFFFFFFF),
+    primaryContainerLight = Color(0xFFFFDAD6),
+    onPrimaryContainerLight = Color(0xFF410002),
+    gradientStart = Color(0xFFFF5252),
+    gradientEnd = Color(0xFFFF9800),
+    secondary = Color(0xFFFFB4AB),
+    tertiary = Color(0xFFFFD7A6),
+)
+
+val TealPalette = AccentPalette(
+    primaryDark = Color(0xFF80DEEA),
+    onPrimaryDark = Color(0xFF00363A),
+    primaryContainerDark = Color(0xFF00565C),
+    onPrimaryContainerDark = Color(0xFFA6F1F5),
+    primaryLight = Color(0xFF00696E),
+    onPrimaryLight = Color(0xFFFFFFFF),
+    primaryContainerLight = Color(0xFFA6F1F5),
+    onPrimaryContainerLight = Color(0xFF002022),
+    gradientStart = Color(0xFF00BFA5),
+    gradientEnd = Color(0xFF00E5FF),
+    secondary = Color(0xFF80DEEA),
+    tertiary = Color(0xFFA5D6C0),
+)
+
+val YellowPalette = AccentPalette(
+    primaryDark = Color(0xFFFFE082),
+    onPrimaryDark = Color(0xFF3F2E00),
+    primaryContainerDark = Color(0xFF5C4300),
+    onPrimaryContainerDark = Color(0xFFFFE8A3),
+    primaryLight = Color(0xFF7A5900),
+    onPrimaryLight = Color(0xFFFFFFFF),
+    primaryContainerLight = Color(0xFFFFE8A3),
+    onPrimaryContainerLight = Color(0xFF261A00),
+    gradientStart = Color(0xFFFFC107),
+    gradientEnd = Color(0xFFFFEB3B),
+    secondary = Color(0xFFFFE082),
+    tertiary = Color(0xFFFFD3A6),
+)
+
+val IndigoPalette = AccentPalette(
+    primaryDark = Color(0xFFB3B9FF),
+    onPrimaryDark = Color(0xFF1A237E),
+    primaryContainerDark = Color(0xFF303F9F),
+    onPrimaryContainerDark = Color(0xFFE0E3FF),
+    primaryLight = Color(0xFF3F51B5),
+    onPrimaryLight = Color(0xFFFFFFFF),
+    primaryContainerLight = Color(0xFFE0E3FF),
+    onPrimaryContainerLight = Color(0xFF060C46),
+    gradientStart = Color(0xFF5C6BC0),
+    gradientEnd = Color(0xFF7C4DFF),
+    secondary = Color(0xFFB3B9FF),
+    tertiary = Color(0xFF8BD5FF),
+)
+
+val CyanPalette = AccentPalette(
+    primaryDark = Color(0xFF80D8FF),
+    onPrimaryDark = Color(0xFF00344A),
+    primaryContainerDark = Color(0xFF00556F),
+    onPrimaryContainerDark = Color(0xFFBEE9FF),
+    primaryLight = Color(0xFF00638A),
+    onPrimaryLight = Color(0xFFFFFFFF),
+    primaryContainerLight = Color(0xFFBEE9FF),
+    onPrimaryContainerLight = Color(0xFF001E2C),
+    gradientStart = Color(0xFF00B0FF),
+    gradientEnd = Color(0xFF00E5FF),
+    secondary = Color(0xFF80D8FF),
+    tertiary = Color(0xFF8BD5FF),
+)
+
+val BrownPalette = AccentPalette(
+    primaryDark = Color(0xFFFFCCBC),
+    onPrimaryDark = Color(0xFF4E2600),
+    primaryContainerDark = Color(0xFF7A3E1D),
+    onPrimaryContainerDark = Color(0xFFFFDBCC),
+    primaryLight = Color(0xFF8D4E2A),
+    onPrimaryLight = Color(0xFFFFFFFF),
+    primaryContainerLight = Color(0xFFFFDBCC),
+    onPrimaryContainerLight = Color(0xFF2E1500),
+    gradientStart = Color(0xFFD2691E),
+    gradientEnd = Color(0xFFFFB74D),
+    secondary = Color(0xFFFFCCBC),
+    tertiary = Color(0xFFFFD7A6),
+)
+
 fun paletteFor(accent: Accent): AccentPalette = when (accent) {
     Accent.VIOLET -> VioletPalette
     Accent.BLUE -> BluePalette
@@ -122,6 +212,12 @@ fun paletteFor(accent: Accent): AccentPalette = when (accent) {
     Accent.ORANGE -> OrangePalette
     Accent.PINK -> PinkPalette
     Accent.MONO -> MonoPalette
+    Accent.RED -> RedPalette
+    Accent.TEAL -> TealPalette
+    Accent.YELLOW -> YellowPalette
+    Accent.INDIGO -> IndigoPalette
+    Accent.CYAN -> CyanPalette
+    Accent.BROWN -> BrownPalette
 }
 
 // ---------------------------------------------------------------------------

@@ -16,6 +16,9 @@
 | [LYRICS.md](LYRICS.md) | синхронизированные тексты, LRC и караоке-режим |
 | [WIDGET.md](WIDGET.md) | виджеты рабочего стола: размеры, обложка, обновление |
 | [WARP.md](WARP.md) | WARP-туннель: конфиги, перебор, только трафик Sonora |
+| [WAVE.md](WAVE.md) | «Моя волна»: только музыка, история, новизна, разнообразие, доля устройства |
+| [PLAYBACK.md](PLAYBACK.md) | режимы проигрывания: онлайн + устройство или только загруженное, стриминг в очереди |
+| [HISTORY.md](HISTORY.md) | вкладка «История»: треки, исполнители, статистика и приватность |
 | [LEGAL.md](LEGAL.md) | что можно и чего нельзя: лицензии, ToS, DRM |
 | [PLATFORM-FACTS.md](PLATFORM-FACTS.md) | детальный разбор API и условий сервисов с источниками |
 
@@ -46,4 +49,4 @@
 - Сборка: `./gradlew :app:assembleDebug` (JDK 21, Android SDK 37).
 - APK: `app/build/outputs/apk/debug/app-debug.apk`.
 - Проверка: `./gradlew :app:testDebugUnitTest :app:lintDebug`.
-- Версия: `0.9.6`, `versionCode 17`.
+- Версия: `1.0.0`, `versionCode 22`.

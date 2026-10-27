@@ -41,6 +41,12 @@ internal object InnerTubeStreams {
             val resolved = runCatching { InnerTubeXEngine.resolve(videoId, quality) }
                 .recoverCatching { api.stream(videoId) }
                 .getOrThrow()
+            // Sonora — музыкальный плеер: видеопотоки не воспроизводим и не качаем.
+            if (!resolved.mimeType.startsWith("audio/", ignoreCase = true)) {
+                throw IllegalStateException(
+                    "YouTube отдал только видеопоток. Sonora играет только музыку (audio).",
+                )
+            }
             cache[cacheKey] = resolved
             resolved
         }
@@ -58,6 +64,11 @@ internal object InnerTubeStreams {
     suspend fun resolveDownloadFallback(videoId: String): StreamInfo {
         val cacheKey = "$videoId|${AudioQuality.MP4.name}"
         val resolved = api.stream(videoId)
+        if (!resolved.mimeType.startsWith("audio/", ignoreCase = true)) {
+            throw IllegalStateException(
+                "YouTube отдал только видеопоток. Sonora играет только музыку (audio).",
+            )
+        }
         cache[cacheKey] = resolved
         return resolved
     }

@@ -20,6 +20,7 @@ import app.sonora.data.remote.SourceRegistry
 import app.sonora.data.remote.soundcloud.SoundCloudSource
 import app.sonora.data.remote.spotify.SpotifySource
 import app.sonora.data.remote.youtube.YouTubeSource
+import app.sonora.data.wave.PlayHistoryStore
 import app.sonora.playback.PlaybackController
 
 /**
@@ -51,6 +52,9 @@ class AppGraph private constructor(context: Context) {
     val spotify = SpotifySource(appContext, settings, secure)
     val youtube = YouTubeSource()
     val soundcloud = SoundCloudSource(appContext, settings, secure)
+
+    /** История прослушиваний/пропусков для «Моей волны» (файл play_history.json). */
+    val playHistory = PlayHistoryStore(appContext)
 
     val sources = SourceRegistry(listOf(spotify, youtube, soundcloud))
 

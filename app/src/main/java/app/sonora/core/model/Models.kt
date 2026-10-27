@@ -77,7 +77,36 @@ data class Track(
         }
 
     val year: Int? get() = extra["year"]?.toIntOrNull()
+
+    /** Локальная копия, сохранённая из стриминга: показываем её вместе с файлами. */
+    val savedFromStreaming: Boolean
+        get() = source == Source.LOCAL &&
+            (extra.containsKey("downloadedTrackId") || extra.containsKey("youtubeId"))
+
+    /** Трек пришёл из сети и ещё не сохранён на устройство. */
+    val streamingOnly: Boolean get() = source != Source.LOCAL
+
+    /**
+     * Видеоконтент: клипы, концерты, реакции, подкасты и локальные файлы
+     * с видеодорожкой. Sonora — музыкальный плеер, такие записи не играем.
+     */
+    val isVideoContent: Boolean
+        get() {
+            if (extra["hasVideo"] == "1") return true
+            if (source == Source.LOCAL) return false
+            val haystack = "$title ${extra["videoType"].orEmpty()}".lowercase()
+            return VIDEO_MARKERS.any { haystack.contains(it) }
+        }
 }
+
+private val VIDEO_MARKERS = listOf(
+    "official video", "music video", "lyric video", "visualizer",
+    "full concert", "full album",
+    "reaction", "interview", "podcast", "shorts", "trailer", "teaser",
+    "1 hour", "10 hours", "gameplay", "asmr", "live stream",
+    "клип", "концерт", "прямой эфир", "подкаст", "интервью",
+    "реакция", "обзор", "полный альбом", "тизер", "трейлер",
+)
 
 /**
  * Результат онлайн-поиска метаданных: то, чего нет в тегах файла.

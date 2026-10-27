@@ -6,6 +6,8 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.Json
 import java.io.File
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 
 /** Простое JSON-хранилище в filesDir: библиотека, плейлисты, кэш метаданных. */
 object JsonFile {
@@ -31,8 +33,20 @@ object JsonFile {
                 val file = File(context.filesDir, name)
                 val tmp = File(context.filesDir, "$name.tmp")
                 tmp.writeText(json.encodeToString(serializer, value))
-                if (file.exists()) file.delete()
-                tmp.renameTo(file)
+                // Атомарная замена: раньше между delete() и renameTo() файл мог
+                // потеряться целиком (например, play_history.json при сбое).
+                val moved = runCatching {
+                    Files.move(
+                        tmp.toPath(),
+                        file.toPath(),
+                        StandardCopyOption.REPLACE_EXISTING,
+                        StandardCopyOption.ATOMIC_MOVE,
+                    )
+                }.isSuccess
+                if (!moved) {
+                    if (file.exists()) file.delete()
+                    tmp.renameTo(file)
+                }
             }
         }
 }

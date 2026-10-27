@@ -81,10 +81,18 @@ class MetadataService(
                 runCatching { withTimeout(PROVIDER_TIMEOUT_MS) { lookupLyrics(title, artist, track.durationMs) } }
             }
             val itunesResult = async {
-                runCatching { withTimeout(PROVIDER_TIMEOUT_MS) { lookupItunes(title, artist, track.durationMs) } }
+                runCatching {
+                    withTimeout(PROVIDER_TIMEOUT_MS) {
+                        lookupItunes(title, artist, track.durationMs, track.album)
+                    }
+                }
             }
             val deezerResult = async {
-                runCatching { withTimeout(PROVIDER_TIMEOUT_MS) { lookupDeezer(title, artist, track.durationMs) } }
+                runCatching {
+                    withTimeout(PROVIDER_TIMEOUT_MS) {
+                        lookupDeezer(title, artist, track.durationMs, track.album)
+                    }
+                }
             }
             val audioDbResult = async {
                 runCatching { withTimeout(PROVIDER_TIMEOUT_MS) { lookupTheAudioDb(title, artist, track.durationMs) } }
@@ -103,6 +111,19 @@ class MetadataService(
             val needArtistImage = listOf(audioDb?.artistImageUrl, deezer?.artistImageUrl)
                 .all { it.isNullOrBlank() }
             val needBio = audioDb?.artistBio.isNullOrBlank()
+            // Если трек не нашёлся по названию, обложку альбома всё ещё можно взять
+            // из iTunes по исполнителю и альбому — именно так находятся обложки
+            // у треков с «грязными» тегами.
+            val albumCoverDeferred = if (needCover && !track.album.isNullOrBlank()) {
+                val album = track.album
+                async {
+                    runCatching {
+                        withTimeout(PROVIDER_TIMEOUT_MS) { lookupItunesAlbumCover(artist, album) }
+                    }
+                }
+            } else {
+                null
+            }
 
             val innerTubeDeferred = if (
                 innerTubeSearch != null && (needCover || needArtist)
@@ -129,6 +150,7 @@ class MetadataService(
                 audioDb = audioDb,
                 innerTube = innerTube,
                 wikipedia = wiki,
+                fallbackCover = albumCoverDeferred?.await()?.getOrNull(),
             )
             val providersResponded = brainzResult.await().isSuccess ||
                 lyricsResult.await().isSuccess ||
@@ -294,51 +316,65 @@ class MetadataService(
     /**
      * Обложка, альбом, год и исполнитель из iTunes Search API. Ключ не нужен,
      * отдаёт готовые ссылки на обложку; запрашиваем максимальный размер 1000 px.
-     * Исполнитель и длительность сверяются, чтобы не приклеить обложку чужой
-     * песни с тем же названием.
+     *
+     * Теги у локальных файлов часто «грязные» (лишние пометки, другой порядок
+     * слов, отсутствие исполнителя), поэтому перебираем несколько вариантов
+     * запроса и выбираем лучшего кандидата по очкам: название + исполнитель +
+     * длительность + альбом + наличие обложки. Именно это раньше отсекало
+     * большинство обложек строгим фильтром.
      */
     private suspend fun lookupItunes(
         title: String,
         artist: String,
         durationMs: Long,
+        album: String? = null,
     ): ProviderData? {
-        val term = listOfNotNull(
-            artist.takeIf { it.isNotBlank() },
-            title,
-        ).joinToString(" ")
-        if (term.isBlank()) return null
-        val url = "https://itunes.apple.com/search" +
-            "?term=${encode(term)}&entity=song&limit=10"
-        val root = Http.parseJsonObject(Http.get(url, JSON_HEADERS))
-        val results = root["results"] as? JsonArray ?: return null
-        val best = results
-            .mapNotNull { it as? JsonObject }
-            .filter { candidate ->
-                val name = candidate.text("trackName") ?: return@filter false
-                sameTitle(name, title) &&
-                    sameArtist(candidate.text("artistName"), artist) &&
-                    durationMatches(candidate.text("trackTimeMillis")?.toLongOrNull(), durationMs)
-            }
-            .maxByOrNull { candidate ->
-                (candidate.text("trackTimeMillis")?.toLongOrNull() ?: 0L).let { length ->
-                    if (durationMs > 0L && length > 0L) {
-                        -kotlin.math.abs(length - durationMs) / 1_000L
-                    } else {
-                        0L
-                    }
+        val variants = searchVariants(title, artist, album)
+        var best: JsonObject? = null
+        var bestScore = 0.0
+        for (term in variants) {
+            val url = "https://itunes.apple.com/search" +
+                "?term=${encode(term)}&entity=song&limit=25"
+            val root = runCatching {
+                Http.parseJsonObject(Http.get(url, JSON_HEADERS))
+            }.getOrNull() ?: continue
+            val results = root["results"] as? JsonArray ?: continue
+            for (candidate in results.mapNotNull { it as? JsonObject }) {
+                val name = candidate.text("trackName") ?: continue
+                if (!sameTitle(name, title)) continue
+                val artistMatch = sameArtist(candidate.text("artistName"), artist)
+                val length = candidate.text("trackTimeMillis")?.toLongOrNull() ?: 0L
+                val timeMatch = durationMatches(length, durationMs)
+                // Название совпало, плюс хотя бы один признак записи (исполнитель
+                // или длительность) — кандидат годится, дальше решают очки.
+                if (!artistMatch && !timeMatch) continue
+                var score = 1.0
+                if (artistMatch) score += 2.0
+                if (!album.isNullOrBlank() &&
+                    sameTitle(candidate.text("collectionName").orEmpty(), album)
+                ) {
+                    score += 1.5
+                }
+                if (durationMs > 0L && length > 0L) {
+                    score -= kotlin.math.abs(length - durationMs) / 60_000.0
+                }
+                if (!candidate.text("artworkUrl100").isNullOrBlank()) score += 1.0
+                if (score > bestScore) {
+                    bestScore = score
+                    best = candidate
                 }
             }
-            ?: return null
-        val artwork = best.text("artworkUrl100")
-            ?.replace("100x100bb", "1000x1000bb")
-            ?.replace("100x100", "1000x1000")
-        val album = best.text("collectionName")
-        val year = best.text("releaseDate")?.take(4)?.toIntOrNull()
-        val artistName = best.text("artistName")
-        if (artwork == null && album == null && year == null && artistName == null) return null
+            if (bestScore >= 4.5) break
+        }
+        val track = best ?: return null
+        val artwork = upgradeItunesArtwork(track.text("artworkUrl100"))
+        val albumName = track.text("collectionName")
+        val year = track.text("releaseDate")?.take(4)?.toIntOrNull()
+        val artistName = track.text("artistName")
+        if (artwork == null && albumName == null && year == null && artistName == null) return null
         return ProviderData(
             coverUrl = artwork,
-            album = album,
+            album = albumName,
             year = year,
             artist = artistName,
             source = "iTunes",
@@ -348,70 +384,131 @@ class MetadataService(
     /**
      * Обложка, альбом и фото исполнителя из публичного Deezer API (без ключа).
      * Deezer отдаёт обложку до 1000×1000 и `picture_xl` исполнителя.
+     * Как и iTunes, перебираем варианты запроса и мягко оцениваем кандидатов.
      */
     private suspend fun lookupDeezer(
         title: String,
         artist: String,
         durationMs: Long,
+        album: String? = null,
     ): ProviderData? {
-        val query = buildString {
-            append("track:\"")
-            append(title.replace("\"", " "))
-            append('"')
+        val cleanTitle = title.replace("\"", " ")
+        val cleanArtist = artist.replace("\"", " ")
+        val queries = buildList {
             if (artist.isNotBlank()) {
-                append(" artist:\"")
-                append(artist.replace("\"", " "))
-                append('"')
+                add("track:\"$cleanTitle\" artist:\"$cleanArtist\"")
+                add("$artist $title")
+                if (!album.isNullOrBlank()) add("$artist $album")
+            } else {
+                add(title)
             }
-        }
-        val url = "https://api.deezer.com/search?q=${encode(query)}&limit=10"
-        val root = Http.parseJsonObject(Http.get(url, JSON_HEADERS))
-        val items = root["data"] as? JsonArray ?: return null
-        val best = items
-            .mapNotNull { it as? JsonObject }
-            .filter { candidate ->
-                val name = candidate.text("title") ?: return@filter false
+        }.map { it.trim() }
+            .filter { it.isNotBlank() }
+            .distinctBy { it.lowercase() }
+            .take(3)
+        var best: JsonObject? = null
+        var bestScore = 0.0
+        for (query in queries) {
+            val url = "https://api.deezer.com/search?q=${encode(query)}&limit=25"
+            val root = runCatching {
+                Http.parseJsonObject(Http.get(url, JSON_HEADERS))
+            }.getOrNull() ?: continue
+            val items = root["data"] as? JsonArray ?: continue
+            for (candidate in items.mapNotNull { it as? JsonObject }) {
+                val name = candidate.text("title") ?: continue
+                if (!sameTitle(name, title)) continue
                 val candidateArtist = (candidate["artist"] as? JsonObject)?.text("name")
-                sameTitle(name, title) &&
-                    sameArtist(candidateArtist, artist) &&
-                    durationMatches(
-                        candidate.text("duration")?.toLongOrNull()?.times(1_000L),
-                        durationMs,
-                    )
-            }
-            .maxByOrNull { candidate ->
+                val artistMatch = sameArtist(candidateArtist, artist)
                 val length = candidate.text("duration")?.toLongOrNull()?.times(1_000L) ?: 0L
+                val timeMatch = durationMatches(length, durationMs)
+                if (!artistMatch && !timeMatch) continue
+                var score = 1.0
+                if (artistMatch) score += 2.0
+                val albumObject = candidate["album"] as? JsonObject
+                if (!album.isNullOrBlank() &&
+                    sameTitle(albumObject?.text("title").orEmpty(), album)
+                ) {
+                    score += 1.5
+                }
                 if (durationMs > 0L && length > 0L) {
-                    -kotlin.math.abs(length - durationMs) / 1_000L
-                } else {
-                    0L
+                    score -= kotlin.math.abs(length - durationMs) / 60_000.0
+                }
+                if (!albumObject?.text("cover_xl").isNullOrBlank()) score += 1.0
+                if (score > bestScore) {
+                    bestScore = score
+                    best = candidate
                 }
             }
-            ?: return null
-        val albumObject = best["album"] as? JsonObject
-        val artistObject = best["artist"] as? JsonObject
+            if (bestScore >= 4.5) break
+        }
+        val track = best ?: return null
+        val albumObject = track["album"] as? JsonObject
+        val artistObject = track["artist"] as? JsonObject
         val cover = albumObject?.text("cover_xl")
             ?: albumObject?.text("cover_big")
-        val album = albumObject?.text("title")
+        val albumName = albumObject?.text("title")
         val year = albumObject?.text("release_date")?.take(4)?.toIntOrNull()
         val artistName = artistObject?.text("name")
         val artistId = artistObject?.text("id")
         val artistImage = artistId?.let { id ->
             runCatching { lookupDeezerArtistImage(id) }.getOrNull()
         }
-        if (cover == null && album == null && year == null && artistName == null &&
+        if (cover == null && albumName == null && year == null && artistName == null &&
             artistImage == null
         ) {
             return null
         }
         return ProviderData(
             coverUrl = cover,
-            album = album,
+            album = albumName,
             year = year,
             artist = artistName,
             artistImageUrl = artistImage,
             source = "Deezer",
         )
+    }
+
+    /** Варианты поискового запроса: чем «грязнее» теги, тем важнее перебор. */
+    private fun searchVariants(title: String, artist: String, album: String?): List<String> =
+        buildList {
+            if (artist.isNotBlank()) {
+                add("$artist $title")
+                add("$title $artist")
+            } else {
+                add(title)
+            }
+            if (!album.isNullOrBlank()) add("$artist $album".trim())
+            // В title из имени файла иногда попадает «Artist - Title» целиком.
+            title.split(" - ").lastOrNull()?.trim()
+                ?.takeIf { it.isNotBlank() && it != title }
+                ?.let { add(it) }
+        }.map { it.trim() }
+            .filter { it.isNotBlank() }
+            .distinctBy { it.lowercase() }
+            .take(4)
+
+    private fun upgradeItunesArtwork(url: String?): String? = url
+        ?.replace("100x100bb", "1000x1000bb")
+        ?.replace("100x100", "1000x1000")
+
+    /** Обложка альбома из iTunes по исполнителю и альбому (entity=album). */
+    private suspend fun lookupItunesAlbumCover(artist: String, album: String): String? {
+        val term = listOf(artist, album).filter { it.isNotBlank() }.joinToString(" ")
+        if (term.isBlank()) return null
+        val url = "https://itunes.apple.com/search" +
+            "?term=${encode(term)}&entity=album&limit=10"
+        val root = runCatching {
+            Http.parseJsonObject(Http.get(url, JSON_HEADERS))
+        }.getOrNull() ?: return null
+        val results = root["results"] as? JsonArray ?: return null
+        val best = results
+            .mapNotNull { it as? JsonObject }
+            .filter { candidate ->
+                val name = candidate.text("collectionName") ?: return@filter false
+                sameTitle(name, album) && sameArtist(candidate.text("artistName"), artist)
+            }
+            .firstOrNull { !it.text("artworkUrl100").isNullOrBlank() }
+        return upgradeItunesArtwork(best?.text("artworkUrl100"))
     }
 
     /** `picture_xl` исполнителя Deezer; ошибка/404 не ломает основной поиск. */
@@ -805,6 +902,7 @@ class MetadataService(
         audioDb: ProviderData? = null,
         innerTube: ProviderData? = null,
         wikipedia: ArtistInfo? = null,
+        fallbackCover: String? = null,
     ): TrackMetadata? {
         if (brainz == null && lyrics == null && itunes == null && deezer == null &&
             audioDb == null && innerTube == null && wikipedia == null
@@ -812,13 +910,14 @@ class MetadataService(
             return null
         }
         // Обложки: сначала самые крупные и надёжные каталоги, затем Cover Art
-        // Archive и InnerTube. TheAudioDB/Deezer обычно отдают 1000 px.
+        // Archive, InnerTube и в последнюю очередь — обложка альбома из iTunes.
         val cover = listOf(
             deezer?.coverUrl,
             audioDb?.coverUrl,
             itunes?.coverUrl,
             brainz?.coverUrl,
             innerTube?.coverUrl,
+            fallbackCover,
         ).firstOrNull { !it.isNullOrBlank() }
 
         // Автор: канонический artist-credit MusicBrainz важнее названия канала.

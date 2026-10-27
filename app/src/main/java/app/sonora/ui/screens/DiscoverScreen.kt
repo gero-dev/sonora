@@ -66,6 +66,7 @@ private val CardRadius = 20.dp
 @Composable
 fun DiscoverScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) -> Unit) {
     val state by vm.discover.collectAsState()
+    val saveStates by vm.saveStates.collectAsState()
     val sources = remember { vm.discoverSources() }
 
     LazyColumn(
@@ -206,7 +207,9 @@ fun DiscoverScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
                     DiscoverTrackCard(
                         track = track,
                         downloading = track.id in state.downloadingIds,
-                        downloaded = track.id in state.downloadedIds,
+                        downloaded = track.id in state.downloadedIds ||
+                            vm.isTrackDownloaded(track),
+                        percent = saveStates[track.id]?.percent ?: -1,
                         onPlay = { vm.playOrOpen(track) },
                         onDownload = { vm.downloadDiscoverTrack(track) },
                     )
@@ -299,6 +302,7 @@ private fun DiscoverTrackCard(
     track: Track,
     downloading: Boolean,
     downloaded: Boolean,
+    percent: Int,
     onPlay: () -> Unit,
     onDownload: () -> Unit,
 ) {
@@ -351,10 +355,20 @@ private fun DiscoverTrackCard(
         }
         IconButton(onClick = onDownload, enabled = !downloading && !downloaded) {
             when {
-                downloading -> CircularProgressIndicator(
-                    modifier = Modifier.size(18.dp),
-                    strokeWidth = 2.dp,
-                )
+                downloading -> {
+                    if (percent in 0..99) {
+                        CircularProgressIndicator(
+                            progress = percent / 100f,
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp,
+                        )
+                    } else {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                        )
+                    }
+                }
 
                 downloaded -> Icon(
                     imageVector = Icons.Rounded.CheckCircle,

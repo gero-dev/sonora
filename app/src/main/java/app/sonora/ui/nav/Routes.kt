@@ -6,6 +6,7 @@ object Routes {
     const val HOME = "home"
     const val SEARCH = "search"
     const val DISCOVER = "discover"
+    const val HISTORY = "history"
     const val LIBRARY = "library"
     const val SETTINGS = "settings"
     const val CONNECTIONS = "connections"
@@ -24,5 +25,5 @@ object Routes {
     fun album(name: String, artist: String): String = "album/${Uri.encode(name)}/${Uri.encode(artist)}"
     fun artist(name: String): String = "artist/${Uri.encode(name)}"
 
-    val tabs = listOf(HOME, SEARCH, DISCOVER, LIBRARY, SETTINGS)
+    val tabs = listOf(HOME, SEARCH, HISTORY, LIBRARY, SETTINGS)
 }

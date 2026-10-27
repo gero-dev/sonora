@@ -45,6 +45,18 @@
 |---|---|
 | ![YouTube Music](docs/screenshots/youtube-web.png) | ![Библиотека YouTube](docs/screenshots/library-youtube.png) |
 
+| «Моя волна»: только музыка | Настройки «Моей волны» | Режим проигрывания |
+|---|---|---|
+| ![Волна](docs/screenshots/home-wave.png) | ![Настройки волны](docs/screenshots/wave-settings.png) | ![Режим проигрывания](docs/screenshots/settings-playback.png) |
+
+| Очередь: стриминг убран |
+|---|
+| ![Очередь](docs/screenshots/queue-offline.png) |
+
+| WARP из коробки | Метаданные из файлов | Поиск пропущенных обложек |
+|---|---|---|
+| ![WARP](docs/screenshots/warp-builtin.png) | ![Метаданные](docs/screenshots/settings-metadata.png) | ![Обложки](docs/screenshots/covers-search.png) |
+
 Светлая тема и авто-очередь: [settings-light.png](docs/screenshots/settings-light.png), [queue.png](docs/screenshots/queue.png).
 
 ---
@@ -65,6 +77,9 @@
 | Импорт файлов, копирование в свою папку `Music/Sonora` | ✅ |
 | **Поиск и скачивание свободной музыки**: Internet Archive (без ключа) и Jamendo (CC) | ✅ |
 | **Онлайн-метаданные**: альбом, год, обложка, фото и биография автора | ✅ MusicBrainz, CAA, iTunes, Deezer, TheAudioDB, Wikipedia, InnerTube |
+| **Метаданные из файлов**: JSON/NFO/LRC и `cover.jpg` рядом с треками — офлайн и точнее | ✅ |
+| **Встроенные обложки**: ID3/FLAC/MP4 → папка → онлайн, кнопка «Найти пропущенные обложки» | ✅ |
+| **Встроенный WARP**: 3 конфига в комплекте, «Восстановить встроенные конфиги», импорт своих | ✅ |
 | **Синхронизированные тексты песен** из LRCLIB: караоке-подсветка, автоскролл, тап — переход по строке | ✅ |
 | **Автопоиск метаданных** после сканирования (включён по умолчанию) | ✅ |
 | **Постоянный кэш метаданных**: найденное сохраняется на диск сразу и навсегда | ✅ |
@@ -76,14 +91,23 @@
 | **Вход в Google-аккаунт** через WebView: личные плейлисты и «Понравившиеся» | ✅ |
 | **Скачивание треков YouTube** в приватную папку с обложкой, артистом и альбомом | ✅ |
 | **Сохранение любого играемого трека**: InnerTube, прямые URL, открытые каталоги | ✅ |
+| **Сохранённые из стриминга — в общей фонотеке**: рядом с файлами устройства, со значком и фильтром | ✅ |
+| **Прогресс сохранения**: процент в списке, плеере и «Обзоре», статусы и повтор при ошибке | ✅ |
 | **Импорт плейлиста из файла** CSV/JSON/M3U/TXT (Spotify, Apple Music, YouTube Music) | ✅ |
 | **Моя волна** на главной: источники, настроения, сортировка, микс локального и онлайн | ✅ |
+| **Режимы проигрывания**: «Онлайн + устройство» / «Только загруженное» (офлайн-режим, как в Spotify) | ✅ |
+| **Переключатель стриминга в плеере**: долгое нажатие на кнопку перемешивания, без похода в настройки | ✅ |
+| **Вкладка «История»**: недавние треки по дням, исполнители, статистика — как Recently played в Spotify | ✅ |
+| **Мини-плеер внизу**: раскрывается по стрелке, работает на Samsung/One UI и всех оболочках | ✅ |
+| **Только музыка, без видео**: видеопотоки не играются и не скачиваются, клипы/концерты/подкасты отфильтрованы | ✅ |
+| **WARP на Главной**: подключение, статус и автоподхват после выключения своего VPN/WARP | ✅ |
+| **Настройки «Моей волны»**: только музыка без клипов, история прослушиваний, новизна, разнообразие, доля устройства | ✅ |
 | **Очередь сохранённых**: избранное, «Понравившиеся» YouTube, плейлисты аккаунта | ✅ |
 | **Тексты как в Metrolist**: крупный караоке-визуал, плавная подсветка и автоскролл | ✅ |
 | **Импорт плейлиста YouTube по ссылке** (PL…, OLAK5uy_…, `?list=…`) | ✅ |
 | **Встроенный YouTube Music** (WebView для личной библиотеки и входа в Google) | ✅ |
 | **Импорт библиотеки YouTube Music из Google Takeout** (CSV/ZIP, без API-ключей) | ✅ |
-| Оформление в духе Metrolist: Material 3 Expressive, тёмная тема, 6 акцентов, динамический цвет | ✅ |
+| Оформление: Material 3 Expressive, тёмная/светлая тема, **12 акцентов**, динамический цвет | ✅ |
 
 ### YouTube Music на InnerTube
 
@@ -153,12 +177,12 @@ app/src/main/java/app/sonora/
 │                            PlaybackController, AudioEffectBus
 ├── widget/                  SonoraWidget, SonoraWidgetProvider (RemoteViews)
 └── ui/
-    ├── MainScreen.kt        нижняя навигация (5 вкладок), мини-плеер, маршруты
-    ├── MainViewModel.kt     единая ViewModel
+    ├── MainScreen.kt        нижняя навигация (Главная/Поиск/История/Медиатека/Настройки)
+    ├── MainViewModel.kt     единая ViewModel, очередь сохранений, история
     ├── theme/               цвета, типографика, формы, акценты
     ├── nav/Routes.kt
-    ├── components/          TrackRow, CoverArt, MiniPlayer, EmptyState, LyricsSheet
-    └── screens/             Home, Search, Discover, Library, Player, Queue, Settings,
+    ├── components/          TrackRow, CoverArt, DynamicIsland (нижний плеер), EmptyState, LyricsSheet
+    └── screens/             Home, Search, History, Discover, Library, Player, Queue, Settings,
                              Connections, Details, YouTubeWebScreen
 ```
 
@@ -200,13 +224,15 @@ Gradle wrapper (9.7.1) лежит в репозитории, отдельно с
 - [docs/SETUP.md](docs/SETUP.md) — установка, Takeout, виджет, типовые ошибки
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — слои, потоки данных, InnerTube, воспроизведение, OAuth
 - [docs/DOWNLOADS.md](docs/DOWNLOADS.md) — сохранение треков: InnerTube, прямые ссылки, каталоги, ошибки
-- [docs/METADATA.md](docs/METADATA.md) — источники метаданных, авторы, фото, биографии, обложки
+- [docs/METADATA.md](docs/METADATA.md) — источники метаданных, sidecar-файлы, встроенные обложки, авторы
 - [docs/GOOGLE-ACCOUNT.md](docs/GOOGLE-ACCOUNT.md) — вход в Google, личные плейлисты, приватность
 - [docs/DISCOVERY.md](docs/DISCOVERY.md) — открытые каталоги (Archive.org, Jamendo), лицензии, лимиты
 - [docs/TAKEOUT.md](docs/TAKEOUT.md) — импорт библиотеки YouTube Music из Google Takeout
 - [docs/IMPORT.md](docs/IMPORT.md) — импорт своей музыки файлами и плейлистов из других сервисов
+- [docs/WAVE.md](docs/WAVE.md) — «Моя волна»: фильтр «только музыка», история, новизна, разнообразие, FAQ
+- [docs/PLAYBACK.md](docs/PLAYBACK.md) — режимы проигрывания, «Стриминг в очереди», офлайн-поведение, FAQ
 - [GITHUB.md](GITHUB.md) — данные для публикации репозитория и релиза на GitHub
-- [docs/WARP.md](docs/WARP.md) — WARP-туннель: конфиги, перебор, только трафик Sonora
+- [docs/WARP.md](docs/WARP.md) — WARP-туннель: встроенные и свои конфиги, перебор, только трафик Sonora
 - [docs/LYRICS.md](docs/LYRICS.md) — синхронизированные тексты (LRC, караоке)
 - [docs/WIDGET.md](docs/WIDGET.md) — виджет: размеры, обложка, обновление
 - [docs/LEGAL.md](docs/LEGAL.md) — что можно и нельзя, кратко и по-русски
@@ -219,7 +245,7 @@ Gradle wrapper (9.7.1) лежит в репозитории, отдельно с
 
 ## Статус и лицензия
 
-Версия **0.9.6**. Проверено в среде разработки:
+Версия **0.9.8**. Проверено в среде разработки:
 
 - `gradlew :app:assembleDebug` — **BUILD SUCCESSFUL**, APK в `app/build/outputs/apk/debug/`;
 - **WARP на главном экране**: статус и кнопка «Подключить/Выключить» без похода в Настройки;

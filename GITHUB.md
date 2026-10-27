@@ -1,7 +1,7 @@
 # Sonora — данные для публикации на GitHub
 
-Всё, что нужно для создания репозитория и релиза. Проверено на версии **0.9.6**
-(`versionCode 17`, `versionName 0.9.6`, APK 39 394 366 байт).
+Всё, что нужно для создания репозитория и релиза. Проверено на версии **0.9.8**
+(`versionCode 19`, `versionName 0.9.8`, APK 39 749 010 байт).
 
 ---
 
@@ -51,44 +51,46 @@ open-source gpl-3-0 android-app audio-player
 
 ---
 
-## 3. Релиз **v0.9.6**
+## 3. Релиз **v0.9.8**
 
-**Тег:** `v0.9.6` · **Заголовок:** `Sonora 0.9.6 — скачивание InnerTube и полные метаданные авторов`
+**Тег:** `v0.9.8` · **Заголовок:** `Sonora 0.9.8 — WARP из коробки, метаданные из файлов, обложки`
 
 ### Что нового (черновик release notes)
 
 ```markdown
-## Sonora 0.9.6
+## Sonora 0.9.8
 
-### Исправлено
-- **«Не удалось скачать» для треков из InnerTube**: поддержаны bounded-range
-  потоки InnerTubeX (только `Range`-куски), добавлены резервный player-поток,
-  сброс кэша ссылки при 403/410/416 и корректные заголовки. Теперь скачивание
-  идёт как в Metrolist, а не падает на первом полном GET.
-- В интерфейсе показывается настоящая причина ошибки (`HTTP 403`, `Только Wi-Fi`,
-  `Range не принят сервером`) вместо общей фразы.
+### WARP из коробки
+- Три WARP-конфига идут в комплекте: при первом запуске уже в списке, первый выбран.
+- «Восстановить встроенные конфиги» в настройках, если удалили.
+- Импорт своих `.conf` через файл сохранён; лимит 8 конфигов, автоперебор как раньше.
+- ВАЖНО: приватные ключи встроенных конфигов лежат в APK — сборка для личного
+  использования; перед публикацией удалите `app/src/main/assets/warp/`.
 
-### Добавлено
-- **Больше источников метаданных**: MusicBrainz, Cover Art Archive, iTunes,
-  Deezer, TheAudioDB, Wikipedia (EN/RU) и InnerTube-fallback.
-- **Авторы и обложки**: фото автора, биография и жанр; обложки до 1000×1000;
-  имена `Nirvana - Topic`/`NirvanaVEVO` сводятся к `Nirvana`, дубли в Медиатеке
-  исчезают. Для скачанных треков фото автора кэшируется офлайн.
-- Кэш метаданных с версией схемы: старые записи один раз перезапрашиваются.
+### Метаданные из файлов
+- Чтение sidecar-файлов рядом с музыкой: `<имя>.json`, `<имя>.nfo`, `<имя>.lrc`,
+  `album.json`, `cover.jpg` / `folder.jpg` — альбом, год, обложка и текст.
+- «Импортировать метаданные из файла»: JSON/CSV/NFO, сопоставление по исполнителю
+  и названию, результат «Совпало: N, обновлено: M».
+- Подсказки альбома/года теперь уходят в онлайн-поиск — базы находят точнее.
 
-### Сохранено из 0.9.5
-- Импорт плейлистов CSV/JSON/M3U/TXT, сохранение любого играемого трека,
-  WARP на главном, бесконечная «Моя волна», импорт Takeout, караоке-тексты.
+### Обложки
+- Сначала встроенная обложка из аудиофайла (ID3/FLAC/MP4) и обложка из папки —
+  без сети и без «битых» MediaStore-ссылок.
+- Онлайн-подбор стал терпимее: несколько вариантов запроса к iTunes/Deezer,
+  ослабленные фильтры, оценка кандидатов, обложка альбома как fallback.
+- Кнопка «Найти пропущенные обложки» с прогрессом (до 40 за запуск).
 
-**Полный APK:** `Sonora-0.9.6-debug.apk` · **Исходники:** `Sonora-0.9.6-source.zip`
+### Прочее
+- Версия 0.9.8 (versionCode 19), документация обновлена.
 ```
 
 ### Файлы релиза (assets)
 
 | Файл | Размер | SHA-256 |
 |---|---|---|
-| `Sonora-0.9.6-debug.apk` | 39 394 366 Б (37.6 МБ) | `93cef0349271b8a1f8a4d79d1f620a99976ba30458fec5cdf653cc2584ce532b` |
-| `Sonora-0.9.6-source.zip` | ≈ 12,3 МБ | указан в `Sonora-0.9.6-source.zip.sha256` рядом с архивом |
+| `Sonora-0.9.8-debug.apk` | 39 749 010 Б (37,9 МБ) | `e4a089d1ecb394a7fa4a98f3b634925efa9f9f7dab0f0dc7f6db7987341cb6b1` |
+| `Sonora-0.9.8-source.zip` | ≈ 15 800 000 Б (≈ 15,0 МБ) | см. `Sonora-0.9.8-SHA256SUMS.txt` рядом с архивом |
 
 APK подписан **debug-ключом** — для установки вручную. Для публикации в магазинах
 нужен release-keystore.
@@ -96,7 +98,7 @@ APK подписан **debug-ключом** — для установки вру
 ### Установка
 
 ```bash
-adb install -r Sonora-0.9.6-debug.apk
+adb install -r Sonora-0.9.8-debug.apk
 ```
 Или скопировать APK на телефон и открыть (разрешить установку из неизвестных источников).
 
@@ -117,10 +119,10 @@ sonora/
 │   │   ├── ui/                  экраны, компоненты, тема, онбординг
 │   │   └── widget/              виджеты 2×2, 4×1, 4×2, 4×4
 │   └── src/main/res/            ресурсы, раскладки виджетов, иконки
-├── docs/                        документация (18 файлов: гайды, архитектура, лицензии)
+├── docs/                        документация (20 файлов: гайды, архитектура, лицензии)
 ├── gradle/wrapper/              Gradle 9.7.1 wrapper
 ├── scripts/dev/                 вспомогательные скрипты для тестовых файлов
-├── CHANGELOG.md                 история версий (0.1.0 → 0.9.6)
+├── CHANGELOG.md                 история версий (0.1.0 → 0.9.8)
 ├── README.md                    описание, возможности, скриншоты, сборка
 ├── LICENSE                      GPL-3.0
 └── THIRD-PARTY-NOTICES.md       сторонние библиотеки и лицензии
@@ -129,10 +131,10 @@ sonora/
 ### Документация
 
 `docs/README.md` — индекс. `docs/ARCHITECTURE.md` · `docs/SETUP.md` · `docs/IMPORT.md` ·
-`docs/DOWNLOADS.md` · `docs/METADATA.md` · `docs/WARP.md` · `docs/LYRICS.md` · `docs/WIDGET.md` ·
-`docs/TAKEOUT.md` · `docs/GOOGLE-ACCOUNT.md` · `docs/DISCOVERY.md` · `docs/REVIEW.md` ·
-`docs/INTEGRATIONS.md` · `docs/UI.md` · `docs/LEGAL.md` · `docs/PLATFORM-FACTS.md` ·
-`docs/ROADMAP.md` · `docs/REVIEW.md` · `CHANGELOG.md`
+`docs/DOWNLOADS.md` · `docs/METADATA.md` · `docs/WARP.md` · `docs/WAVE.md` · `docs/PLAYBACK.md` ·
+`docs/LYRICS.md` · `docs/WIDGET.md` · `docs/TAKEOUT.md` · `docs/GOOGLE-ACCOUNT.md` ·
+`docs/DISCOVERY.md` · `docs/INTEGRATIONS.md` · `docs/UI.md` · `docs/LEGAL.md` ·
+`docs/PLATFORM-FACTS.md` · `docs/ROADMAP.md` · `docs/REVIEW.md` · `CHANGELOG.md`
 
 ### CI (`docs/ci/android.yml`)
 
@@ -153,7 +155,7 @@ OAuth-scope `workflow`. Чтобы включить CI, скопируйте е�
 cd sonora
 git init
 git add -A
-git commit -m "feat: Sonora 0.9.6"
+git commit -m "feat: Sonora 0.9.8 — WARP из коробки, метаданные из файлов, обложки"
 git branch -M main
 git remote add origin https://github.com/<username>/sonora.git
 git push -u origin main
@@ -162,12 +164,12 @@ git push -u origin main
 Релиз:
 
 ```bash
-git tag -a v0.9.6 -m "Sonora 0.9.6"
-git push origin v0.9.6
+git tag -a v0.9.8 -m "Sonora 0.9.8"
+git push origin v0.9.8
 ```
 
-Затем на GitHub: **Releases → Draft a new release** → тег `v0.9.6` → вставить
-release notes выше → прикрепить `Sonora-0.9.6-debug.apk` и `Sonora-0.9.6-source.zip`.
+Затем на GitHub: **Releases → Draft a new release** → тег `v0.9.8` → вставить
+release notes выше → прикрепить `Sonora-0.9.8-debug.apk` и `Sonora-0.9.8-source.zip`.
 
 В **Settings → General**: Description («Открытый музыкальный плеер для Android…»),
 Topics (список выше), License → GPL-3.0. В **Settings → Code and automation → Actions**
@@ -181,8 +183,11 @@ Topics (список выше), License → GPL-3.0. В **Settings → Code and 
   протокол; приложение не связано с Google/YouTube. Подробности — `docs/LEGAL.md`,
   `docs/PLATFORM-FACTS.md`.
 - **WARP** — обычный WireGuard-туннель, работает **только для трафика Sonora**
-  (per-app VPN), не меняет маршрутизацию остальных приложений; конфиги импортирует
-  пользователь, приватные ключи не попадают в APK/репозиторий.
+  (per-app VPN), не меняет маршрутизацию остальных приложений. В 0.9.8 три конфига
+  идут **внутри APK** (`app/src/main/assets/warp/`) — это осознанное решение для
+  личного использования: приватные ключи видны тому, у кого есть APK, поэтому
+  **перед публикацией сборки удалите `app/src/main/assets/warp/`**. Свои конфиги
+  пользователь по-прежнему импортирует файлом. Подробности — `docs/WARP.md`.
 - **Лицензия**: GPL-3.0 (совместимо с зависимостью InnerTubeX, GPL-3.0) — см.
   `THIRD-PARTY-NOTICES.md`.
 - Проект не обходит DRM. Кнопка сохранения работает для InnerTube/YouTube,

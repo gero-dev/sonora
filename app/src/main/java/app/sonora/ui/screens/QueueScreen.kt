@@ -2,6 +2,7 @@ package app.sonora.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
@@ -18,18 +20,24 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.PlaylistAdd
 import androidx.compose.material.icons.rounded.QueueMusic
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -48,6 +56,7 @@ import androidx.compose.ui.unit.dp
 import app.sonora.core.model.Playlist
 import app.sonora.core.model.Source
 import app.sonora.core.model.Track
+import app.sonora.core.settings.PlaybackMode
 import app.sonora.ui.MainViewModel
 import app.sonora.ui.components.BackIconButton
 import app.sonora.ui.components.CoverArt
@@ -64,7 +73,10 @@ fun QueueScreen(vm: MainViewModel, navigate: (String) -> Unit) {
     val player by vm.player.collectAsState()
     val playlists by vm.playlists.collectAsState()
     val google by vm.googleAccount.collectAsState()
+    val settings by vm.settings.collectAsState()
     val queue = player.queue
+    // Сколько треков в очереди требуют сети — для строки «Онлайн-треков в очереди».
+    val onlineInQueue = remember(queue) { queue.count { !vm.offlinePlayable(it) } }
     var showSaved by remember { mutableStateOf(false) }
 
     Column(
@@ -99,6 +111,16 @@ fun QueueScreen(vm: MainViewModel, navigate: (String) -> Unit) {
                 Text("Очистить")
             }
         }
+
+        // Карточка режима проигрывания: что попадает в очередь и как убрать стриминг.
+        QueuePlaybackModeCard(
+            mode = settings.playbackMode,
+            streamingInQueue = settings.streamingInQueue,
+            onlineCount = onlineInQueue,
+            onModeChange = vm::setPlaybackMode,
+            onStreamingChange = vm::setStreamingInQueue,
+            onRemoveStreaming = vm::removeStreamingFromQueue,
+        )
 
         if (queue.isEmpty()) {
             Box(
@@ -152,9 +174,13 @@ fun QueueScreen(vm: MainViewModel, navigate: (String) -> Unit) {
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         ) {
+            // Список опций прокручивается внутри листа: при большом числе плейлистов
+            // нижние пункты остаются достижимыми, а сам лист не растягивается на весь экран.
             Column(
                 modifier = Modifier
                     .navigationBarsPadding()
+                    .heightIn(max = 420.dp)
+                    .verticalScroll(rememberScrollState())
                     .padding(horizontal = 20.dp)
                     .padding(bottom = 24.dp),
             ) {
@@ -231,6 +257,101 @@ fun QueueScreen(vm: MainViewModel, navigate: (String) -> Unit) {
                             },
                         )
                     }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Карточка «Режим проигрывания»: онлайн-режим, выключатель стриминга в очереди
+ * и быстрая чистка онлайн-треков.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun QueuePlaybackModeCard(
+    mode: PlaybackMode,
+    streamingInQueue: Boolean,
+    onlineCount: Int,
+    onModeChange: (PlaybackMode) -> Unit,
+    onStreamingChange: (Boolean) -> Unit,
+    onRemoveStreaming: () -> Unit,
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        ),
+    ) {
+        Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+            Text("Режим проигрывания", style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(8.dp))
+            // Два режима всегда помещаются в строку; скролл — страховка для узких экранов.
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                PlaybackMode.entries.forEach { option ->
+                    FilterChip(
+                        selected = mode == option,
+                        onClick = { onModeChange(option) },
+                        label = { Text(option.label) },
+                    )
+                }
+            }
+            Spacer(Modifier.height(6.dp))
+            // В локальном режиме подсказка режима и есть статус очереди.
+            Text(
+                text = if (mode == PlaybackMode.LOCAL_ONLY) {
+                    "Играем только то, что сохранено на устройстве"
+                } else {
+                    mode.hint
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (mode == PlaybackMode.LOCAL_ONLY) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+            )
+            Spacer(Modifier.height(10.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Стриминг в очереди", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        text = "Разрешать онлайн-треки в очереди и автодополнении",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(
+                    checked = streamingInQueue && mode == PlaybackMode.STREAMING,
+                    onCheckedChange = onStreamingChange,
+                    // В режиме «только загруженное» стриминг выключен по определению.
+                    enabled = mode == PlaybackMode.STREAMING,
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "Онлайн-треков в очереди: $onlineCount",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                )
+                TextButton(
+                    onClick = onRemoveStreaming,
+                    enabled = onlineCount > 0,
+                ) {
+                    Text("Убрать стриминг")
                 }
             }
         }

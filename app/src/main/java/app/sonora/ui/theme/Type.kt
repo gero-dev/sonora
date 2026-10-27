@@ -39,8 +39,8 @@ val SonoraTypography = Typography(
     headlineLarge = TextStyle(
         fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.Bold,
-        fontSize = 28.sp,
-        lineHeight = 34.sp,
+        fontSize = 26.sp,
+        lineHeight = 32.sp,
         letterSpacing = (-0.4).sp,
     ),
     headlineMedium = TextStyle(
@@ -60,8 +60,8 @@ val SonoraTypography = Typography(
     titleLarge = TextStyle(
         fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.SemiBold,
-        fontSize = 22.sp,
-        lineHeight = 28.sp,
+        fontSize = 20.sp,
+        lineHeight = 26.sp,
         letterSpacing = (-0.2).sp,
     ),
     titleMedium = TextStyle(

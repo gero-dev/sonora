@@ -61,6 +61,8 @@ class PlaybackController(context: Context) {
     private var controller: MediaController? = null
     private var sleepJob: Job? = null
     private var lastWidgetUpdateAt = 0L
+    /** Пока идёт пакетное удаление из очереди, снимок состояния не пересчитываем. */
+    private var suppressingRefresh = false
 
     private val _state = MutableStateFlow(PlayerUiState())
     val state: StateFlow<PlayerUiState> = _state.asStateFlow()
@@ -117,6 +119,7 @@ class PlaybackController(context: Context) {
     }
 
     private fun refresh() {
+        if (suppressingRefresh) return
         val c = controller ?: return
         _state.update { st ->
             val duration = runCatching { c.duration }.getOrDefault(0L)
@@ -311,6 +314,41 @@ class PlaybackController(context: Context) {
         _state.update { st ->
             st.copy(queue = st.queue.filterIndexed { i, _ -> i != index })
         }
+    }
+
+    /**
+     * Удаляет из очереди треки, для которых [keep] вернул false. Текущий трек
+     * остаётся на месте, чтобы не прерывать воспроизведение. Возвращает число удалённых.
+     */
+    fun removeWhere(keep: (Track) -> Boolean): Int {
+        val c = controller ?: return 0
+        val queue = _state.value.queue.toMutableList()
+        val currentIndex = runCatching { c.currentMediaItemIndex }.getOrDefault(-1)
+        var removed = 0
+        // На время пакетного удаления не пересчитываем снимок: иначе onEvents
+        // обновит index/queue по промежуточному состоянию и «текущий» трек
+        // на мгновение станет чужим.
+        suppressingRefresh = true
+        try {
+            for (index in queue.indices.reversed()) {
+                if (index == currentIndex) continue
+                val track = queue.getOrNull(index) ?: continue
+                if (keep(track)) continue
+                if (index >= c.mediaItemCount) continue
+                val success = runCatching { c.removeMediaItem(index) }.isSuccess
+                if (success) {
+                    queue.removeAt(index)
+                    removed++
+                }
+            }
+        } finally {
+            suppressingRefresh = false
+        }
+        if (removed > 0) {
+            _state.update { st -> st.copy(queue = queue) }
+            refresh()
+        }
+        return removed
     }
 
     fun move(from: Int, to: Int) {

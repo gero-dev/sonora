@@ -27,6 +27,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.Explore
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.MusicNote
@@ -36,6 +37,7 @@ import androidx.compose.material.icons.rounded.PlayCircle
 import androidx.compose.material.icons.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Sort
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.UploadFile
 import androidx.compose.material.icons.rounded.VpnKey
 import androidx.compose.material3.AlertDialog
@@ -49,6 +51,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -90,8 +93,8 @@ import java.time.LocalTime
 private val PagePadding = 16.dp
 private val SectionGap = 12.dp
 private val RailSpacing = 12.dp
-private val CardRadius = 20.dp
-private val TileWidth = 160.dp
+private val CardRadius = 16.dp
+private val TileWidth = 152.dp
 private val ArtworkRadius = 12.dp
 
 /**
@@ -111,9 +114,13 @@ fun HomeScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) -> 
     val warpConfigs by vm.warpConfigs.collectAsState()
     val warpExternal by vm.warpExternalVpn.collectAsState()
     val warpError by vm.warpError.collectAsState()
+    val warpKeepAlive by vm.warpKeepAlive.collectAsState()
     val fileImport by vm.fileImport.collectAsState()
+    val settings by vm.settings.collectAsState()
+    val waveHistorySize by vm.waveHistorySize.collectAsState()
 
     var showImportGuide by remember { mutableStateOf(false) }
+    var showWaveSettings by remember { mutableStateOf(false) }
     val musicImportLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenMultipleDocuments(),
     ) { uris ->
@@ -162,20 +169,29 @@ fun HomeScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) -> 
                     onSort = vm::setWaveSort,
                     onTrackClick = { vm.playOrOpen(it) },
                     onLoadMore = { vm.loadMoreWave() },
+                    onSettings = { showWaveSettings = true },
                 )
             }
 
             if (localTracks.isEmpty()) {
                 item { ScanLibraryCard(scanning = scanning, onScan = { vm.scanLibrary() }) }
             }
-            item { YouTubeWebCard(onOpen = { navigate(Routes.SEARCH) }) }
+            item {
+                QuickAccessRow(
+                    onCatalog = { navigate(Routes.DISCOVER) },
+                    onSearch = { navigate(Routes.SEARCH) },
+                )
+            }
 
+            // WARP всегда на виду на Главной: включить/выключить и автоподхват.
             item {
                 WarpHomeCard(
                     status = warpStatus,
                     configsCount = warpConfigs.size,
                     externalVpn = warpExternal,
+                    keepAlive = warpKeepAlive,
                     error = warpError,
+                    onKeepAliveChange = vm::setWarpKeepAlive,
                     onOpenSettings = { navigate(Routes.SETTINGS) },
                     onDisable = { vm.stopWarp() },
                     onEnable = {
@@ -204,17 +220,6 @@ fun HomeScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) -> 
                     onPickFiles = { musicImportLauncher.launch(arrayOf("*/*")) },
                     onShowGuide = { showImportGuide = true },
                 )
-            }
-
-            val current = player.current
-            if (current != null) {
-                item {
-                    NowPlayingCard(
-                        track = current,
-                        isPlaying = player.isPlaying,
-                        onClick = { navigate(Routes.PLAYER) },
-                    )
-                }
             }
 
             if (recent.isNotEmpty()) {
@@ -308,7 +313,7 @@ fun HomeScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) -> 
                 } else {
                     null
                 },
-                downloadLabel = "Скачать",
+                downloadLabel = "Сохранить на устройство",
             )
         }
 
@@ -330,6 +335,19 @@ fun HomeScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) -> 
                     playlistForNewTrack = null
                     vm.createPlaylist(name) { created -> vm.addToPlaylist(created.id, track.id) }
                 },
+            )
+        }
+
+        if (showWaveSettings) {
+            app.sonora.ui.screens.WaveSettingsSheet(
+                settings = settings.wave,
+                historySize = waveHistorySize,
+                onDismiss = { showWaveSettings = false },
+                onApply = { draft ->
+                    vm.updateWaveSettings { _ -> draft }
+                    showWaveSettings = false
+                },
+                onClearHistory = { vm.clearWaveHistory() },
             )
         }
 
@@ -411,6 +429,18 @@ private fun HomeGreeting(localCount: Int) {
     }
 }
 
+private fun tracksLabel(count: Int): String {
+    val mod100 = count % 100
+    val mod10 = count % 10
+    val word = when {
+        mod100 in 11..14 -> "треков"
+        mod10 == 1 -> "трек"
+        mod10 in 2..4 -> "трека"
+        else -> "треков"
+    }
+    return "$count $word"
+}
+
 private fun greetingForNow(): String {
     val hour = LocalTime.now().hour
     return when (hour) {
@@ -486,104 +516,90 @@ private fun ScanLibraryCard(scanning: Boolean, onScan: () -> Unit) {
     }
 }
 
-/** Карточка встроенного веб-плеера YouTube Music. */
+/**
+ * Две компактные карточки вместо больших промо-блоков: «Обзор» открытых
+ * каталогов и поиск по стримингу. Меньше визуального шума на Главной.
+ */
 @Composable
-private fun YouTubeWebCard(onOpen: () -> Unit) {
+private fun QuickAccessRow(onCatalog: () -> Unit, onSearch: () -> Unit) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(CardRadius))
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-            .clickable(onClick = onOpen)
-            .padding(14.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Box(
-            modifier = Modifier
-                .size(44.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .background(MaterialTheme.colorScheme.primaryContainer),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.PlayCircle,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onPrimaryContainer,
-            )
-        }
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
-            Text("YouTube Music · InnerTube", style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.height(2.dp))
-            Text(
-                text = "Поиск и воспроизведение без API-ключей: очередь, тексты и обложки прямо в приложении",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        Spacer(Modifier.width(8.dp))
-        Icon(
-            imageVector = Icons.Rounded.ChevronRight,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        QuickAccessTile(
+            title = "Обзор",
+            subtitle = "Свободная музыка",
+            icon = Icons.Rounded.Explore,
+            onClick = onCatalog,
+            modifier = Modifier.weight(1f),
+        )
+        QuickAccessTile(
+            title = "Стриминг",
+            subtitle = "YouTube Music",
+            icon = Icons.Rounded.PlayCircle,
+            onClick = onSearch,
+            modifier = Modifier.weight(1f),
+            accent = true,
         )
     }
 }
 
-/** Компактная карточка «Сейчас играет» с переходом в полный плеер. */
 @Composable
-private fun NowPlayingCard(track: Track, isPlaying: Boolean, onClick: () -> Unit) {
+private fun QuickAccessTile(
+    title: String,
+    subtitle: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    accent: Boolean = false,
+) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(CardRadius))
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+        modifier = modifier
+            .clip(RoundedCornerShape(14.dp))
+            .background(
+                if (accent) {
+                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)
+                } else {
+                    MaterialTheme.colorScheme.surfaceContainerHigh
+                },
+            )
             .clickable(onClick = onClick)
-            .padding(12.dp),
+            .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        CoverArt(
-            url = track.artworkUrl ?: track.artworkUri,
-            size = 56.dp,
-            cornerRadius = ArtworkRadius,
-        )
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
-            Text(
-                text = "Сейчас играет",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.primary,
-            )
-            Spacer(Modifier.height(2.dp))
-            Text(
-                text = track.title,
-                style = MaterialTheme.typography.titleMedium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = track.artist,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        Spacer(Modifier.width(8.dp))
         Box(
             modifier = Modifier
-                .size(40.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)),
+                .size(36.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(
+                    if (accent) {
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                    } else {
+                        MaterialTheme.colorScheme.surfaceContainerHighest
+                    },
+                ),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
-                imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                imageVector = icon,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(22.dp),
+                tint = if (accent) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                modifier = Modifier.size(20.dp),
+            )
+        }
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleSmall, maxLines = 1)
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
     }
@@ -604,6 +620,7 @@ private fun WaveCard(
     onSort: (WaveSort) -> Unit,
     onTrackClick: (Track) -> Unit,
     onLoadMore: () -> Unit,
+    onSettings: () -> Unit,
 ) {
     var sortMenu by remember { mutableStateOf(false) }
     Column(
@@ -651,6 +668,13 @@ private fun WaveCard(
                     strokeWidth = 2.dp,
                 )
             } else {
+                IconButton(onClick = onSettings) {
+                    Icon(
+                        imageVector = Icons.Rounded.Tune,
+                        contentDescription = "Настройки волны",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 IconButton(onClick = onRefresh) {
                     Icon(
                         imageVector = Icons.Rounded.Refresh,
@@ -713,7 +737,7 @@ private fun WaveCard(
             }
             Spacer(Modifier.weight(1f))
             Text(
-                text = "${state.tracks.size} треков",
+                text = if (state.loading) "Собираем…" else tracksLabel(state.tracks.size),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -919,7 +943,9 @@ private fun WarpHomeCard(
     status: WarpStatus,
     configsCount: Int,
     externalVpn: Boolean,
+    keepAlive: Boolean,
     error: String?,
+    onKeepAliveChange: (Boolean) -> Unit,
     onOpenSettings: () -> Unit,
     onEnable: () -> Unit,
     onDisable: () -> Unit,
@@ -928,6 +954,7 @@ private fun WarpHomeCard(
         status.state == WarpState.CONNECTING
     val stateText = when {
         configsCount == 0 -> "Конфигурация не импортирована"
+        externalVpn && keepAlive -> "Другой VPN активен — подхватим после отключения"
         externalVpn -> "Активен другой VPN — туннель не включён"
         status.state == WarpState.CONNECTED -> "Подключён"
         status.state == WarpState.CONNECTING -> "Подключение…"
@@ -935,68 +962,96 @@ private fun WarpHomeCard(
         status.state == WarpState.ERROR -> "Ошибка подключения"
         else -> "Выключен"
     }
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(CardRadius))
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .padding(horizontal = 14.dp, vertical = 10.dp),
     ) {
-        Box(
-            modifier = Modifier
-                .size(42.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .background(
-                    if (connected) {
-                        MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(13.dp))
+                    .background(
+                        if (connected) {
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
+                        } else {
+                            MaterialTheme.colorScheme.surfaceContainerHighest
+                        },
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.VpnKey,
+                    contentDescription = null,
+                    tint = if (connected) {
+                        MaterialTheme.colorScheme.primary
                     } else {
-                        MaterialTheme.colorScheme.surfaceContainerHighest
+                        MaterialTheme.colorScheme.onSurfaceVariant
                     },
-                ),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.VpnKey,
-                contentDescription = null,
-                tint = if (connected) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-            )
-        }
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
-            Text("WARP", style = MaterialTheme.typography.titleMedium)
-            Text(
-                text = stateText,
-                style = MaterialTheme.typography.bodyMedium,
-                color = if (connected) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            error?.let {
-                Text(
-                    text = it,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.error,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.size(20.dp),
                 )
             }
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                Text("WARP", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    text = stateText,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (connected) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                error?.let {
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            if (configsCount == 0) {
+                TextButton(onClick = onOpenSettings) { Text("Настроить") }
+            } else if (externalVpn) {
+                TextButton(onClick = if (keepAlive) onEnable else onOpenSettings) {
+                    Text(if (keepAlive) "Подхватить" else "Подробнее")
+                }
+            } else {
+                TextButton(onClick = if (connected) onDisable else onEnable) {
+                    Text(if (connected) "Выключить" else "Подключить")
+                }
+            }
         }
-        if (configsCount == 0) {
-            TextButton(onClick = onOpenSettings) { Text("Настроить") }
-        } else if (externalVpn) {
-            TextButton(onClick = onOpenSettings) { Text("Подробнее") }
-        } else {
-            TextButton(onClick = if (connected) onDisable else onEnable) {
-                Text(if (connected) "Выключить" else "Подключить")
+        if (configsCount > 0) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = "Автовосстановление",
+                        style = MaterialTheme.typography.labelMedium,
+                    )
+                    Text(
+                        text = "Поднять WARP, если вы выключили свой VPN",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(
+                    checked = keepAlive,
+                    onCheckedChange = onKeepAliveChange,
+                )
             }
         }
     }
@@ -1012,77 +1067,64 @@ private fun ImportMusicCard(
     onPickFiles: () -> Unit,
     onShowGuide: () -> Unit,
 ) {
-    Column(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(CardRadius))
+            .clip(RoundedCornerShape(14.dp))
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-            .padding(16.dp),
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier
-                    .size(42.dp)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.UploadFile,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                )
-            }
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text("Своя музыка файлами", style = MaterialTheme.typography.titleMedium)
-                Text(
-                    text = "MP3, FLAC, M4A, OGG, OPUS — как «Local files» в Spotify",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-        if (done) {
-            Spacer(Modifier.height(6.dp))
-            Text(
-                text = "Импортировано: $imported" +
-                    if (failed > 0) " · не удалось: $failed" else "",
-                style = MaterialTheme.typography.labelMedium,
-                color = if (imported > 0) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.error
-                },
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.UploadFile,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp),
             )
         }
-        Spacer(Modifier.height(10.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Button(
-                onClick = onPickFiles,
-                enabled = !importing,
-                modifier = Modifier.weight(1f),
-            ) {
-                if (importing) {
-                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = if (done) {
+                    "Импортировано: $imported" + if (failed > 0) " · ошибок: $failed" else ""
                 } else {
-                    Icon(
-                        imageVector = Icons.Rounded.UploadFile,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
-                    )
-                }
-                Spacer(Modifier.width(6.dp))
-                Text(if (importing) "Импорт…" else "Выбрать файлы")
-            }
-            OutlinedButton(onClick = onShowGuide) {
-                Icon(
-                    imageVector = Icons.Rounded.Info,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp),
-                )
-                Spacer(Modifier.width(6.dp))
-                Text("Инструкция")
+                    "Своя музыка файлами"
+                },
+                style = MaterialTheme.typography.titleSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = if (done) {
+                    "Файлы уже в медиатеке"
+                } else {
+                    "MP3, FLAC, M4A, OGG, OPUS"
+                },
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+            )
+        }
+        IconButton(onClick = onShowGuide) {
+            Icon(
+                imageVector = Icons.Rounded.Info,
+                contentDescription = "Как импортировать музыку",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp),
+            )
+        }
+        TextButton(onClick = onPickFiles, enabled = !importing) {
+            if (importing) {
+                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+            } else {
+                Text("Выбрать")
             }
         }
     }

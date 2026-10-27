@@ -8,6 +8,7 @@ import android.net.NetworkCapabilities
 import android.net.Uri
 import android.net.VpnService
 import android.provider.OpenableColumns
+import android.util.Log
 import androidx.core.content.ContextCompat
 import app.sonora.core.security.SecureStore
 import kotlinx.coroutines.Dispatchers
@@ -29,6 +30,30 @@ private const val MAX_CONFIG_BYTES = 128 * 1024
 
 /** Общий lock для файлов конфигов: store создаётся и в UI, и в сервисе. */
 private val WARP_STORE_LOCK = Any()
+
+private const val WARP_LOG_TAG = "WarpTunnel"
+
+/** Имя папки встроенных конфигов внутри APK (`assets/warp/`). */
+private const val BUNDLED_ASSETS_DIR = "warp"
+
+/**
+ * Встроенный в APK WARP-конфиг.
+ *
+ * ВНИМАНИЕ: в `[Interface]` лежит приватный ключ — он попадает в APK. Это
+ * осознанное решение пользователя для личного использования: ключ нельзя
+ * логировать/передавать, в UI показываются только имя и endpoint.
+ */
+private data class BundledWarpConfig(
+    val fileName: String,
+    val displayName: String,
+)
+
+/** Ровно те конфиги, что лежат в `app/src/main/assets/warp/`. */
+private val BUNDLED_WARP_CONFIGS = listOf(
+    BundledWarpConfig("warp_09027.conf", "Встроенный WARP 09027"),
+    BundledWarpConfig("warp_25786.conf", "Встроенный WARP 25786"),
+    BundledWarpConfig("warp_65867.conf", "Встроенный WARP 65867"),
+)
 
 /** Состояние встроенного WARP-туннеля. */
 enum class WarpState {
@@ -119,9 +144,20 @@ internal class WarpPreferences(context: Context) {
             prefs.edit().putBoolean(KEY_AUTO_ROTATE, value).apply()
         }
 
+    /**
+     * Флаг «встроенные конфиги уже добавлялись» (`warp_bundled_seeded`), чтобы
+     * не пересевать их при каждом запуске. [WarpTunnel.restoreBundled] его игнорирует.
+     */
+    fun isBundledSeeded(): Boolean = prefs.getBoolean(KEY_BUNDLED_SEEDED, false)
+
+    fun setBundledSeeded(value: Boolean) {
+        prefs.edit().putBoolean(KEY_BUNDLED_SEEDED, value).apply()
+    }
+
     private companion object {
         const val PREFS_FILE = "warp_settings"
         const val KEY_AUTO_ROTATE = "auto_rotate"
+        const val KEY_BUNDLED_SEEDED = "warp_bundled_seeded"
     }
 }
 
@@ -141,6 +177,10 @@ internal class WarpPreferences(context: Context) {
  *
  * [externalVpnActive] позволяет UI не воевать с уже включённым системным VPN:
  * только собственный активный туннель не считается «внешним».
+ *
+ * ВНИМАНИЕ: встроенные конфиги из `assets/warp/` содержат приватные ключи
+ * прямо в APK — это осознанное решение пользователя для личного использования.
+ * Приватные ключи не логируются и не показываются в UI (только имя и endpoint).
  *
  * Публичный API для AppGraph/VM описан в docs/WARP.md.
  */
@@ -166,6 +206,11 @@ class WarpTunnel(
     val status: StateFlow<WarpStatus> = WarpTunnelState.status
 
     init {
+        // Встроенные WARP-конфиги: при первом запуске уже есть 3 готовых профиля.
+        runCatching { ensureBundledConfigs() }
+            .onFailure { error ->
+                Log.w(WARP_LOG_TAG, "bundled WARP seeding failed: ${error.javaClass.simpleName}")
+            }
         syncIdleState()
     }
 
@@ -258,6 +303,102 @@ class WarpTunnel(
             WarpStatus(state = WarpState.NOT_CONFIGURED, autoRotate = preferences.autoRotate),
         )
     }
+
+    // ---------------------------------------------------------------- встроенные конфиги
+
+    /**
+     * Добавляет встроенные конфиги из `assets/warp/`, если они ещё не добавлялись,
+     * и выбирает первый встроенный. Вызывается в [init] (синхронно, файлы ~3 КБ).
+     *
+     * ВНИМАНИЕ: приватные ключи встроенных конфигов попадают в APK — это осознанное
+     * решение пользователя для личного использования; ключи не логируются.
+     *
+     * @return число реально добавленных конфигов (0, если уже сеяли).
+     */
+    @Synchronized
+    fun ensureBundledConfigs(): Int {
+        if (preferences.isBundledSeeded()) return 0
+        val added = runCatching { addBundledConfigs(selectFirstBundled = true) }
+            .onFailure { error ->
+                Log.w(WARP_LOG_TAG, "bundled WARP seeding failed: ${error.javaClass.simpleName}")
+            }
+            .getOrDefault(0)
+        preferences.setBundledSeeded(true)
+        return added
+    }
+
+    /**
+     * Повторно добавляет отсутствующие встроенные конфиги (например, после того
+     * как пользователь их удалил). Флаг «уже сеяли» игнорируется; [WarpConfigStore.add]
+     * дедуплицирует по id, поэтому существующие конфиги не дублируются.
+     * Текущий выбранный конфиг сохраняется, если он ещё существует.
+     *
+     * @return число реально добавленных конфигов.
+     */
+    @Synchronized
+    fun restoreBundled(): Int =
+        runCatching { addBundledConfigs(selectFirstBundled = false) }
+            .onFailure { error ->
+                Log.w(WARP_LOG_TAG, "bundled WARP restore failed: ${error.javaClass.simpleName}")
+            }
+            .getOrDefault(0)
+
+    /** Сколько встроенных конфигов реально присутствует в assets. */
+    fun bundledConfigsCount(): Int = runCatching {
+        BUNDLED_WARP_CONFIGS.count { descriptor ->
+            runCatching {
+                appContext.assets.open(assetPath(descriptor.fileName)).use { }
+            }.isSuccess
+        }
+    }.getOrDefault(0)
+
+    /**
+     * Общий код [ensureBundledConfigs]/[restoreBundled]: читает assets, парсит их
+     * через [WarpConfig.parse] и добавляет через store. Ошибки отдельных файлов
+     * не фатальны; в лог пишем только имя файла и класс ошибки — без ключей.
+     *
+     * Переполнение [MAX_CONFIGS] просто пропускается: [WarpConfigStore.add]
+     * бросает IOException, он ловится на уровне файла.
+     */
+    private fun addBundledConfigs(selectFirstBundled: Boolean): Int {
+        val previousSelectedId = store.selectedId()
+        var added = 0
+        var firstProcessedId: String? = null
+        for (descriptor in BUNDLED_WARP_CONFIGS) {
+            try {
+                val text = appContext.assets
+                    .open(assetPath(descriptor.fileName))
+                    .bufferedReader(Charsets.UTF_8)
+                    .use { reader -> reader.readText() }
+                val config = WarpConfig.parse(text)
+                val sizeBefore = store.entries().size
+                val entry = store.add(config, descriptor.displayName)
+                val isNew = store.entries().size > sizeBefore
+                if (isNew) added += 1
+                if (firstProcessedId == null) firstProcessedId = entry.id
+            } catch (error: Exception) {
+                Log.w(
+                    WARP_LOG_TAG,
+                    "bundled config ${descriptor.fileName} skipped: ${error.javaClass.simpleName}",
+                )
+            }
+        }
+        when {
+            // ensure: по контракту выбираем первый встроенный.
+            selectFirstBundled -> firstProcessedId?.let { store.select(it) }
+            // restore: не сбиваем выбор пользователя, если он ещё существует.
+            previousSelectedId != null &&
+                store.entries().any { entry -> entry.id == previousSelectedId } ->
+                previousSelectedId?.let { store.select(it) }
+            // restore на пустом списке: выбираем первый встроенный.
+            previousSelectedId == null -> firstProcessedId?.let { store.select(it) }
+        }
+        invalidateSummary()
+        publishSelectionIdle()
+        return added
+    }
+
+    private fun assetPath(fileName: String): String = "$BUNDLED_ASSETS_DIR/$fileName"
 
     // ---------------------------------------------------------------- автоперебор
 

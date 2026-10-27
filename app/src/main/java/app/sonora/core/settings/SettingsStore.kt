@@ -12,6 +12,57 @@ import kotlinx.serialization.json.Json
 @Serializable
 enum class ThemeMode { SYSTEM, DARK, LIGHT }
 
+/**
+ * Режим проигрывания, как в Spotify: можно разрешить стриминг в очереди,
+ * а можно слушать только то, что уже сохранено на устройстве.
+ */
+@Serializable
+enum class PlaybackMode(val label: String, val hint: String) {
+    STREAMING("Онлайн + устройство", "В очередь попадают и стриминговые треки"),
+    LOCAL_ONLY("Только загруженное", "Играем только то, что сохранено на устройстве"),
+}
+
+/** Тонкая настройка «Моей волны»: что и как подбирается в рекомендации. */
+@Serializable
+data class WaveSettings(
+    /** Только музыка: без клипов, концертов, интервью и подкастов. */
+    val musicOnly: Boolean = true,
+    /** Скрывать видеоклипы даже при выключенном «только музыка». */
+    val excludeVideos: Boolean = true,
+    val includeFavorites: Boolean = true,
+    /** Учитывать историю прослушиваний и пропусков. */
+    val useHistory: Boolean = true,
+    /** 0 — знакомое, 100 — новое. */
+    val novelty: Int = 50,
+    /** Максимум треков одного артиста в начале подборки. */
+    val artistDiversity: Int = 2,
+    /** Доля локальных треков в миксе, проценты. */
+    val localShare: Int = 60,
+    /** Нижняя граница длительности трека, секунды. */
+    val minDurationSec: Int = 45,
+    /** Верхняя граница длительности онлайн-трека, минуты. */
+    val maxDurationMin: Int = 12,
+) {
+    /** Приведение значений к безопасным диапазонам из UI. */
+    fun normalized(): WaveSettings {
+        val maxMinutes = maxDurationMin.coerceIn(2, 45)
+        val minSeconds = minDurationSec.coerceIn(15, 1800)
+        // Верхняя граница не может быть меньше нижней, иначе волна останется пустой.
+        val safeMinSeconds = minSeconds.coerceAtMost(maxMinutes * 60)
+        return WaveSettings(
+            musicOnly = musicOnly,
+            excludeVideos = excludeVideos,
+            includeFavorites = includeFavorites,
+            useHistory = useHistory,
+            novelty = novelty.coerceIn(0, 100),
+            artistDiversity = artistDiversity.coerceIn(1, 5),
+            localShare = localShare.coerceIn(0, 100),
+            minDurationSec = safeMinSeconds,
+            maxDurationMin = maxMinutes,
+        )
+    }
+}
+
 @Serializable
 enum class Accent(val label: String) {
     VIOLET("Фиолетовый"),
@@ -20,6 +71,12 @@ enum class Accent(val label: String) {
     ORANGE("Оранжевый"),
     PINK("Розовый"),
     MONO("Моно"),
+    RED("Красный"),
+    TEAL("Бирюзовый"),
+    YELLOW("Жёлтый"),
+    INDIGO("Индиго"),
+    CYAN("Голубой"),
+    BROWN("Терракотовый"),
 }
 
 @Serializable
@@ -37,6 +94,17 @@ data class AppSettings(
     val eqBands: List<Float> = List(BANDS_COUNT) { 0f },
     val playbackSpeed: Float = 1f,
 
+    // Воспроизведение: онлайн-стриминг можно выключить, как «офлайн-режим» в Spotify.
+    val playbackMode: PlaybackMode = PlaybackMode.STREAMING,
+    /** Разрешать стриминговые треки в очереди и автодополнении. */
+    val streamingInQueue: Boolean = true,
+
+    /** Вести историю прослушиваний: треки, исполнители, статистика. */
+    val saveHistory: Boolean = true,
+
+    // «Моя волна»: точность рекомендаций и фильтр «только музыка».
+    val wave: WaveSettings = WaveSettings(),
+
     // Библиотека
     val scanOnStart: Boolean = true,
     val excludeShortTracks: Boolean = true,
@@ -51,8 +119,19 @@ data class AppSettings(
     val downloadFolder: String = "Sonora",
     /** Показывать обучающий экран при первом запуске. */
     val onboardingDone: Boolean = false,
+    /** Читать sidecar-файлы (json/nfo/lrc, cover.jpg) рядом с аудиофайлами. */
+    val readSidecarMetadata: Boolean = true,
+    /** Доставать встроенную обложку из аудиофайла (ID3/FLAC/MP4). */
+    val useEmbeddedArtwork: Boolean = true,
     /** Автоматически поднимать WARP-туннель при старте приложения (если есть конфиги). */
     val warpAutoConnect: Boolean = false,
+    /**
+     * Автовосстановление: если пользователь выключил свой WARP/VPN во время
+     * активной сессии, Sonora снова поднимает свой туннель, когда внешний VPN исчез.
+     */
+    val warpKeepAlive: Boolean = true,
+    /** Пользователь включал WARP; переживает перезапуск процесса для автоподхвата. */
+    val warpUserEnabled: Boolean = false,
     /** Версия схемы метаданных: после апгрейда сбрасываем устаревшие отметки «проверено». */
     val metadataSchemaVersion: Int = 0,
 
@@ -85,6 +164,11 @@ class SettingsStore(context: Context) {
         val updated = transform(_state.value)
         _state.value = updated
         prefs.edit().putString(KEY, json.encodeToString(updated)).apply()
+    }
+
+    /** Обновление настроек волны с приведением значений к допустимым диапазонам. */
+    fun updateWave(transform: (WaveSettings) -> WaveSettings) {
+        update { current -> current.copy(wave = transform(current.wave).normalized()) }
     }
 
     fun set(settings: AppSettings) = update { settings }
