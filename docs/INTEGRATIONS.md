@@ -139,9 +139,9 @@ artist-credit, фото/биография берутся из TheAudioDB, Deeze
 `downloadedFrom` и `downloadedTrackId`.
 
 Папка: `getExternalFilesDir(Music)/<downloadFolder>` (по умолчанию `Sonora`),
-fallback — `filesDir`. Поддерживается `settings.downloadWifiOnly` (ошибка
-«Только Wi-Fi»), уникальные имена файлов, `.part`, прогресс в `StateFlow`,
-удаление и подсчёт размера.
+fallback — `filesDir`. Загрузка идёт через **любую сеть** (Wi-Fi, мобильный
+интернет, Ethernet, VPN/WARP), без ограничения «только Wi-Fi». Поддерживаются
+уникальные имена файлов, `.part`, прогресс в `StateFlow`, удаление и подсчёт размера.
 
 ## Импорт списков
 

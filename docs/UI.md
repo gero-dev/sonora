@@ -20,7 +20,7 @@
 
 ```
 ui/
-  components/  TrackRow.kt, MiniPlayer.kt, DynamicIsland.kt
+  components/  TrackRow.kt, MiniPlayer.kt
   screens/     HomeScreen, SearchScreen, HistoryScreen, LibraryScreen, SettingsScreen,
                ConnectionsScreen, PlayerScreen, QueueScreen, DetailsScreen
   MainScreen.kt, MainViewModel.kt, nav/Routes.kt, theme/*
@@ -30,12 +30,12 @@ ui/
 `EmptyState`, `SourceChip`, `BackIconButton`, `TrackActionSheet` (лист действий по долгому нажатию),
 `CreatePlaylistDialog`, `sourceColor`, `accentGradient`. Экраны переиспользуют их и не дублируют.
 
-`components/DynamicIsland.kt` — раскрывающийся мини-плеер в стиле Dynamic Island, но
-**внизу экрана**, в `bottomBar` над навигацией. Верхний `topBar` убран: на Samsung/One UI
-он мог уезжать под статус-бар/вырез. Нижняя позиция не зависит от системных inset'ов
-сверху; NavigationBar ниже сам учитывает жестовую/кнопочную навигацию. Плеер
-сворачивается в «пилюлю», по стрелке раскрывается вверх до карточки с транспортом,
-обычный тап открывает полный плеер.
+`components/MiniPlayer.kt` — нижний мини-плеер из классической версии: обложка,
+название, тонкий прогресс, play/pause и следующий трек. Тап открывает полный плеер,
+свайп влево/вправо переключает трек, свайп вверх открывает плеер. Нажатие на имя
+артиста ведёт на его страницу. Верхнего `topBar` нет — это исправляет Samsung/One UI.
+`MainScreen` оборачивает контент в `LocalArtistNavigator`, поэтому переход к
+исполнителю работает из строк треков, истории, очереди и листа действий.
 
 ## Экраны
 
@@ -80,8 +80,8 @@ ui/
 используют это как `contentPadding` у `LazyColumn`/`LazyVerticalGrid` (+16dp сверху и +24dp снизу),
 полноэкранные маршруты (Плеер, Очередь, Детали) применяют `Modifier.safeDrawingPadding()`.
 Пять корневых вкладок: Главная, Поиск, История, Медиатека, Настройки. Над нижней
-навигацией всегда показывается один раскрывающийся плеер (`DynamicIsland`).
-Отдельной настройки «Динамический остров» больше нет — плеер всегда внизу.
+навигацией всегда показывается `MiniPlayer` со свайпами. Отдельной настройки
+«Динамический остров» нет — плеер всегда внизу.
 
 ## Технические ограничения
 

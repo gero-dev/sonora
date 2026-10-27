@@ -59,6 +59,7 @@ import app.sonora.ui.components.CoverArt
 import app.sonora.ui.components.CreatePlaylistDialog
 import app.sonora.ui.components.EmptyState
 import app.sonora.ui.components.TrackActionSheet
+import app.sonora.ui.nav.LocalArtistNavigator
 import app.sonora.ui.nav.Routes
 import app.sonora.ui.theme.LocalSonoraColors
 import java.time.Instant
@@ -256,6 +257,14 @@ fun HistoryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
                 actionTrack = null
                 vm.toggleFavorite(track)
             },
+            onOpenArtist = if (track.artist.isNotBlank()) {
+                {
+                    actionTrack = null
+                    navigate(Routes.artist(track.artist))
+                }
+            } else {
+                null
+            },
             onDownload = if (track.playable && track.streamingOnly && !vm.isTrackDownloaded(track)) {
                 {
                     actionTrack = null
@@ -396,6 +405,7 @@ private fun HistoryTrackRow(
     onDownload: () -> Unit,
 ) {
     val track = row.track
+    val openArtist = LocalArtistNavigator.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -434,6 +444,9 @@ private fun HistoryTrackRow(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.clickable(enabled = track.artist.isNotBlank()) {
+                    openArtist(track.artist)
+                },
             )
         }
         Column(horizontalAlignment = Alignment.End) {

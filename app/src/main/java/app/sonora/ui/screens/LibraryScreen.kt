@@ -244,6 +244,14 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
                     actionTrack = null
                     vm.toggleFavorite(track)
                 },
+                onOpenArtist = if (track.artist.isNotBlank()) {
+                    {
+                        actionTrack = null
+                        navigate(Routes.artist(track.artist))
+                    }
+                } else {
+                    null
+                },
                 onDownload = if (track.playable && track.source != Source.LOCAL && !vm.isTrackDownloaded(track)) {
                     {
                         actionTrack = null

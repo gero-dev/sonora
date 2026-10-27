@@ -30,6 +30,7 @@ import androidx.compose.material.icons.rounded.Lyrics
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.OpenInNew
+import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.PlaylistAdd
 import androidx.compose.material.icons.rounded.PlaylistPlay
@@ -70,6 +71,7 @@ import app.sonora.core.model.Source
 import app.sonora.core.model.Track
 import app.sonora.data.download.SaveStatus
 import app.sonora.data.download.TrackSaveState
+import app.sonora.ui.nav.LocalArtistNavigator
 import app.sonora.ui.theme.LocalSonoraColors
 import coil.compose.AsyncImage
 
@@ -282,6 +284,7 @@ fun TrackRow(
     modifier: Modifier = Modifier,
 ) {
     val hasLyrics = !track.lyrics.isNullOrBlank() || !track.syncedLyrics.isNullOrBlank()
+    val openArtist = LocalArtistNavigator.current
     val canDownload = onDownload != null && track.streamingOnly &&
         saveState?.status != SaveStatus.UNAVAILABLE
     val saving = saveState?.status == SaveStatus.QUEUED ||
@@ -329,6 +332,12 @@ fun TrackRow(
                 },
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.clickable(
+                    enabled = !saving && !saveFailed && track.artist.isNotBlank(),
+                ) {
+                    // Как в Spotify/Metrolist: имя артиста ведёт на его страницу.
+                    openArtist(track.artist)
+                },
             )
         }
         if (saving) {
@@ -489,9 +498,16 @@ fun TrackActionSheet(
     onAddToPlaylist: (Playlist) -> Unit,
     onCreatePlaylist: () -> Unit,
     onToggleFavorite: () -> Unit,
+    onOpenArtist: (() -> Unit)? = null,
     onDownload: (() -> Unit)? = null,
     downloadLabel: String = "Скачать",
 ) {
+    val artistNavigator = LocalArtistNavigator.current
+    val artistAction = onOpenArtist ?: if (track.artist.isNotBlank()) {
+        { artistNavigator(track.artist) }
+    } else {
+        null
+    }
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -520,6 +536,9 @@ fun TrackActionSheet(
             SheetAction(Icons.Rounded.PlayArrow, "Играть", onPlay)
             SheetAction(Icons.Rounded.QueueMusic, "В очередь", onAddToQueue)
             SheetAction(Icons.Rounded.PlaylistPlay, "Играть следующим", onPlayNext)
+            if (artistAction != null) {
+                SheetAction(Icons.Rounded.Person, "Перейти к исполнителю", artistAction)
+            }
             SheetAction(
                 icon = if (isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
                 label = if (isFavorite) "Убрать из избранного" else "В избранное",

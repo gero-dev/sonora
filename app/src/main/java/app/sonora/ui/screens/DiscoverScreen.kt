@@ -206,7 +206,8 @@ fun DiscoverScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
                 items(state.results, key = { "${it.source.name}-${it.id}" }) { track ->
                     DiscoverTrackCard(
                         track = track,
-                        downloading = track.id in state.downloadingIds,
+                        downloading = track.id in state.downloadingIds ||
+                            saveStates[track.id]?.isActive == true,
                         downloaded = track.id in state.downloadedIds ||
                             vm.isTrackDownloaded(track),
                         percent = saveStates[track.id]?.percent ?: -1,

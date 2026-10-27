@@ -61,6 +61,7 @@ import app.sonora.ui.MainViewModel
 import app.sonora.ui.components.BackIconButton
 import app.sonora.ui.components.CoverArt
 import app.sonora.ui.components.EmptyState
+import app.sonora.ui.nav.LocalArtistNavigator
 import app.sonora.ui.nav.Routes
 
 /**
@@ -409,6 +410,7 @@ private fun QueueRow(
     onMoveDown: () -> Unit,
     onRemove: () -> Unit,
 ) {
+    val openArtist = LocalArtistNavigator.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -446,6 +448,9 @@ private fun QueueRow(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.clickable(enabled = track.artist.isNotBlank()) {
+                    openArtist(track.artist)
+                },
             )
         }
         IconButton(onClick = onMoveUp, enabled = canMoveUp, modifier = Modifier.size(36.dp)) {

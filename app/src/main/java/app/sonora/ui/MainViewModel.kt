@@ -600,6 +600,25 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
     private val saveQueuedIds = mutableSetOf<String>()
     private var saveWorker: Job? = null
 
+    /**
+     * Треки, ожидающие разрешения на скачивание через мобильную сеть.
+     * UI показывает диалог «Скачать по мобильному трафику?».
+     */
+    private val _pendingMobileDownloads = MutableStateFlow<List<Track>>(emptyList())
+    val pendingMobileDownloads: StateFlow<List<Track>> = _pendingMobileDownloads.asStateFlow()
+
+    /** Пользователь разрешил мобильную загрузку для ожидающих треков. */
+    fun confirmMobileDownloads(always: Boolean) {
+        val pending = _pendingMobileDownloads.value
+        _pendingMobileDownloads.value = emptyList()
+        if (always) updateSettings { it.copy(askMobileDownload = false) }
+        pending.forEach { track -> enqueueSave(track) }
+    }
+
+    fun cancelMobileDownloads() {
+        _pendingMobileDownloads.value = emptyList()
+    }
+
     /** Состояние сохранения конкретного трека (null — ещё не сохраняли). */
     fun saveState(trackId: String): TrackSaveState? = _saveStates.value[trackId]
 
@@ -640,7 +659,9 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
      * попадают в общую библиотеку — трек сразу виден во вкладках «Треки», «Альбомы»,
      * «Исполнители» и «Избранное», рядом с файлами устройства.
      */
-    fun downloadTrack(track: Track) {
+    fun downloadTrack(track: Track) = requestSave(track, allowMobile = false)
+
+    private fun requestSave(track: Track, allowMobile: Boolean) {
         if (track.source == Source.LOCAL) {
             _saveStates.update { it + (track.id to TrackSaveState.done()) }
             return
@@ -658,6 +679,21 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
             }
             return
         }
+        // На мобильной сети показываем разрешение, а не молча тратим трафик.
+        if (!allowMobile &&
+            graph.settings.current.askMobileDownload &&
+            graph.downloads.isOnMobileData()
+        ) {
+            _pendingMobileDownloads.update { pending ->
+                if (pending.any { it.id == track.id }) pending else pending + track
+            }
+            return
+        }
+        enqueueSave(track)
+    }
+
+    private fun enqueueSave(track: Track) {
+        if (track.id in saveQueuedIds || _saveStates.value[track.id]?.isActive == true) return
         _saveStates.update { it + (track.id to TrackSaveState.queued()) }
         saveQueuedIds += track.id
         saveQueue.addLast(track)
@@ -2133,7 +2169,6 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
     fun setGapless(enabled: Boolean) = updateSettings { it.copy(gapless = enabled) }
     fun setSkipSilence(enabled: Boolean) = updateSettings { it.copy(skipSilence = enabled) }
     fun setScanOnStart(enabled: Boolean) = updateSettings { it.copy(scanOnStart = enabled) }
-    fun setDownloadWifiOnly(enabled: Boolean) = updateSettings { it.copy(downloadWifiOnly = enabled) }
 
     fun setReadSidecarMetadata(enabled: Boolean) =
         updateSettings { it.copy(readSidecarMetadata = enabled) }
@@ -2185,6 +2220,10 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
 
     fun setInfiniteQueue(enabled: Boolean) {
         updateSettings { it.copy(infiniteQueue = enabled) }
+    }
+
+    fun setAskMobileDownload(enabled: Boolean) {
+        updateSettings { it.copy(askMobileDownload = enabled) }
     }
 
     // ---------- Режим проигрывания (онлайн / только устройство) ----------
@@ -2272,41 +2311,10 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
      * прогресс, обложка, метаданные и появление в фонотеке — как у стриминга.
      */
     fun downloadDiscoverTrack(track: Track) {
-        if (_discover.value.downloadingIds.contains(track.id)) return
-        if (isTrackDownloaded(track)) {
-            _discover.update { it.copy(downloadedIds = it.downloadedIds + track.id) }
-            return
-        }
-        _discover.update {
-            it.copy(downloadingIds = it.downloadingIds + track.id, error = null)
-        }
+        // Обычный путь сохранения: прогресс, очередь, разрешение мобильной сети.
+        // Если пользователь отменит мобильную загрузку, состояния не будет —
+        // интерфейс «Обзора» не зависнет в бесконечном спиннере.
         downloadTrack(track)
-        viewModelScope.launch {
-            var done = false
-            var failed = false
-            kotlinx.coroutines.withTimeoutOrNull(20 * 60 * 1000L) {
-                while (!done && !failed) {
-                    when (saveState(track.id)?.status) {
-                        SaveStatus.DONE -> done = true
-                        SaveStatus.ERROR, SaveStatus.UNAVAILABLE -> failed = true
-                        else -> delay(500)
-                    }
-                }
-            }
-            _discover.update {
-                it.copy(
-                    downloadingIds = it.downloadingIds - track.id,
-                    downloadedIds = if (done) it.downloadedIds + track.id else it.downloadedIds,
-                    error = if (failed) {
-                        saveState(track.id)?.message?.let { message ->
-                            "Не удалось скачать: $message"
-                        } ?: it.error
-                    } else {
-                        it.error
-                    },
-                )
-            }
-        }
     }
 
     fun openDownloadFolderHint(): String = graph.downloads.downloadDirectory().absolutePath

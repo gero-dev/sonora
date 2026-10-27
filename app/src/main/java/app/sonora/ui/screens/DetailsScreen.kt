@@ -127,7 +127,13 @@ fun PlaylistDetailScreen(vm: MainViewModel, playlistId: String, navigate: (Strin
             }
         }
     }
-    DetailActionHost(vm = vm, actions = actions, playlists = playlists, favorites = favorites)
+    DetailActionHost(
+        vm = vm,
+        actions = actions,
+        playlists = playlists,
+        favorites = favorites,
+        navigate = navigate,
+    )
 }
 
 @Composable
@@ -185,7 +191,13 @@ fun AlbumDetailScreen(
             )
         }
     }
-    DetailActionHost(vm = vm, actions = actions, playlists = playlists, favorites = favorites)
+    DetailActionHost(
+        vm = vm,
+        actions = actions,
+        playlists = playlists,
+        favorites = favorites,
+        navigate = navigate,
+    )
 }
 
 @Composable
@@ -257,7 +269,13 @@ fun ArtistDetailScreen(vm: MainViewModel, artistName: String, navigate: (String)
             }
         }
     }
-    DetailActionHost(vm = vm, actions = actions, playlists = playlists, favorites = favorites)
+    DetailActionHost(
+        vm = vm,
+        actions = actions,
+        playlists = playlists,
+        favorites = favorites,
+        navigate = navigate,
+    )
 }
 
 /** Состояние листа действий над треком для детальных экранов. */
@@ -273,6 +291,7 @@ private fun DetailActionHost(
     actions: DetailActions,
     playlists: List<Playlist>,
     favorites: Set<String>,
+    navigate: (String) -> Unit,
 ) {
     actions.track?.let { track ->
         TrackActionSheet(
@@ -303,6 +322,14 @@ private fun DetailActionHost(
             onToggleFavorite = {
                 actions.track = null
                 vm.toggleFavorite(track)
+            },
+            onOpenArtist = if (track.artist.isNotBlank()) {
+                {
+                    actions.track = null
+                    navigate(Routes.artist(track.artist))
+                }
+            } else {
+                null
             },
             onDownload = if (track.playable && track.source != Source.LOCAL && !vm.isTrackDownloaded(track)) {
                 {

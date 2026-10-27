@@ -115,8 +115,9 @@ data class AppSettings(
     /** Бесконечно достраивать очередь случайными треками, когда она заканчивается. */
     val infiniteQueue: Boolean = true,
     val autoQueueSize: Int = 25,
-    val downloadWifiOnly: Boolean = true,
     val downloadFolder: String = "Sonora",
+    /** Спрашивать перед скачиванием через мобильную сеть. */
+    val askMobileDownload: Boolean = true,
     /** Показывать обучающий экран при первом запуске. */
     val onboardingDone: Boolean = false,
     /** Читать sidecar-файлы (json/nfo/lrc, cover.jpg) рядом с аудиофайлами. */

@@ -7,12 +7,15 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -20,10 +23,19 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -33,7 +45,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import app.sonora.AppGraph
-import app.sonora.ui.components.DynamicIsland
+import app.sonora.ui.components.MiniPlayer
+import app.sonora.ui.nav.LocalArtistNavigator
 import app.sonora.ui.nav.Routes
 import app.sonora.ui.screens.AlbumDetailScreen
 import app.sonora.ui.screens.ArtistDetailScreen
@@ -81,6 +94,7 @@ fun MainScreen(graph: AppGraph) {
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
     val playerState by viewModel.player.collectAsState()
+    val mobilePending by viewModel.pendingMobileDownloads.collectAsState()
 
     val showChrome = currentRoute != null && TABS.any { it.route == currentRoute }
     // Стабильная лямбда: иначе экраны пересобираются на каждый тик позиции плеера.
@@ -90,23 +104,31 @@ fun MainScreen(graph: AppGraph) {
         }
     }
 
+    CompositionLocalProvider(
+        LocalArtistNavigator provides { name: String ->
+            if (name.isNotBlank()) navController.navigate(Routes.artist(name)) {
+                launchSingleTop = true
+            }
+        },
+    ) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
             if (showChrome) {
                 Column {
-                    // Плеер снова внизу, над навигацией. key(route): при переходе
-                    // на другую вкладку раскрытая панель сворачивается.
+                    // Нижний мини-плеер из предыдущей версии: свайпы влево/вправо
+                    // переключают трек, свайп вверх и тап открывают полный плеер.
                     if (playerState.current != null) {
-                        key(currentRoute) {
-                            DynamicIsland(
-                                state = playerState,
-                                onTogglePlay = viewModel::togglePlayPause,
-                                onNext = viewModel::next,
-                                onPrevious = viewModel::previous,
-                                onOpen = { navigate(Routes.PLAYER) },
-                            )
-                        }
+                        MiniPlayer(
+                            state = playerState,
+                            onOpen = { navigate(Routes.PLAYER) },
+                            onTogglePlay = viewModel::togglePlayPause,
+                            onNext = viewModel::next,
+                            onPrevious = viewModel::previous,
+                            onArtistClick = playerState.current?.artist
+                                ?.takeIf { it.isNotBlank() }
+                                ?.let { artist -> { navigate(Routes.artist(artist)) } },
+                        )
                     }
                     NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
                         TABS.forEach { tab ->
@@ -196,5 +218,45 @@ fun MainScreen(graph: AppGraph) {
                 ArtistDetailScreen(viewModel, artistName, navigate)
             }
         }
+    }
+    if (mobilePending.isNotEmpty()) {
+        var always by remember(mobilePending.size) { mutableStateOf(false) }
+        AlertDialog(
+            onDismissRequest = viewModel::cancelMobileDownloads,
+            title = { Text("Мобильная сеть") },
+            text = {
+                Column {
+                    Text(
+                        if (mobilePending.size == 1) {
+                            "Скачать «${mobilePending.first().title}» через мобильный интернет? " +
+                                "Может расходоваться трафик."
+                        } else {
+                            "Скачать ${mobilePending.size} трека(ов) через мобильный интернет? " +
+                                "Может расходоваться трафик."
+                        },
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(
+                            checked = always,
+                            onCheckedChange = { always = it },
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text("Больше не спрашивать")
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { viewModel.confirmMobileDownloads(always) }) {
+                    Text("Скачать")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::cancelMobileDownloads) {
+                    Text("Отмена")
+                }
+            },
+        )
+    }
     }
 }

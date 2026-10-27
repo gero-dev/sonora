@@ -47,6 +47,7 @@ import app.sonora.ui.components.SourceChip
 import app.sonora.ui.components.TrackActionSheet
 import app.sonora.ui.components.TrackRow
 import app.sonora.ui.components.sourceColor
+import app.sonora.ui.nav.Routes
 
 /** Подписи фильтров: порядок совпадает с индексами в фильтре. */
 private val SEARCH_FILTERS = listOf("Все", "Устройство", "YouTube Music")
@@ -269,6 +270,14 @@ fun SearchScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) -
             onToggleFavorite = {
                 actionTrack = null
                 vm.toggleFavorite(track)
+            },
+            onOpenArtist = if (track.artist.isNotBlank()) {
+                {
+                    actionTrack = null
+                    navigate(Routes.artist(track.artist))
+                }
+            } else {
+                null
             },
             onDownload = if (track.playable && track.source != Source.LOCAL && !vm.isTrackDownloaded(track)) {
                 {

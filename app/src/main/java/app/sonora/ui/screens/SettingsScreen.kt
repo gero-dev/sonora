@@ -340,6 +340,12 @@ fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
                 checked = settings.scanOnStart,
                 onCheckedChange = vm::setScanOnStart,
             )
+            SwitchRow(
+                title = "Спрашивать перед мобильной сетью",
+                subtitle = "Показывать разрешение при сохранении без Wi-Fi",
+                checked = settings.askMobileDownload,
+                onCheckedChange = vm::setAskMobileDownload,
+            )
             Spacer(Modifier.height(8.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -915,7 +921,7 @@ fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
 
         // ---------- О приложении ----------
         SettingsSection(title = "О приложении", icon = Icons.Rounded.Info) {
-            InfoRow(title = "Версия", value = "1.0.0")
+            InfoRow(title = "Версия", value = "1.1.0")
             InfoRow(title = "Стек", value = "Kotlin · Compose · Media3")
             Spacer(Modifier.height(8.dp))
             Text(

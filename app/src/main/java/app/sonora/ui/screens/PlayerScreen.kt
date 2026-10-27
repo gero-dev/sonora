@@ -3,6 +3,7 @@ package app.sonora.ui.screens
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -27,6 +28,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Bedtime
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Cloud
 import androidx.compose.material.icons.rounded.CloudOff
 import androidx.compose.material.icons.rounded.Download
@@ -38,6 +40,7 @@ import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.MusicOff
 import androidx.compose.material.icons.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Pause
+import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Repeat
@@ -252,6 +255,19 @@ fun PlayerScreen(vm: MainViewModel, onBack: () -> Unit, navigate: (String) -> Un
                         expanded = menuExpanded,
                         onDismissRequest = { menuExpanded = false },
                     ) {
+                        track?.artist?.takeIf { it.isNotBlank() }?.let { artist ->
+                            DropdownMenuItem(
+                                text = { Text("Перейти к исполнителю") },
+                                leadingIcon = {
+                                    Icon(Icons.Rounded.Person, contentDescription = null)
+                                },
+                                onClick = {
+                                    menuExpanded = false
+                                    navigate(Routes.artist(artist))
+                                },
+                            )
+                            HorizontalDivider()
+                        }
                         DropdownMenuItem(
                             text = { Text("Очередь") },
                             onClick = {
@@ -405,13 +421,38 @@ fun PlayerScreen(vm: MainViewModel, onBack: () -> Unit, navigate: (String) -> Un
                         overflow = TextOverflow.Ellipsis,
                     )
                     Spacer(Modifier.height(4.dp))
-                    Text(
-                        text = current.displaySubtitle,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color.White.copy(alpha = 0.7f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                    // Как в Spotify/Metrolist: тап по исполнителю открывает его страницу.
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable(enabled = current.artist.isNotBlank()) {
+                                navigate(Routes.artist(current.artist))
+                            }
+                            .padding(vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = current.displaySubtitle,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (current.artist.isNotBlank()) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                Color.White.copy(alpha = 0.7f)
+                            },
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
+                        if (current.artist.isNotBlank()) {
+                            Icon(
+                                imageVector = Icons.Rounded.ChevronRight,
+                                contentDescription = "Перейти к исполнителю",
+                                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
+                                modifier = Modifier.size(16.dp),
+                            )
+                        }
+                    }
                     if (saveState?.isActive == true) {
                         Spacer(Modifier.height(10.dp))
                         Row(

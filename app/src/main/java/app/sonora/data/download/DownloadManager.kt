@@ -72,8 +72,7 @@ class DownloadManager(
 
     /**
      * Скачивает прямой URL в папку загрузок (OkHttp-поток, прогресс в [items]).
-     * Уважает settings.downloadWifiOnly: при мобильной сети вернёт ошибку
-     * «Только Wi-Fi».
+     * Работает при любом типе подключения: Wi-Fi, мобильная сеть, VPN/WARP.
      *
      * [contentLengthHint], [rangeChunkSizeBytes] и [requireBoundedRange] нужны
      * для потоков InnerTubeX, которые отдают файл только кусками с `Range`.
@@ -96,14 +95,6 @@ class DownloadManager(
         withContext(Dispatchers.IO) {
             if (url.isBlank()) {
                 return@withContext Result.failure(IOException("Пустая ссылка"))
-            }
-            if (settings.current.downloadWifiOnly && !isOnWifi()) {
-                return@withContext Result.failure(
-                    IllegalStateException(
-                        "Нет Wi-Fi. Подключитесь к Wi-Fi или отключите «Скачивать только по Wi-Fi» " +
-                            "в настройках.",
-                    ),
-                )
             }
             val dir = downloadDirectory()
             if (!dir.exists() && !dir.mkdirs()) {
@@ -477,6 +468,32 @@ class DownloadManager(
             .sumOf { it.length() }
     }.getOrDefault(0L)
 
+    /**
+     * Активное подключение — мобильное (нет Wi-Fi/Ethernet, но есть сотовая сеть)?
+     * VPN/WARP не мешает: проверяются underlying-сети, а не только activeNetwork.
+     */
+    fun isOnMobileData(): Boolean = runCatching {
+        val manager = appContext.getSystemService(Context.CONNECTIVITY_SERVICE)
+            as? ConnectivityManager ?: return@runCatching false
+        fun capsOf(network: android.net.Network?): NetworkCapabilities? =
+            manager.getNetworkCapabilities(network)
+        fun isWifi(caps: NetworkCapabilities?): Boolean =
+            caps != null && (
+                caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
+                    caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
+                )
+        fun hasInternet(caps: NetworkCapabilities?): Boolean =
+            caps?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+        val all = manager.allNetworks.mapNotNull { capsOf(it) }
+        // При активном VPN физический Wi-Fi может быть не default-сетью.
+        if (all.any { isWifi(it) && hasInternet(it) }) return@runCatching false
+        val active = capsOf(manager.activeNetwork)
+        if (active != null && active.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) {
+            return@runCatching true
+        }
+        all.any { it.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) && hasInternet(it) }
+    }.getOrDefault(false)
+
     // ---------------------------------------------------------------- внутреннее
 
     private fun upsert(item: DownloadItem) {
@@ -574,24 +591,6 @@ class DownloadManager(
         val cleaned = raw.trim().replace(ILLEGAL_CHARS, "_").trim().trim('.')
         return cleaned.ifBlank { DEFAULT_FOLDER }.take(MAX_FOLDER_NAME)
     }
-
-    private fun isOnWifi(): Boolean = runCatching {
-        val manager = appContext.getSystemService(Context.CONNECTIVITY_SERVICE)
-            as? ConnectivityManager ?: return@runCatching false
-        fun isWifi(capabilities: NetworkCapabilities?): Boolean =
-            capabilities != null && (
-                capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
-                    capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
-                )
-        // Активная сеть может быть VPN/WARP: у неё транспорт TRANSPORT_VPN,
-        // а не WIFI, поэтому раньше скачивание ошибочно падало с «Только Wi-Fi».
-        if (isWifi(manager.getNetworkCapabilities(manager.activeNetwork))) return@runCatching true
-        manager.allNetworks.any { network ->
-            val capabilities = manager.getNetworkCapabilities(network) ?: return@any false
-            isWifi(capabilities) &&
-                capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-        }
-    }.getOrDefault(false)
 
     companion object {
         const val STATUS_DOWNLOADING = "Скачивание"
