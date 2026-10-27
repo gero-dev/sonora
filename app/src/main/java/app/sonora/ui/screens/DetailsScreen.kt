@@ -5,6 +5,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -22,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.PlaylistPlay
 import androidx.compose.material.icons.rounded.Shuffle
@@ -50,6 +53,7 @@ import app.sonora.core.util.Formatters
 import app.sonora.data.metadata.ArtistNames
 import app.sonora.playback.PlayerUiState
 import app.sonora.ui.MainViewModel
+import app.sonora.ui.PlaylistSaveProgress
 import app.sonora.ui.components.BackIconButton
 import app.sonora.ui.components.CoverArtBox
 import app.sonora.ui.components.CreatePlaylistDialog
@@ -73,6 +77,11 @@ fun PlaylistDetailScreen(vm: MainViewModel, playlistId: String, navigate: (Strin
     val playlist = playlists.firstOrNull { it.id == playlistId }
     val playlistTracks = remember(playlist, tracks) { playlist?.let { vm.playlistTracks(it) } ?: emptyList() }
     val totalMs = remember(playlistTracks) { playlistTracks.sumOf { it.durationMs } }
+    val saveStates by vm.saveStates.collectAsState()
+    val progress = remember(playlist, tracks, saveStates) {
+        playlist?.let { vm.playlistSaveProgress(it) } ?: PlaylistSaveProgress()
+    }
+    val downloadable = remember(playlistTracks) { playlistTracks.any { it.source != Source.LOCAL } }
 
     Column(
         Modifier
@@ -118,6 +127,18 @@ fun PlaylistDetailScreen(vm: MainViewModel, playlistId: String, navigate: (Strin
                     onShuffle = {
                         if (!player.shuffle) vm.toggleShuffle()
                         if (playlistTracks.isNotEmpty()) vm.playQueue(playlistTracks.shuffled())
+                    },
+                    downloadLabel = when {
+                        !downloadable -> null
+                        progress.total == 0 -> "Скачать"
+                        progress.allDone -> "Скачано"
+                        progress.done > 0 -> "Скачивание ${progress.done}/${progress.total}"
+                        else -> "Скачать ${progress.total}"
+                    },
+                    onDownload = if (downloadable) {
+                        { vm.downloadPlaylist(playlist) }
+                    } else {
+                        null
                     },
                 )
                 if (playlist.source != Source.LOCAL && playlist.trackIds.isEmpty()) {
@@ -200,93 +221,15 @@ fun AlbumDetailScreen(
     )
 }
 
-@Composable
-fun ArtistDetailScreen(vm: MainViewModel, artistName: String, navigate: (String) -> Unit) {
-    val tracks by vm.tracks.collectAsState()
-    val favorites by vm.favorites.collectAsState()
-    val playlists by vm.playlists.collectAsState()
-    val player by vm.player.collectAsState()
-
-    val actions = remember { DetailActions() }
-    val visibleTracks = remember(tracks) { vm.withoutSavedCopies(tracks) }
-    val artistTracks = remember(visibleTracks, artistName) {
-        visibleTracks.filter { ArtistNames.matches(it.artist, artistName) }
-    }
-    val artwork = remember(artistTracks) {
-        artistTracks.firstNotNullOfOrNull { it.extra["artistImageUri"]?.takeIf(String::isNotBlank) }
-            ?: artistTracks.firstNotNullOfOrNull { it.extra["artistImageUrl"]?.takeIf(String::isNotBlank) }
-            ?: artistTracks.firstOrNull { !it.artworkUrl.isNullOrBlank() }?.artworkUrl
-            ?: artistTracks.firstOrNull { !it.artworkUri.isNullOrBlank() }?.artworkUri
-    }
-    val bio = remember(artistTracks) {
-        artistTracks.firstNotNullOfOrNull { it.extra["artistBio"]?.takeIf(String::isNotBlank) }
-    }
-    val genre = remember(artistTracks) {
-        artistTracks.firstNotNullOfOrNull { it.extra["genre"]?.takeIf(String::isNotBlank) }
-    }
-
-    Column(
-        Modifier
-            .fillMaxSize()
-            .safeDrawingPadding(),
-    ) {
-        DetailBackRow()
-        DetailTracks(
-            favorites = favorites,
-            player = player,
-            tracks = artistTracks,
-            emptyTitle = "Нет треков",
-            emptySubtitle = "У этого исполнителя пока нет треков в библиотеке.",
-            onClick = { vm.playOrOpen(it) },
-            onLongClick = { actions.track = it },
-            onFavorite = { vm.toggleFavorite(it.id) },
-        ) {
-            DetailCoverHeader(
-                artwork = artwork,
-                title = artistName,
-                subtitle = "Исполнитель",
-                meta = buildString {
-                    append("Треков: ${artistTracks.size}")
-                    if (!genre.isNullOrBlank()) append(" · $genre")
-                },
-                actionsEnabled = artistTracks.isNotEmpty(),
-                round = true,
-                onPlay = { vm.playQueue(artistTracks) },
-                onShuffle = {
-                    if (!player.shuffle) vm.toggleShuffle()
-                    if (artistTracks.isNotEmpty()) vm.playQueue(artistTracks.shuffled())
-                },
-            )
-            if (!bio.isNullOrBlank()) {
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    text = bio,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 6,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-    }
-    DetailActionHost(
-        vm = vm,
-        actions = actions,
-        playlists = playlists,
-        favorites = favorites,
-        navigate = navigate,
-    )
-}
-
 /** Состояние листа действий над треком для детальных экранов. */
-private class DetailActions {
+internal class DetailActions {
     var track by mutableStateOf<Track?>(null)
     var createFor by mutableStateOf<Track?>(null)
 }
 
-/** Лист действий и диалог создания плейлиста, общие для трёх экранов. */
+/** Лист действий и диалог создания плейлиста, общие для детальных экранов. */
 @Composable
-private fun DetailActionHost(
+internal fun DetailActionHost(
     vm: MainViewModel,
     actions: DetailActions,
     playlists: List<Playlist>,
@@ -356,7 +299,7 @@ private fun DetailActionHost(
 
 /** Строка «назад» в шапке детального экрана. */
 @Composable
-private fun DetailBackRow() {
+internal fun DetailBackRow() {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -382,6 +325,8 @@ private fun PlaylistHeader(
     actionsEnabled: Boolean,
     onPlay: () -> Unit,
     onShuffle: () -> Unit,
+    downloadLabel: String? = null,
+    onDownload: (() -> Unit)? = null,
 ) {
     Column(
         Modifier
@@ -416,6 +361,8 @@ private fun PlaylistHeader(
             enabled = actionsEnabled,
             onPlay = onPlay,
             onShuffle = onShuffle,
+            downloadLabel = downloadLabel,
+            onDownload = onDownload,
         )
         Spacer(Modifier.height(8.dp))
     }
@@ -483,10 +430,20 @@ private fun DetailCoverHeader(
     }
 }
 
-/** Кнопки «Играть» и «Перемешать». */
+/** Кнопки «Играть», «Перемешать» и опционально «Скачать». */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun HeaderActions(enabled: Boolean, onPlay: () -> Unit, onShuffle: () -> Unit) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+private fun HeaderActions(
+    enabled: Boolean,
+    onPlay: () -> Unit,
+    onShuffle: () -> Unit,
+    downloadLabel: String? = null,
+    onDownload: (() -> Unit)? = null,
+) {
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
         Button(onClick = onPlay, enabled = enabled) {
             Icon(
                 imageVector = Icons.Rounded.PlayArrow,
@@ -504,6 +461,17 @@ private fun HeaderActions(enabled: Boolean, onPlay: () -> Unit, onShuffle: () ->
             )
             Spacer(Modifier.width(6.dp))
             Text("Перемешать")
+        }
+        if (onDownload != null && downloadLabel != null) {
+            OutlinedButton(onClick = onDownload, enabled = enabled) {
+                Icon(
+                    imageVector = Icons.Rounded.Download,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(downloadLabel)
+            }
         }
     }
 }

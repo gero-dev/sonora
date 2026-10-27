@@ -168,6 +168,26 @@ data class Artist(
     val artworkUrl: String?,
 )
 
+/**
+ * Релиз в дискографии исполнителя — то, что Spotify показывает в блоке
+ * «Альбомы» на странице артиста.
+ *
+ * [id] — browseId InnerTube (`MPREb…`) для онлайн-релиза или синтетический
+ * ключ `local:…` для альбома, собранного из файлов устройства. [remote]
+ * говорит, открывается ли релиз сетевым экраном или локальным.
+ */
+data class ArtistRelease(
+    val id: String,
+    val title: String,
+    val artist: String,
+    val year: Int? = null,
+    val artworkUrl: String? = null,
+    val artworkUri: String? = null,
+    val trackCount: Int? = null,
+    val type: String? = null,
+    val remote: Boolean = true,
+)
+
 /** Состояние подключения к внешнему сервису. */
 data class ConnectionState(
     val source: Source,

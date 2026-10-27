@@ -20,10 +20,14 @@ object Routes {
     const val PLAYLIST = "playlist/{playlistId}"
     const val ALBUM = "album/{albumName}/{artist}"
     const val ARTIST = "artist/{artistName}"
+    /** Онлайн-альбом из дискографии исполнителя (browseId InnerTube). */
+    const val REMOTE_ALBUM = "remote_album/{albumId}/{albumTitle}/{artist}"
 
     fun playlist(id: String): String = "playlist/${Uri.encode(id)}"
     fun album(name: String, artist: String): String = "album/${Uri.encode(name)}/${Uri.encode(artist)}"
     fun artist(name: String): String = "artist/${Uri.encode(name)}"
+    fun remoteAlbum(id: String, title: String, artist: String): String =
+        "remote_album/${Uri.encode(id)}/${Uri.encode(title)}/${Uri.encode(artist)}"
 
     val tabs = listOf(HOME, SEARCH, HISTORY, LIBRARY, SETTINGS)
 }

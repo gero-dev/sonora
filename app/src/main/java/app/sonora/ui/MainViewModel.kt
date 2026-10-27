@@ -9,6 +9,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import app.sonora.AppGraph
+import app.sonora.core.model.ArtistRelease
 import app.sonora.core.model.ConnectionState
 import app.sonora.core.model.Playlist
 import app.sonora.core.model.Source
@@ -64,6 +65,53 @@ data class DiscoverUiState(
     val error: String? = null,
     val downloadingIds: Set<String> = emptySet(),
     val downloadedIds: Set<String> = emptySet(),
+)
+
+/**
+ * Страница исполнителя: дискография (альбомы, синглы, EP) и популярные треки.
+ * Локальная библиотека и InnerTube дополняют друг друга: если сети нет,
+ * остаются альбомы из файлов устройства.
+ */
+data class ArtistUiState(
+    val name: String = "",
+    val loading: Boolean = false,
+    val albums: List<ArtistRelease> = emptyList(),
+    val topTracks: List<Track> = emptyList(),
+    val error: String? = null,
+)
+
+/** Онлайн-альбом, открытый из дискографии исполнителя. */
+data class RemoteAlbumUiState(
+    val id: String = "",
+    val title: String = "",
+    val artist: String = "",
+    val year: Int? = null,
+    val artworkUrl: String? = null,
+    val tracks: List<Track> = emptyList(),
+    val loading: Boolean = false,
+    val error: String? = null,
+)
+
+/**
+ * Прогресс сохранения плейлиста целиком: сколько треков предстоит сохранить,
+ * сколько готово и сколько качается прямо сейчас.
+ */
+data class PlaylistSaveProgress(
+    val total: Int = 0,
+    val done: Int = 0,
+    val active: Int = 0,
+) {
+    val pending: Int get() = (total - done - active).coerceAtLeast(0)
+    val allDone: Boolean get() = total > 0 && done >= total
+}
+
+/** Год релиза в подписи альбома (`1991`, `2004`). */
+private val YEAR_TEXT = Regex("""^(19|20)\d{2}$""")
+
+/** Служебные слова в подписи релиза: их нельзя принимать за имя исполнителя. */
+internal val RELEASE_TYPE_TOKENS = setOf(
+    "album", "single", "ep", "compilation", "live", "soundtrack",
+    "альбом", "сингл", "мини-альбом", "сборник",
 )
 
 data class GoogleAccountUiState(
@@ -181,6 +229,11 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
 
     init {
         viewModelScope.launch {
+            // Свойства ViewModel объявлены ниже init-блока. Без приостановки
+            // корутина на Main.immediate успевает выполниться до их инициализации
+            // и падает с NPE (_google/_discover == null). delay(1) гарантирует,
+            // что работа начнётся после завершения конструктора.
+            delay(1)
             graph.library.initialize()
             repairSavedTrackTitles()
             // Миграция: старая версия могла пометить треки «проверенными» после сетевого
@@ -464,6 +517,158 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
 
     fun artists() = graph.library.artists()
 
+    // ---------- Страница исполнителя и онлайн-альбомы ----------
+
+    private val _artist = MutableStateFlow(ArtistUiState())
+    val artist: StateFlow<ArtistUiState> = _artist.asStateFlow()
+    private val artistCache = mutableMapOf<String, ArtistUiState>()
+    private var artistJob: Job? = null
+
+    private val _remoteAlbum = MutableStateFlow(RemoteAlbumUiState())
+    val remoteAlbum: StateFlow<RemoteAlbumUiState> = _remoteAlbum.asStateFlow()
+    private val remoteAlbumCache = mutableMapOf<String, RemoteAlbumUiState>()
+    private var remoteAlbumJob: Job? = null
+
+    /**
+     * Загружает дискографию артиста: альбомы/синглы/EP из InnerTube плюс
+     * альбомы, собранные из файлов устройства. Результат кэшируется на сессию,
+     * поэтому возврат с альбома не дёргает сеть повторно.
+     */
+    fun openArtist(artistName: String) {
+        val name = artistName.trim()
+        if (name.isBlank()) return
+        val cached = artistCache[name]
+        if (cached != null) {
+            _artist.value = cached
+            return
+        }
+        if (artistJob?.isActive == true && _artist.value.name == name) return
+        artistJob?.cancel()
+        _artist.value = ArtistUiState(name = name, loading = true)
+        artistJob = viewModelScope.launch {
+            val remoteAlbums = runCatching { graph.youtube.artistAlbums(name) }
+                .getOrDefault(emptyList())
+            val topTracks = runCatching { graph.youtube.artistTopTracks(name) }
+                .getOrDefault(emptyList())
+            val state = ArtistUiState(
+                name = name,
+                loading = false,
+                albums = mergeArtistAlbums(name, remoteAlbums),
+                topTracks = withoutSavedCopies(topTracks),
+                error = graph.youtube.lastError,
+            )
+            artistCache[name] = state
+            _artist.value = state
+        }
+    }
+
+    /** Повторить загрузку дискографии (например, после ошибки сети). */
+    fun reloadArtist() {
+        val name = _artist.value.name
+        if (name.isBlank()) return
+        artistCache.remove(name)
+        artistJob?.cancel()
+        _artist.value = ArtistUiState()
+        openArtist(name)
+    }
+
+    private fun mergeArtistAlbums(
+        name: String,
+        remote: List<ArtistRelease>,
+    ): List<ArtistRelease> {
+        val out = LinkedHashMap<String, ArtistRelease>()
+        for (album in remote) out.putIfAbsent(ArtistNames.key(album.title), album)
+        graph.library.albums()
+            .filter { ArtistNames.matches(it.artist, name) }
+            .forEach { album ->
+                val key = ArtistNames.key(album.name)
+                if (out.containsKey(key)) return@forEach
+                out[key] = ArtistRelease(
+                    id = "local:${album.name}|${album.artist}",
+                    title = album.name,
+                    artist = album.artist,
+                    year = album.year,
+                    artworkUrl = album.artworkUrl,
+                    artworkUri = album.artworkUri,
+                    trackCount = album.trackIds.size,
+                    remote = false,
+                )
+            }
+        return out.values.sortedWith(
+            compareByDescending<ArtistRelease> { it.year ?: 0 }
+                .thenBy { it.title.lowercase() },
+        )
+    }
+
+    /** Онлайн-альбом из дискографии: состав, год, обложка. */
+    fun openRemoteAlbum(browseId: String, title: String, artist: String) {
+        val id = browseId.trim()
+        if (id.isBlank()) return
+        remoteAlbumCache[id]?.let { cached ->
+            _remoteAlbum.value = cached
+            return
+        }
+        if (remoteAlbumJob?.isActive == true && _remoteAlbum.value.id == id) return
+        remoteAlbumJob?.cancel()
+        _remoteAlbum.value = RemoteAlbumUiState(
+            id = id,
+            title = title,
+            artist = artist,
+            loading = true,
+        )
+        remoteAlbumJob = viewModelScope.launch {
+            val album = runCatching { graph.youtube.album(id) }.getOrNull()
+            val state = if (album == null || album.tracks.isEmpty()) {
+                RemoteAlbumUiState(
+                    id = id,
+                    title = title,
+                    artist = artist,
+                    loading = false,
+                    error = graph.youtube.lastError
+                        ?: "Не удалось загрузить альбом. Проверьте подключение.",
+                )
+            } else {
+                val parts = album.subtitle.orEmpty()
+                    .split("•", "·")
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() }
+                val year = parts.firstOrNull { YEAR_TEXT.matches(it) }?.toIntOrNull()
+                // В подписи шапки первым может идти тип релиза («Album», «Single»),
+                // а не исполнитель — такие слова пропускаем.
+                val headerArtist = parts
+                    .firstOrNull { part ->
+                        part.toIntOrNull() == null && part.lowercase() !in RELEASE_TYPE_TOKENS
+                    }
+                    ?.let { ArtistNames.clean(it) }
+                    ?.takeIf { it.isNotBlank() && !ArtistNames.isPlaceholder(it) }
+                val resolvedArtist = headerArtist ?: artist
+                val tracks = album.tracks
+                    .filterNot { it.isVideoContent }
+                    .map { track ->
+                        val badArtist = track.artist.isBlank() ||
+                            ArtistNames.isPlaceholder(track.artist)
+                        track.copy(
+                            artist = if (badArtist) resolvedArtist else track.artist,
+                            artworkUrl = track.artworkUrl ?: album.artworkUrl,
+                        )
+                    }
+                graph.library.cacheRemoteTracks(tracks)
+                RemoteAlbumUiState(
+                    id = id,
+                    title = album.title,
+                    artist = resolvedArtist,
+                    year = year,
+                    artworkUrl = album.artworkUrl
+                        ?: tracks.firstOrNull { !it.artworkUrl.isNullOrBlank() }?.artworkUrl,
+                    tracks = tracks,
+                    loading = false,
+                )
+            }
+            remoteAlbumCache[id] = state
+            _remoteAlbum.value = state
+        }
+    }
+
     fun playlistTracks(playlist: Playlist): List<Track> {
         val local = graph.library.tracksByIds(playlist.trackIds)
         if (local.isNotEmpty() || playlist.remoteId == null) return local
@@ -601,16 +806,25 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
     private var saveWorker: Job? = null
 
     /**
+     * Разрешение на мобильный трафик, выданное пользователем в этой сессии.
+     * Оно глобальное для всего приложения: после первого подтверждения
+     * плейлисты целиком и одиночные треки качаются без повторных вопросов.
+     */
+    private var mobileDataApproved = false
+
+    /**
      * Треки, ожидающие разрешения на скачивание через мобильную сеть.
-     * UI показывает диалог «Скачать по мобильному трафику?».
+     * UI показывает один диалог на всю пачку (трек, альбом или плейлист).
      */
     private val _pendingMobileDownloads = MutableStateFlow<List<Track>>(emptyList())
     val pendingMobileDownloads: StateFlow<List<Track>> = _pendingMobileDownloads.asStateFlow()
 
-    /** Пользователь разрешил мобильную загрузку для ожидающих треков. */
+    /** Пользователь разрешил мобильную загрузку — сразу для всей пачки. */
     fun confirmMobileDownloads(always: Boolean) {
         val pending = _pendingMobileDownloads.value
         _pendingMobileDownloads.value = emptyList()
+        // Разрешение действует на всё приложение до конца сессии.
+        mobileDataApproved = true
         if (always) updateSettings { it.copy(askMobileDownload = false) }
         pending.forEach { track -> enqueueSave(track) }
     }
@@ -618,6 +832,9 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
     fun cancelMobileDownloads() {
         _pendingMobileDownloads.value = emptyList()
     }
+
+    /** Выдано ли разрешение на мобильную сеть в текущей сессии. */
+    fun isMobileDownloadApproved(): Boolean = mobileDataApproved
 
     /** Состояние сохранения конкретного трека (null — ещё не сохраняли). */
     fun saveState(trackId: String): TrackSaveState? = _saveStates.value[trackId]
@@ -680,8 +897,11 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
             return
         }
         // На мобильной сети показываем разрешение, а не молча тратим трафик.
+        // После первого «Скачать» разрешение глобальное: очередь плейлиста
+        // и следующие треки идут без повторных вопросов.
         if (!allowMobile &&
             graph.settings.current.askMobileDownload &&
+            !mobileDataApproved &&
             graph.downloads.isOnMobileData()
         ) {
             _pendingMobileDownloads.update { pending ->
@@ -706,6 +926,57 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
     fun retrySave(track: Track) {
         _saveStates.update { it - track.id }
         downloadTrack(track)
+    }
+
+    /**
+     * Сохраняет плейлист целиком — как кнопка «Скачать» в Spotify.
+     *
+     * Локальные и уже сохранённые треки пропускаются. Если состав удалённого
+     * плейлиста ещё не синхронизирован, сначала подгружаем его; при мобильной
+     * сети разрешение спрашивается один раз на всю пачку.
+     */
+    fun downloadPlaylist(playlist: Playlist) {
+        viewModelScope.launch {
+            var tracks = playlistTracks(playlist)
+            if (tracks.isEmpty() && playlist.remoteId != null) {
+                tracks = runCatching { graph.youtube.playlistTracks(playlist.remoteId) }
+                    .getOrDefault(emptyList())
+                if (tracks.isNotEmpty()) {
+                    graph.library.cacheRemoteTracks(tracks)
+                    graph.library.addToPlaylist(playlist.id, tracks.map { it.id })
+                }
+            }
+            if (tracks.isEmpty()) {
+                toast("В этом плейлисте нет треков")
+                return@launch
+            }
+            downloadTracks(tracks)
+        }
+    }
+
+    /**
+     * Сохраняет набор треков (альбом, подборку) одной пачкой: одна очередь,
+     * одно разрешение мобильной сети на всех.
+     */
+    fun downloadTracks(tracks: List<Track>) {
+        val candidates = tracks.filter { track ->
+            track.source != Source.LOCAL && track.playable && !isTrackDownloaded(track)
+        }
+        if (candidates.isEmpty()) {
+            toast("Всё уже сохранено на устройстве")
+            return
+        }
+        toast("Скачиваем треков: ${candidates.size}")
+        candidates.forEach { track -> downloadTrack(track) }
+    }
+
+    /** Сколько треков плейлиста уже сохранено и сколько качается сейчас. */
+    fun playlistSaveProgress(playlist: Playlist): PlaylistSaveProgress {
+        val tracks = playlistTracks(playlist).filter { it.source != Source.LOCAL }
+        if (tracks.isEmpty()) return PlaylistSaveProgress()
+        val done = tracks.count { saveState(it.id)?.status == SaveStatus.DONE || isTrackDownloaded(it) }
+        val active = tracks.count { saveState(it.id)?.isActive == true }
+        return PlaylistSaveProgress(total = tracks.size, done = done, active = active)
     }
 
     private fun canSave(track: Track): Boolean {

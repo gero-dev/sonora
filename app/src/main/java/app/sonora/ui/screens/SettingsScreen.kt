@@ -921,7 +921,7 @@ fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
 
         // ---------- О приложении ----------
         SettingsSection(title = "О приложении", icon = Icons.Rounded.Info) {
-            InfoRow(title = "Версия", value = "1.1.0")
+            InfoRow(title = "Версия", value = "1.2.0")
             InfoRow(title = "Стек", value = "Kotlin · Compose · Media3")
             Spacer(Modifier.height(8.dp))
             Text(

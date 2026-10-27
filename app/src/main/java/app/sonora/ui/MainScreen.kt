@@ -60,6 +60,7 @@ import app.sonora.ui.screens.OnboardingScreen
 import app.sonora.ui.screens.PlayerScreen
 import app.sonora.ui.screens.PlaylistDetailScreen
 import app.sonora.ui.screens.QueueScreen
+import app.sonora.ui.screens.RemoteAlbumScreen
 import app.sonora.ui.screens.SearchScreen
 import app.sonora.ui.screens.SettingsScreen
 import app.sonora.ui.screens.YouTubeWebScreen
@@ -217,23 +218,37 @@ fun MainScreen(graph: AppGraph) {
                 val artistName = entry.arguments?.getString("artistName").orEmpty()
                 ArtistDetailScreen(viewModel, artistName, navigate)
             }
+
+            composable(Routes.REMOTE_ALBUM) { entry ->
+                val albumId = entry.arguments?.getString("albumId").orEmpty()
+                val albumTitle = entry.arguments?.getString("albumTitle").orEmpty()
+                val artist = entry.arguments?.getString("artist").orEmpty()
+                RemoteAlbumScreen(viewModel, albumId, albumTitle, artist, navigate)
+            }
         }
     }
     if (mobilePending.isNotEmpty()) {
         var always by remember(mobilePending.size) { mutableStateOf(false) }
         AlertDialog(
             onDismissRequest = viewModel::cancelMobileDownloads,
-            title = { Text("Мобильная сеть") },
+            title = { Text("Мобильный интернет") },
             text = {
                 Column {
                     Text(
                         if (mobilePending.size == 1) {
-                            "Скачать «${mobilePending.first().title}» через мобильный интернет? " +
+                            "Скачать «${mobilePending.first().title}» через мобильную сеть? " +
                                 "Может расходоваться трафик."
                         } else {
-                            "Скачать ${mobilePending.size} трека(ов) через мобильный интернет? " +
+                            "Скачать ${mobilePending.size} трека(ов) через мобильную сеть? " +
                                 "Может расходоваться трафик."
                         },
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = "Разрешение действует на всё приложение: плейлисты и " +
+                            "следующие треки скачаются без повторных вопросов.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Spacer(Modifier.height(8.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -242,7 +257,7 @@ fun MainScreen(graph: AppGraph) {
                             onCheckedChange = { always = it },
                         )
                         Spacer(Modifier.width(4.dp))
-                        Text("Больше не спрашивать")
+                        Text("Не спрашивать снова")
                     }
                 }
             },

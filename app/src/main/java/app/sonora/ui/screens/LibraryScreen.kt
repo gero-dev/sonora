@@ -2,12 +2,16 @@ package app.sonora.ui.screens
 
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -29,8 +33,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Album
+import androidx.compose.material.icons.rounded.ArrowDownward
+import androidx.compose.material.icons.rounded.ArrowUpward
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.DownloadDone
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material.icons.rounded.Person
@@ -38,16 +48,20 @@ import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.PlayCircle
 import androidx.compose.material.icons.rounded.PlaylistPlay
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.Sort
 import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -91,6 +105,23 @@ import kotlin.math.roundToInt
 private val LIBRARY_TABS =
     listOf("Треки", "Альбомы", "Артисты", "Плейлисты", "Избранное", "YouTube")
 
+/** Сортировка треков в медиатеке — как в Spotify: заголовок, артист, альбом и т. д. */
+private enum class LibrarySort(val label: String) {
+    TITLE("По названию"),
+    ARTIST("По исполнителю"),
+    ALBUM("По альбому"),
+    YEAR("По году"),
+    DURATION("По длительности"),
+    ADDED("По дате добавления"),
+}
+
+/** Быстрый фильтр состава вкладки «Треки». */
+private enum class LibraryFilter(val label: String) {
+    ALL("Все"),
+    STREAMING("Из стриминга"),
+    DEVICE("Файлы устройства"),
+}
+
 /**
  * Медиатека: треки, альбомы, исполнители, плейлисты и избранное.
  * Долгое нажатие на трек открывает общий лист действий.
@@ -105,22 +136,48 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
     val scanning by vm.scanning.collectAsState()
 
     var tabIndex by rememberSaveable { mutableStateOf(0) }
-    var sortByArtist by rememberSaveable { mutableStateOf(false) }
-    var onlySaved by rememberSaveable { mutableStateOf(false) }
+    var sortName by rememberSaveable { mutableStateOf(LibrarySort.TITLE.name) }
+    var sortDescending by rememberSaveable { mutableStateOf(false) }
+    var filterName by rememberSaveable { mutableStateOf(LibraryFilter.ALL.name) }
     var showCreateDialog by remember { mutableStateOf(false) }
     var showYouTubeImport by remember { mutableStateOf(false) }
     var actionTrack by remember { mutableStateOf<Track?>(null) }
     var playlistForNewTrack by remember { mutableStateOf<Track?>(null) }
+    var playlistMenu by remember { mutableStateOf<Playlist?>(null) }
+    var renameTarget by remember { mutableStateOf<Playlist?>(null) }
+    var deleteTarget by remember { mutableStateOf<Playlist?>(null) }
+
+    val sort = LibrarySort.valueOf(sortName)
+    val filter = LibraryFilter.valueOf(filterName)
 
     val localTracks = remember(tracks) { tracks.filter { it.source == Source.LOCAL } }
     val savedFromStreaming = remember(localTracks) { localTracks.count { it.savedFromStreaming } }
-    val sortedTracks = remember(localTracks, sortByArtist, onlySaved) {
-        val filtered = if (onlySaved) localTracks.filter { it.savedFromStreaming } else localTracks
-        if (sortByArtist) {
-            filtered.sortedBy { it.artist.lowercase() }
-        } else {
-            filtered.sortedBy { it.title.lowercase() }
+    val sortedTracks = remember(localTracks, sort, sortDescending, filter) {
+        val filtered = when (filter) {
+            LibraryFilter.ALL -> localTracks
+            LibraryFilter.STREAMING -> localTracks.filter { it.savedFromStreaming }
+            LibraryFilter.DEVICE -> localTracks.filterNot { it.savedFromStreaming }
         }
+        val comparator: Comparator<Track> = when (sort) {
+            LibrarySort.TITLE -> compareBy<Track> { it.title.lowercase() }
+            LibrarySort.ARTIST -> compareBy(
+                { it.artist.lowercase() },
+                { it.title.lowercase() },
+            )
+            LibrarySort.ALBUM -> compareBy(
+                { it.album.orEmpty().lowercase() },
+                { it.extra["trackNo"]?.toIntOrNull() ?: 0 },
+                { it.title.lowercase() },
+            )
+            LibrarySort.YEAR -> compareBy<Track> { it.year ?: 0 }
+            LibrarySort.DURATION -> compareBy<Track> { it.durationMs }
+            // Сохранённые из стриминга несут метку downloadedAt; у файлов
+            // устройства её нет — они остаются в конце списка.
+            LibrarySort.ADDED -> compareBy<Track> {
+                it.extra["downloadedAt"]?.toLongOrNull() ?: 0L
+            }
+        }
+        filtered.sortedWith(comparator).let { if (sortDescending) it.asReversed() else it }
     }
     val albums = remember(localTracks) { vm.albums() }
     val artists = remember(localTracks) { vm.artists() }
@@ -169,11 +226,13 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
                     tracks = sortedTracks,
                     favorites = favorites,
                     player = player,
-                    sortByArtist = sortByArtist,
-                    onlySaved = onlySaved,
+                    sort = sort,
+                    sortDescending = sortDescending,
+                    filter = filter,
                     scanning = scanning,
-                    onToggleSort = { sortByArtist = !sortByArtist },
-                    onToggleSaved = { onlySaved = !onlySaved },
+                    onSortChange = { sortName = it.name },
+                    onToggleDirection = { sortDescending = !sortDescending },
+                    onFilterChange = { filterName = it.name },
                     onScan = { vm.scanLibrary() },
                     onClick = { vm.playOrOpen(it) },
                     onLongClick = { actionTrack = it },
@@ -187,6 +246,7 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
                     navigate = navigate,
                     bottomPadding = bottomPadding,
                     onCreatePlaylist = { showCreateDialog = true },
+                    onLongClick = { playlistMenu = it },
                 )
                 5 -> YouTubeTab(
                     tracks = importedTracks,
@@ -264,6 +324,74 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
             )
         }
 
+        playlistMenu?.let { playlist ->
+            PlaylistActionsSheet(
+                playlist = playlist,
+                onDismiss = { playlistMenu = null },
+                onPlay = {
+                    playlistMenu = null
+                    val list = vm.playlistTracks(playlist)
+                    if (list.isNotEmpty()) vm.playQueue(list)
+                },
+                onShuffle = {
+                    playlistMenu = null
+                    val list = vm.playlistTracks(playlist)
+                    if (list.isNotEmpty()) {
+                        if (!player.shuffle) vm.toggleShuffle()
+                        vm.playQueue(list.shuffled())
+                    }
+                },
+                onDownload = {
+                    playlistMenu = null
+                    vm.downloadPlaylist(playlist)
+                },
+                onRename = {
+                    playlistMenu = null
+                    renameTarget = playlist
+                },
+                onDelete = if (playlist.editable) {
+                    {
+                        playlistMenu = null
+                        deleteTarget = playlist
+                    }
+                } else {
+                    null
+                },
+            )
+        }
+
+        renameTarget?.let { playlist ->
+            RenamePlaylistDialog(
+                currentName = playlist.name,
+                onDismiss = { renameTarget = null },
+                onRename = { name ->
+                    renameTarget = null
+                    vm.renamePlaylist(playlist.id, name)
+                },
+            )
+        }
+
+        deleteTarget?.let { playlist ->
+            AlertDialog(
+                onDismissRequest = { deleteTarget = null },
+                title = { Text("Удалить плейлист?") },
+                text = { Text("«${playlist.name}» будет удалён. Файлы на устройстве останутся.") },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            deleteTarget = null
+                            vm.deletePlaylist(playlist.id)
+                        },
+                    ) {
+                        Text("Удалить", color = MaterialTheme.colorScheme.error)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { deleteTarget = null }) { Text("Отмена") }
+                },
+            )
+        }
+
         if (showCreateDialog) {
             CreatePlaylistDialog(
                 onDismiss = { showCreateDialog = false },
@@ -298,22 +426,27 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
 }
 
 /** Вкладка «Треки»: счётчик, сортировка, пересканирование и список. */
+/** Вкладка «Треки»: сортировка, фильтры и список файлов на устройстве. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun TracksTab(
     tracks: List<Track>,
     favorites: Set<String>,
     player: PlayerUiState,
-    sortByArtist: Boolean,
-    onlySaved: Boolean,
+    sort: LibrarySort,
+    sortDescending: Boolean,
+    filter: LibraryFilter,
     scanning: Boolean,
-    onToggleSort: () -> Unit,
-    onToggleSaved: () -> Unit,
+    onSortChange: (LibrarySort) -> Unit,
+    onToggleDirection: () -> Unit,
+    onFilterChange: (LibraryFilter) -> Unit,
     onScan: () -> Unit,
     onClick: (Track) -> Unit,
     onLongClick: (Track) -> Unit,
     onFavorite: (Track) -> Unit,
     bottomPadding: Dp,
 ) {
+    var sortMenuOpen by remember { mutableStateOf(false) }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(
@@ -325,50 +458,101 @@ private fun TracksTab(
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         item {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = "${tracks.size} трек(ов)",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(1f),
-                )
-                IconButton(onClick = onToggleSaved) {
-                    Icon(
-                        imageVector = Icons.Rounded.DownloadDone,
-                        contentDescription = if (onlySaved) {
-                            "Показать все треки"
-                        } else {
-                            "Только сохранённые из стриминга"
-                        },
-                        tint = if (onlySaved) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
+            Column {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "${tracks.size} трек(ов)",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f),
                     )
-                }
-                FilterChip(
-                    selected = sortByArtist,
-                    onClick = onToggleSort,
-                    label = { Text(if (sortByArtist) "По исполнителю" else "По названию") },
-                    leadingIcon = {
-                        Icon(
-                            imageVector = if (sortByArtist) Icons.Rounded.Person else Icons.Rounded.Sort,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp),
+                    Box {
+                        FilterChip(
+                            selected = false,
+                            onClick = { sortMenuOpen = true },
+                            label = { Text(sort.label) },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Rounded.Sort,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                )
+                            },
                         )
-                    },
-                )
-                IconButton(onClick = onScan) {
-                    if (scanning) {
-                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                    } else {
-                        Icon(Icons.Rounded.Refresh, contentDescription = "Сканировать фонотеку")
+                        DropdownMenu(
+                            expanded = sortMenuOpen,
+                            onDismissRequest = { sortMenuOpen = false },
+                        ) {
+                            LibrarySort.values().forEach { option ->
+                                DropdownMenuItem(
+                                    text = { Text(option.label) },
+                                    leadingIcon = {
+                                        if (option == sort) {
+                                            Icon(
+                                                imageVector = Icons.Rounded.Check,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(18.dp),
+                                            )
+                                        }
+                                    },
+                                    onClick = {
+                                        sortMenuOpen = false
+                                        onSortChange(option)
+                                    },
+                                )
+                            }
+                        }
+                    }
+                    IconButton(onClick = onToggleDirection) {
+                        Icon(
+                            imageVector = if (sortDescending) {
+                                Icons.Rounded.ArrowDownward
+                            } else {
+                                Icons.Rounded.ArrowUpward
+                            },
+                            contentDescription = if (sortDescending) {
+                                "Сначала больше"
+                            } else {
+                                "Сначала меньше"
+                            },
+                        )
+                    }
+                    IconButton(onClick = onScan) {
+                        if (scanning) {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                        } else {
+                            Icon(Icons.Rounded.Refresh, contentDescription = "Сканировать фонотеку")
+                        }
+                    }
+                }
+                FlowRow(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    LibraryFilter.values().forEach { option ->
+                        FilterChip(
+                            selected = filter == option,
+                            onClick = { onFilterChange(option) },
+                            label = { Text(option.label) },
+                            leadingIcon = if (option == LibraryFilter.STREAMING) {
+                                {
+                                    Icon(
+                                        imageVector = Icons.Rounded.DownloadDone,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp),
+                                    )
+                                }
+                            } else {
+                                null
+                            },
+                        )
                     }
                 }
             }
@@ -377,12 +561,19 @@ private fun TracksTab(
             item {
                 EmptyState(
                     icon = Icons.Rounded.LibraryMusic,
-                    title = if (onlySaved) "Нет сохранённых треков" else "Треков нет",
-                    subtitle = if (onlySaved) {
-                        "Нажмите кнопку загрузки у онлайн-трека — он сохранится сюда, " +
-                            "рядом с музыкой на устройстве."
+                    title = if (filter == LibraryFilter.STREAMING) {
+                        "Нет сохранённых треков"
                     } else {
-                        "Нажмите «Сканировать» — найдём аудиофайлы на устройстве."
+                        "Треков нет"
+                    },
+                    subtitle = when (filter) {
+                        LibraryFilter.STREAMING ->
+                            "Нажмите кнопку загрузки у онлайн-трека — он сохранится сюда, " +
+                                "рядом с музыкой на устройстве."
+                        LibraryFilter.DEVICE ->
+                            "Файлов устройства пока нет: нажмите «Сканировать», чтобы найти музыку."
+                        LibraryFilter.ALL ->
+                            "Нажмите «Сканировать» — найдём аудиофайлы на устройстве."
                     },
                 )
             }
@@ -522,12 +713,15 @@ private fun ArtistsTab(artists: List<Artist>, navigate: (String) -> Unit, bottom
 }
 
 /** Вкладка «Плейлисты»: свои и синхронизированные из сервисов. */
+/** Вкладка «Плейлисты»: создание, переход и действия по долгому нажатию. */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun PlaylistsTab(
     playlists: List<Playlist>,
     navigate: (String) -> Unit,
     bottomPadding: Dp,
     onCreatePlaylist: () -> Unit,
+    onLongClick: (Playlist) -> Unit,
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -565,7 +759,10 @@ private fun PlaylistsTab(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(16.dp))
-                        .clickable { navigate(Routes.playlist(playlist.id)) }
+                        .combinedClickable(
+                            onClick = { navigate(Routes.playlist(playlist.id)) },
+                            onLongClick = { onLongClick(playlist) },
+                        )
                         .padding(horizontal = 6.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -873,6 +1070,124 @@ private fun YouTubePlaylistDialog(
                 onClick = { if (url.isNotBlank()) onImport(url.trim()) },
                 enabled = url.isNotBlank(),
             ) { Text("Импортировать") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Отмена") }
+        },
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+    )
+}
+
+/** Действия над плейлистом прямо из списка — по долгому нажатию. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PlaylistActionsSheet(
+    playlist: Playlist,
+    onDismiss: () -> Unit,
+    onPlay: () -> Unit,
+    onShuffle: () -> Unit,
+    onDownload: () -> Unit,
+    onRename: () -> Unit,
+    onDelete: (() -> Unit)?,
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(bottom = 24.dp),
+        ) {
+            Text(
+                text = playlist.name,
+                style = MaterialTheme.typography.titleLarge,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+            )
+            Text(
+                text = "${playlist.trackIds.size} трек(ов)",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp),
+            )
+            Spacer(Modifier.height(8.dp))
+            PlaylistSheetAction(Icons.Rounded.PlayArrow, "Играть", onPlay)
+            PlaylistSheetAction(Icons.Rounded.Shuffle, "Перемешать", onShuffle)
+            PlaylistSheetAction(
+                Icons.Rounded.Download,
+                "Скачать весь плейлист",
+                onDownload,
+            )
+            if (playlist.editable) {
+                PlaylistSheetAction(Icons.Rounded.Edit, "Переименовать", onRename)
+            }
+            if (onDelete != null) {
+                PlaylistSheetAction(
+                    icon = Icons.Rounded.Delete,
+                    label = "Удалить",
+                    onClick = onDelete,
+                    tint = MaterialTheme.colorScheme.error,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PlaylistSheetAction(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    tint: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onSurface,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = tint,
+            modifier = Modifier.size(22.dp),
+        )
+        Spacer(Modifier.width(16.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.titleMedium,
+            color = tint,
+        )
+    }
+}
+
+/** Переименование плейлиста. */
+@Composable
+private fun RenamePlaylistDialog(
+    currentName: String,
+    onDismiss: () -> Unit,
+    onRename: (String) -> Unit,
+) {
+    var name by remember { mutableStateOf(currentName) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Переименовать плейлист") },
+        text = {
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it },
+                singleLine = true,
+                label = { Text("Название") },
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onRename(name.trim()) },
+                enabled = name.isNotBlank(),
+            ) { Text("Сохранить") }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("Отмена") }

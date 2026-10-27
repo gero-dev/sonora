@@ -1,5 +1,6 @@
 package app.sonora.data.remote.youtube.innertube
 
+import app.sonora.core.model.ArtistRelease
 import app.sonora.core.model.Playlist
 import app.sonora.core.model.Source
 import app.sonora.core.model.Track
@@ -129,6 +130,189 @@ internal class InnerTubeApi {
             for (renderer in response.deepObjects("musicResponsiveListItemRenderer")) {
                 val track = parseTrackRenderer(renderer) ?: continue
                 tracks.putIfAbsent(track.id, track)
+                if (tracks.size >= cap) break
+            }
+            if (tracks.size >= cap) break
+            val token = continuationToken(response) ?: break
+            response = InnerTube.call(
+                endpoint = "browse",
+                payload = buildJsonObject { put("continuation", token) },
+            )
+        }
+
+        return RemotePlaylist(
+            id = id,
+            title = title,
+            subtitle = subtitle,
+            artworkUrl = artwork,
+            tracks = tracks.values.toList(),
+        )
+    }
+
+    // ------------------------------------------------------------ исполнители
+
+    /**
+     * Дискография исполнителя: альбомы, синглы и EP.
+     *
+     * Идём через поиск с фильтром «Альбомы», а не через browse-страницу канала:
+     * в библиотеке хранятся только имена артистов, без channelId, а поиск
+     * отдаёт готовые карточки релизов с browseId — этого достаточно, чтобы
+     * открыть альбом и показать его треки.
+     */
+    suspend fun artistAlbums(artist: String, limit: Int = 70): List<ArtistRelease> {
+        val query = artist.trim()
+        if (query.isBlank()) return emptyList()
+        // Полная дискография живёт на странице канала: сначала находим channelId
+        // поиском по исполнителям, затем читаем все полки «Альбомы»/«Синглы».
+        val channelId = runCatching { artistChannelId(query) }.getOrNull()
+        if (channelId != null) {
+            val fromPage = runCatching { artistPageAlbums(channelId, limit) }
+                .getOrDefault(emptyList())
+            if (fromPage.isNotEmpty()) return fromPage
+        }
+        return searchArtistAlbums(query, limit)
+    }
+
+    /** Канал исполнителя: поиск с фильтром «Исполнители». */
+    private suspend fun artistChannelId(artist: String): String? {
+        val response = InnerTube.call(
+            endpoint = "search",
+            payload = buildJsonObject {
+                put("query", artist)
+                put("params", FILTER_ARTISTS)
+            },
+        )
+        for (renderer in response.deepObjects("musicResponsiveListItemRenderer")) {
+            val pageType = renderer.obj("navigationEndpoint")
+                ?.obj("browseEndpoint")
+                ?.obj("browseEndpointContextSupportedConfigs")
+                ?.obj("browseEndpointContextMusicConfig")
+                ?.str("pageType")
+            if (pageType != null && pageType != ARTIST_PAGE_TYPE) continue
+            val browseId = renderer.obj("navigationEndpoint")
+                ?.obj("browseEndpoint")
+                ?.str("browseId")
+                ?: renderer.deepObjects("browseEndpoint").firstOrNull()?.str("browseId")
+                ?: continue
+            if (!browseId.startsWith(CHANNEL_ID_PREFIX)) continue
+            val name = renderer.arr("flexColumns")
+                ?.firstOrNull()
+                ?.asObjectOrNull()
+                ?.obj("musicResponsiveListItemFlexColumnRenderer")
+                ?.get("text")
+                .text()
+                ?: renderer.obj("title").text()
+            if (name != null && ArtistNames.matches(name, artist)) return browseId
+        }
+        return null
+    }
+
+    /** Все релизы со страницы артиста, включая продолжения «Показать все». */
+    private suspend fun artistPageAlbums(channelId: String, limit: Int): List<ArtistRelease> {
+        var response = InnerTube.call(
+            endpoint = "browse",
+            payload = buildJsonObject { put("browseId", channelId) },
+        )
+        val out = LinkedHashMap<String, ArtistRelease>()
+        var pages = 0
+        while (pages < MAX_PAGES) {
+            pages++
+            val before = out.size
+            for (renderer in response.deepObjects("musicTwoRowItemRenderer")) {
+                val album = parseAlbumCard(renderer) ?: continue
+                out.putIfAbsent(album.id, album)
+                if (out.size >= limit) return out.values.toList()
+            }
+            // Продолжение без новых альбомов — это полка песен, а не релизов.
+            if (out.size == before) break
+            // На странице артиста полки листаются своей кнопкой «Ещё».
+            val token = continuationToken(response) ?: break
+            response = InnerTube.call(
+                endpoint = "browse",
+                payload = buildJsonObject { put("continuation", token) },
+            )
+        }
+        return out.values.toList()
+    }
+
+    /** Резервный путь: поиск с фильтром «Альбомы», если канал не нашёлся. */
+    private suspend fun searchArtistAlbums(artist: String, limit: Int): List<ArtistRelease> {
+        val response = InnerTube.call(
+            endpoint = "search",
+            payload = buildJsonObject {
+                put("query", artist)
+                put("params", FILTER_ALBUMS)
+            },
+        )
+        val out = LinkedHashMap<String, ArtistRelease>()
+        for (renderer in response.deepObjects("musicTwoRowItemRenderer")) {
+            val album = parseAlbumCard(renderer) ?: continue
+            if (!belongsToArtist(album, artist)) continue
+            out.putIfAbsent(album.id, album)
+            if (out.size >= limit) break
+        }
+        if (out.size < limit) {
+            for (renderer in response.deepObjects("musicResponsiveListItemRenderer")) {
+                val album = parseAlbumCard(renderer) ?: continue
+                if (!belongsToArtist(album, artist)) continue
+                out.putIfAbsent(album.id, album)
+                if (out.size >= limit) break
+            }
+        }
+        return out.values.toList()
+    }
+
+    /** Популярные треки исполнителя — блок «Популярное» на его странице. */
+    suspend fun artistTopTracks(artist: String, limit: Int = 25): List<Track> {
+        val query = artist.trim()
+        if (query.isBlank()) return emptyList()
+        val response = InnerTube.call(
+            endpoint = "search",
+            payload = buildJsonObject {
+                put("query", query)
+                put("params", FILTER_SONGS)
+            },
+        )
+        val out = LinkedHashMap<String, Track>()
+        for (renderer in response.deepObjects("musicResponsiveListItemRenderer")) {
+            val track = parseTrackRenderer(renderer) ?: continue
+            if (!ArtistNames.matches(track.artist, query)) continue
+            out.putIfAbsent(track.id, track)
+            if (out.size >= limit) break
+        }
+        return out.values.toList()
+    }
+
+    /**
+     * Альбом по browseId (`MPREb…`) — та же структура, что у плейлиста:
+     * шапка с обложкой и списком треков, поэтому разбор общий.
+     */
+    suspend fun album(browseId: String, cap: Int = 200): RemotePlaylist {
+        val id = browseId.trim().removePrefix("VL")
+        require(id.isNotBlank()) { "Не удалось распознать альбом YouTube Music." }
+
+        var response = InnerTube.call(
+            endpoint = "browse",
+            payload = buildJsonObject { put("browseId", id) },
+        )
+
+        val header = response.deepObjects("musicResponsiveHeaderRenderer").firstOrNull()
+            ?: response.deepObjects("musicDetailHeaderRenderer").firstOrNull()
+        val title = header?.get("title").text()?.let(::decodeHtml)?.trim()
+            ?.takeIf { it.isNotBlank() }
+            ?: "Альбом YouTube Music"
+        val subtitle = header?.get("subtitle").text()?.let(::decodeHtml)?.trim()
+        val artwork = header?.get("thumbnail").firstThumbnailUrl()
+
+        val tracks = LinkedHashMap<String, Track>()
+        var pages = 0
+        while (pages < MAX_PAGES) {
+            pages++
+            for (renderer in response.deepObjects("musicResponsiveListItemRenderer")) {
+                val parsed = parseTrackRenderer(renderer) ?: continue
+                // На странице альбома название альбома берём из шапки:
+                // в подписи строки его может не быть вовсе.
+                tracks.putIfAbsent(parsed.id, parsed.copy(album = title))
                 if (tracks.size >= cap) break
             }
             if (tracks.size >= cap) break
@@ -505,6 +689,77 @@ internal class InnerTubeApi {
         )
     }
 
+    /**
+     * Карточка релиза в выдаче «Альбомы»: `musicTwoRowItemRenderer` в сетке
+     * и `musicResponsiveListItemRenderer` в списке. Обе несут browseId альбома.
+     */
+    private fun parseAlbumCard(renderer: JsonObject): ArtistRelease? {
+        val endpoint = renderer.obj("navigationEndpoint")?.obj("browseEndpoint")
+            ?: renderer.deepObjects("browseEndpoint").firstOrNull()
+            ?: return null
+        val browseId = endpoint.str("browseId")?.takeIf { it.isNotBlank() } ?: return null
+        val pageType = endpoint
+            .obj("browseEndpointContextSupportedConfigs")
+            ?.obj("browseEndpointContextMusicConfig")
+            ?.str("pageType")
+        if (pageType != null && pageType != ALBUM_PAGE_TYPE) return null
+        if (pageType == null && !browseId.startsWith(ALBUM_ID_PREFIX)) return null
+
+        val title = decodeHtml(
+            renderer.obj("title").text()
+                ?: renderer.arr("flexColumns")
+                    ?.firstOrNull()
+                    ?.asObjectOrNull()
+                    ?.obj("musicResponsiveListItemFlexColumnRenderer")
+                    ?.get("text")
+                    .text(),
+        ).trim()
+        if (title.isBlank() || title in PLACEHOLDER_TITLES) return null
+
+        val subtitle = (
+            renderer.obj("subtitle").text()
+                ?: renderer.arr("flexColumns")
+                    ?.getOrNull(1)
+                    ?.asObjectOrNull()
+                    ?.obj("musicResponsiveListItemFlexColumnRenderer")
+                    ?.get("text")
+                    .text()
+            ).orEmpty()
+        val parts = decodeHtml(subtitle)
+            .split("•", "·")
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+        val year = parts.firstOrNull { YEAR.matches(it) }?.toIntOrNull()
+        val type = parts.firstOrNull { it.lowercase() in RELEASE_TYPES }
+        val artistName = parts.firstOrNull {
+            !YEAR.matches(it) && it.lowercase() !in RELEASE_TYPES
+        }.orEmpty()
+
+        val artwork = renderer.get("thumbnailRenderer").firstThumbnailUrl()
+            ?: renderer.get("thumbnail").firstThumbnailUrl()
+
+        return ArtistRelease(
+            id = browseId,
+            title = title,
+            artist = ArtistNames.clean(artistName),
+            year = year,
+            artworkUrl = artwork,
+            type = type,
+            remote = true,
+        )
+    }
+
+    /** Относится ли релиз к запрошенному исполнителю. */
+    private fun belongsToArtist(album: ArtistRelease, artist: String): Boolean {
+        if (album.artist.isNotBlank() && !ArtistNames.isPlaceholder(album.artist)) {
+            return ArtistNames.matches(album.artist, artist)
+        }
+        val artistKey = ArtistNames.key(artist)
+        val titleKey = ArtistNames.key(album.title)
+        if (artistKey.isBlank()) return false
+        return titleKey == artistKey || titleKey.startsWith("$artistKey ")
+    }
+
     private fun parseAudioFormat(format: JsonObject): RawFormat? {
         val mime = format.str("mimeType").orEmpty()
         if (!mime.startsWith("audio/")) return null
@@ -529,7 +784,11 @@ internal class InnerTubeApi {
     }
 
     private fun continuationToken(root: JsonObject): String? {
-        for (shelf in root.deepObjects("musicPlaylistShelfRenderer")) {
+        val shelves = sequence {
+            yieldAll(root.deepObjects("musicPlaylistShelfRenderer"))
+            yieldAll(root.deepObjects("musicShelfRenderer"))
+        }
+        for (shelf in shelves) {
             val continuations = shelf.arr("continuations") ?: continue
             for (element in continuations) {
                 val continuation = element.asObjectOrNull() ?: continue
@@ -540,6 +799,13 @@ internal class InnerTubeApi {
                     ?.takeIf { it.isNotBlank() }
                     ?.let { return it }
             }
+        }
+        // Страницы артиста/альбома кладут continuation в другую секцию.
+        root.deepObjects("nextContinuationData").forEach { data ->
+            data.str("continuation")?.takeIf { it.isNotBlank() }?.let { return it }
+        }
+        root.deepObjects("reloadContinuationData").forEach { data ->
+            data.str("continuation")?.takeIf { it.isNotBlank() }?.let { return it }
         }
         return null
     }
@@ -582,6 +848,17 @@ internal class InnerTubeApi {
     private companion object {
         const val URI_SCHEME = "innertube:"
         const val FILTER_SONGS = "EgWKAQIIAWoKEAkQBRAKEAMQBA=="
+        const val FILTER_ALBUMS = "EgWKAQIYAWoKEAkQChAFEAMQBA=="
+        const val FILTER_ARTISTS = "EgWKAQIgAWoKEAkQChAFEAMQBA=="
+        const val ALBUM_PAGE_TYPE = "MUSIC_PAGE_TYPE_ALBUM"
+        const val ARTIST_PAGE_TYPE = "MUSIC_PAGE_TYPE_ARTIST"
+        const val ALBUM_ID_PREFIX = "MPRE"
+        const val CHANNEL_ID_PREFIX = "UC"
+        val YEAR = Regex("""^(19|20)\d{2}$""")
+        val RELEASE_TYPES = setOf(
+            "album", "single", "ep", "compilation", "live", "soundtrack",
+            "альбом", "сингл", "мини-альбом", "сборник",
+        )
         const val MAX_PAGES = 10
         const val MAX_TRANSCRIPT_LINES = 500
         const val TRANSCRIPT_API_KEY = "AIzaSyC9XL3ZjWddXya6X74dJoCTL-WEYFDNX30"

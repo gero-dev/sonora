@@ -1,5 +1,6 @@
 package app.sonora.data.remote.youtube
 
+import app.sonora.core.model.ArtistRelease
 import app.sonora.core.model.Playlist
 import app.sonora.core.model.Source
 import app.sonora.core.model.Track
@@ -110,6 +111,27 @@ class YouTubeSource(
             .onFailure { error -> lastError = describe(error) }
             .getOrDefault(emptyList())
     }
+
+    /**
+     * Дискография исполнителя: альбомы, синглы и EP.
+     * Нужна странице артиста — как блок «Альбомы» в Spotify.
+     */
+    suspend fun artistAlbums(artist: String, limit: Int = 70): List<ArtistRelease> =
+        runCatching { api.artistAlbums(artist, limit) }
+            .onFailure { error -> lastError = describe(error) }
+            .getOrDefault(emptyList())
+
+    /** Популярные треки исполнителя — верхний блок его страницы. */
+    suspend fun artistTopTracks(artist: String, limit: Int = 25): List<Track> =
+        runCatching { api.artistTopTracks(artist, limit).filterNot { it.isVideoContent } }
+            .onFailure { error -> lastError = describe(error) }
+            .getOrDefault(emptyList())
+
+    /** Альбом по browseId (`MPREb…`): состав, год, обложка. */
+    suspend fun album(browseId: String): app.sonora.data.remote.youtube.innertube.RemotePlaylist? =
+        runCatching { api.album(browseId) }
+            .onFailure { error -> lastError = describe(error) }
+            .getOrNull()
 
     /** Метаданные плейлиста + треки: нужно для красивой карточки в медиатеке. */
     suspend fun importPlaylistDetails(url: String): app.sonora.data.remote.youtube.innertube.RemotePlaylist? {
