@@ -1,4 +1,4 @@
-# Документация Sonora
+﻿# Документация Sonora
 
 Полный набор руководств по приложению. Если вы только начинаете — прочитайте
 корневой [README.md](../README.md), затем нужный раздел ниже.
@@ -28,7 +28,9 @@
 |---|---|
 | [ARCHITECTURE.md](ARCHITECTURE.md) | слои, потоки данных, InnerTube, воспроизведение, загрузка, импорт |
 | [INTEGRATIONS.md](INTEGRATIONS.md) | устройство интеграций: Spotify, YouTube Music, SoundCloud, DownloadManager |
+| [STREAMING-RF.md](STREAMING-RF.md) | стриминг без VPN/WARP: авто-обновление yt-dlp, перебор клиентов, probe, медиашлюз, диагностика |
 | [YTDLP_INTEGRATION.md](YTDLP_INTEGRATION.md) | yt-dlp + ReccoBeats: поиск, поток, аудио-фичи, кэш, оптимизации |
+| [RF-STREAMING-RESEARCH.md](RF-STREAMING-RESEARCH.md) | замеры зеркал и блокировок из РФ (29.10.2026), ограничения и рекомендации |
 | [DISCOVERY.md](DISCOVERY.md) | открытые каталоги Internet Archive и Jamendo |
 | [UI.md](UI.md) | дизайн-система, экраны, состояния, ограничения |
 | [ROADMAP.md](ROADMAP.md) | планы и направления развития |
@@ -50,4 +52,4 @@
 - Сборка: `./gradlew :app:assembleDebug` (JDK 21, Android SDK 37).
 - APK: `app/build/outputs/apk/debug/app-debug.apk`.
 - Проверка: `./gradlew :app:testDebugUnitTest :app:lintDebug`.
-- Версия: `1.5.0`, `versionCode 27`.
+- Версия: `1.6.0`, `versionCode 28`.

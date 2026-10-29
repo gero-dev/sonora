@@ -1,0 +1,712 @@
+{
+ "tested_at_msk": "2026-10-29 18:05:39",
+ "video": "dQw4w9WgXcQ",
+ "elapsed_s": 30.2,
+ "egress_note": "probe machine egress may be WARP/VPN; function only, not RF reachability",
+ "results": [
+  {
+   "kind": "invidious",
+   "base": "https://inv.nadeko.net",
+   "host": "inv.nadeko.net",
+   "dns": {
+    "ok": true,
+    "ms": 67,
+    "ips": [
+     "151.242.242.26",
+     "2803:29e0:10:21aa::1"
+    ]
+   },
+   "api": {
+    "status": 403,
+    "ms": 1304,
+    "len": null,
+    "err": "HTTP 403",
+    "snippet": "Endpoint disabled"
+   },
+   "verdict": "api_fail"
+  },
+  {
+   "kind": "invidious",
+   "base": "https://yewtu.be",
+   "host": "yewtu.be",
+   "dns": {
+    "ok": true,
+    "ms": 125,
+    "ips": [
+     "198.98.60.34",
+     "2605:6400:10:11d::3"
+    ]
+   },
+   "api": {
+    "status": 403,
+    "ms": 709,
+    "len": null,
+    "err": "HTTP 403",
+    "snippet": "<html>\r\n<head><title>403 Forbidden</title></head>\r\n<body>\r\n<center><h1>403 Forbidden</h1></center>\r\n<hr><center>openresty</center>\r\n</body>\r\n</html>\r\n<!-- a padding to disable MSIE and Chrome friendly"
+   },
+   "verdict": "api_fail"
+  },
+  {
+   "kind": "invidious",
+   "base": "https://invidious.nerdvpn.de",
+   "host": "invidious.nerdvpn.de",
+   "dns": {
+    "ok": true,
+    "ms": 125,
+    "ips": [
+     "176.97.120.57",
+     "2a11:6102:0:1::2"
+    ]
+   },
+   "api": {
+    "status": null,
+    "ms": 30010,
+    "len": null,
+    "err": "URLError: <urlopen error timed out>"
+   },
+   "verdict": "api_fail"
+  },
+  {
+   "kind": "invidious",
+   "base": "https://invidious.f5.si",
+   "host": "invidious.f5.si",
+   "dns": {
+    "ok": true,
+    "ms": 66,
+    "ips": [
+     "104.21.61.133",
+     "172.67.210.162",
+     "2606:4700:3034::6815:3d85"
+    ]
+   },
+   "api": {
+    "status": 530,
+    "ms": 151,
+    "len": null,
+    "err": "HTTP 530",
+    "snippet": "<!doctype html>\n<!--[if lt IE 7]> <html class=\"no-js ie6 oldie\" lang=\"en-US\"> <![endif]-->\n<!--[if IE 7]>    <html class=\"no-js ie7 oldie\" lang=\"en-US\"> <![endif]-->\n<!--[if IE 8]>    <html class=\"no-"
+   },
+   "verdict": "api_fail"
+  },
+  {
+   "kind": "invidious",
+   "base": "https://iv.melmac.space",
+   "host": "iv.melmac.space",
+   "dns": {
+    "ok": true,
+    "ms": 175,
+    "ips": [
+     "2a0a:4580:1011:1096::95"
+    ]
+   },
+   "api": {
+    "status": null,
+    "ms": 195,
+    "len": null,
+    "err": "URLError: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: Hostname mismatch, certificate is not valid for 'iv.melmac.space'. (_ssl.c:1082)>"
+   },
+   "verdict": "api_fail"
+  },
+  {
+   "kind": "invidious",
+   "base": "https://invidious.privacyredirect.com",
+   "host": "invidious.privacyredirect.com",
+   "dns": {
+    "ok": true,
+    "ms": 66,
+    "ips": [
+     "179.43.176.2"
+    ]
+   },
+   "api": {
+    "status": 404,
+    "ms": 627,
+    "len": null,
+    "err": "HTTP 404",
+    "snippet": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <link rel=\"stylesheet\" href=\"error.css\">\n    <title>Er"
+   },
+   "verdict": "api_fail"
+  },
+  {
+   "kind": "invidious",
+   "base": "https://iv.datura.network",
+   "host": "iv.datura.network",
+   "dns": {
+    "ok": false,
+    "err": "gaierror: [Errno 11001] getaddrinfo failed"
+   },
+   "verdict": "dns_fail"
+  },
+  {
+   "kind": "invidious",
+   "base": "https://invidious.jing.rocks",
+   "host": "invidious.jing.rocks",
+   "dns": {
+    "ok": false,
+    "err": "gaierror: [Errno 11001] getaddrinfo failed"
+   },
+   "verdict": "dns_fail"
+  },
+  {
+   "kind": "invidious",
+   "base": "https://invidious.reallyaweso.me",
+   "host": "invidious.reallyaweso.me",
+   "dns": {
+    "ok": true,
+    "ms": 65,
+    "ips": [
+     "152.53.17.180",
+     "2a0a:4cc0:1:1396:7474:faff:fecc:5013"
+    ]
+   },
+   "api": {
+    "status": 502,
+    "ms": 429,
+    "len": null,
+    "err": "HTTP 502"
+   },
+   "verdict": "api_fail"
+  },
+  {
+   "kind": "invidious",
+   "base": "https://invidious.materialio.us",
+   "host": "invidious.materialio.us",
+   "dns": {
+    "ok": true,
+    "ms": 101,
+    "ips": [
+     "114.23.117.29",
+     "2406:1e00:9002:102::f40"
+    ]
+   },
+   "api": {
+    "status": null,
+    "ms": 26973,
+    "len": null,
+    "err": "TimeoutError: The read operation timed out"
+   },
+   "verdict": "api_fail"
+  },
+  {
+   "kind": "invidious",
+   "base": "https://yt.artemislena.eu",
+   "host": "yt.artemislena.eu",
+   "dns": {
+    "ok": true,
+    "ms": 126,
+    "ips": [
+     "2a02:8109:929a:1a00:9e6b:ff:fec9:6a56",
+     "91.65.209.160"
+    ]
+   },
+   "api": {
+    "status": null,
+    "ms": 148,
+    "len": null,
+    "err": "URLError: <urlopen error [SSL: TLSV1_ALERT_INTERNAL_ERROR] tlsv1 alert internal error (_ssl.c:1082)>"
+   },
+   "verdict": "api_fail"
+  },
+  {
+   "kind": "invidious",
+   "base": "https://invidious.einfachzocken.eu",
+   "host": "invidious.einfachzocken.eu",
+   "dns": {
+    "ok": true,
+    "ms": 66,
+    "ips": [
+     "161.97.168.99",
+     "2a02:c206:3012:989::1"
+    ]
+   },
+   "api": {
+    "status": null,
+    "ms": 164,
+    "len": null,
+    "err": "URLError: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate (_ssl.c:1082)>"
+   },
+   "verdict": "api_fail"
+  },
+  {
+   "kind": "invidious",
+   "base": "https://inv.tux.pizza",
+   "host": "inv.tux.pizza",
+   "dns": {
+    "ok": true,
+    "ms": 205,
+    "ips": [
+     "45.61.184.135"
+    ]
+   },
+   "api": {
+    "status": null,
+    "ms": 15015,
+    "len": null,
+    "err": "URLError: <urlopen error timed out>"
+   },
+   "verdict": "api_fail"
+  },
+  {
+   "kind": "invidious",
+   "base": "https://invidious.protokolla.fi",
+   "host": "invidious.protokolla.fi",
+   "dns": {
+    "ok": true,
+    "ms": 773,
+    "ips": [
+     "188.68.35.32"
+    ]
+   },
+   "api": {
+    "status": 200,
+    "ms": 317,
+    "len": 1069,
+    "err": null,
+    "snippet": "\n<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"UTF-8\">\n<title>Auth with CAPTCHA</title>\n<script src=\"https://cdn.jsdelivr.net/npm/@cap.js/widget\"></script>\n<style>\n.content {\n  font-family: m"
+   },
+   "verdict": "api_not_json"
+  },
+  {
+   "kind": "invidious",
+   "base": "https://inv.zzls.xyz",
+   "host": "inv.zzls.xyz",
+   "dns": {
+    "ok": true,
+    "ms": 124,
+    "ips": [
+     "2001:550:5a00:785b::1",
+     "38.45.72.183"
+    ]
+   },
+   "api": {
+    "status": 403,
+    "ms": 2037,
+    "len": null,
+    "err": "HTTP 403",
+    "snippet": "Endpoint disabled"
+   },
+   "verdict": "api_fail"
+  },
+  {
+   "kind": "invidious",
+   "base": "https://invidious.dhusch.de",
+   "host": "invidious.dhusch.de",
+   "dns": {
+    "ok": true,
+    "ms": 237,
+    "ips": [
+     "91.20.174.107"
+    ]
+   },
+   "api": {
+    "status": null,
+    "ms": 213,
+    "len": null,
+    "err": "URLError: <urlopen error [SSL: TLSV1_ALERT_INTERNAL_ERROR] tlsv1 alert internal error (_ssl.c:1082)>"
+   },
+   "verdict": "api_fail"
+  },
+  {
+   "kind": "invidious",
+   "base": "https://iv.ggtyler.dev",
+   "host": "iv.ggtyler.dev",
+   "dns": {
+    "ok": true,
+    "ms": 69,
+    "ips": [
+     "45.137.206.20"
+    ]
+   },
+   "api": {
+    "status": null,
+    "ms": 15014,
+    "len": null,
+    "err": "URLError: <urlopen error timed out>"
+   },
+   "verdict": "api_fail"
+  },
+  {
+   "kind": "invidious",
+   "base": "https://invidious.lunivers.trade",
+   "host": "invidious.lunivers.trade",
+   "dns": {
+    "ok": true,
+    "ms": 54,
+    "ips": [
+     "86.203.143.71"
+    ]
+   },
+   "api": {
+    "status": 503,
+    "ms": 324,
+    "len": null,
+    "err": "HTTP 503",
+    "snippet": "<html><body><h1>503 Service Unavailable</h1>\nNo server is available to handle this request.\n</body></html>\n"
+   },
+   "verdict": "api_fail"
+  },
+  {
+   "kind": "invidious",
+   "base": "https://invidious.nikkosphere.com",
+   "host": "invidious.nikkosphere.com",
+   "dns": {
+    "ok": true,
+    "ms": 37,
+    "ips": [
+     "93.41.131.83"
+    ]
+   },
+   "api": {
+    "status": 451,
+    "ms": 3529,
+    "len": null,
+    "err": "HTTP 451"
+   },
+   "verdict": "api_fail"
+  },
+  {
+   "kind": "invidious",
+   "base": "https://invidious.adminforge.de",
+   "host": "invidious.adminforge.de",
+   "dns": {
+    "ok": true,
+    "ms": 46,
+    "ips": [
+     "176.9.8.206",
+     "2a01:4f8:141:5208::206"
+    ]
+   },
+   "api": {
+    "status": 404,
+    "ms": 691,
+    "len": null,
+    "err": "HTTP 404",
+    "snippet": "<!DOCTYPE html>\n<html lang=\"de\" id=\"html-root\">\n\n<head>\n  <base href=\"/\">\n  <meta charset=\"UTF-8\" />\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1, viewport-fit=cover\" />\n\n  <ti"
+   },
+   "verdict": "api_fail"
+  },
+  {
+   "kind": "piped",
+   "base": "https://pipedapi.kavin.rocks",
+   "host": "pipedapi.kavin.rocks",
+   "dns": {
+    "ok": true,
+    "ms": 534,
+    "ips": [
+     "104.21.38.236",
+     "172.67.140.200",
+     "2606:4700:3030::6815:26ec"
+    ]
+   },
+   "api": {
+    "status": 403,
+    "ms": 131,
+    "len": null,
+    "err": "HTTP 403",
+    "snippet": "<!DOCTYPE html>\n<!--[if lt IE 7]> <html class=\"no-js ie6 oldie\" lang=\"en-US\"> <![endif]-->\n<!--[if IE 7]>    <html class=\"no-js ie7 oldie\" lang=\"en-US\"> <![endif]-->\n<!--[if IE 8]>    <html class=\"no-"
+   },
+   "verdict": "api_fail"
+  },
+  {
+   "kind": "piped",
+   "base": "https://pipedapi.adminforge.de",
+   "host": "pipedapi.adminforge.de",
+   "dns": {
+    "ok": true,
+    "ms": 46,
+    "ips": [
+     "176.9.8.206",
+     "2a01:4f8:141:5208::206"
+    ]
+   },
+   "api": {
+    "status": 403,
+    "ms": 754,
+    "len": null,
+    "err": "HTTP 403",
+    "snippet": "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01//EN\" \"http://www.w3.org/TR/html4/strict.dtd\">\n<html><head>\n<title>403 Forbidden</title>\n</head><body>\n<h1>Forbidden</h1>\n<p>You don't have permission to ac"
+   },
+   "verdict": "api_fail"
+  },
+  {
+   "kind": "piped",
+   "base": "https://api.piped.private.coffee",
+   "host": "api.piped.private.coffee",
+   "dns": {
+    "ok": true,
+    "ms": 728,
+    "ips": [
+     "2a0d:f302:104:f47c::1",
+     "86.106.182.35"
+    ]
+   },
+   "api": {
+    "status": 200,
+    "ms": 349,
+    "len": 26128,
+    "err": null,
+    "keys": [
+     "title",
+     "description",
+     "uploadDate",
+     "uploader",
+     "uploaderUrl",
+     "uploaderAvatar",
+     "thumbnailUrl",
+     "hls",
+     "dash",
+     "lbryId"
+    ]
+   },
+   "title": "Rick Astley - Never Gonna Give You Up (Official Video) (4K R",
+   "n_audio": 0,
+   "verdict": "no_audio_streams"
+  },
+  {
+   "kind": "piped",
+   "base": "https://pipedapi.reallyaweso.me",
+   "host": "pipedapi.reallyaweso.me",
+   "dns": {
+    "ok": true,
+    "ms": 32,
+    "ips": [
+     "152.53.15.22"
+    ]
+   },
+   "api": {
+    "status": 200,
+    "ms": 195,
+    "len": 929,
+    "err": null,
+    "snippet": "<!doctype html><meta charset=utf-8><meta content=\"width=device-width,initial-scale=1.0\" name=viewport><title>Man so conventional, so scru- pulously correct as.</title><body><main><h1>Man so convention"
+   },
+   "verdict": "api_not_json"
+  },
+  {
+   "kind": "piped",
+   "base": "https://pipedapi.drgns.space",
+   "host": "pipedapi.drgns.space",
+   "dns": {
+    "ok": false,
+    "err": "gaierror: [Errno 11001] getaddrinfo failed"
+   },
+   "verdict": "dns_fail"
+  },
+  {
+   "kind": "piped",
+   "base": "https://pipedapi.ducks.party",
+   "host": "pipedapi.ducks.party",
+   "dns": {
+    "ok": true,
+    "ms": 34,
+    "ips": [
+     "141.95.32.57",
+     "2001:41d0:700:5539::c0ff:ee"
+    ]
+   },
+   "api": {
+    "status": 200,
+    "ms": 251,
+    "len": 26030,
+    "err": null,
+    "keys": [
+     "title",
+     "description",
+     "uploadDate",
+     "uploader",
+     "uploaderUrl",
+     "uploaderAvatar",
+     "thumbnailUrl",
+     "hls",
+     "dash",
+     "lbryId"
+    ]
+   },
+   "title": "Rick Astley - Never Gonna Give You Up (Official Video) (4K R",
+   "n_audio": 0,
+   "verdict": "no_audio_streams"
+  },
+  {
+   "kind": "piped",
+   "base": "https://pipedapi.leptons.xyz",
+   "host": "pipedapi.leptons.xyz",
+   "dns": {
+    "ok": true,
+    "ms": 33,
+    "ips": [
+     "104.21.83.12",
+     "172.67.166.196",
+     "2606:4700:3031::6815:530c"
+    ]
+   },
+   "api": {
+    "status": 502,
+    "ms": 253,
+    "len": null,
+    "err": "HTTP 502",
+    "snippet": "<!DOCTYPE html>\n<!--[if lt IE 7]> <html class=\"no-js ie6 oldie\" lang=\"en-US\"> <![endif]-->\n<!--[if IE 7]>    <html class=\"no-js ie7 oldie\" lang=\"en-US\"> <![endif]-->\n<!--[if IE 8]>    <html class=\"no-"
+   },
+   "verdict": "api_fail"
+  },
+  {
+   "kind": "piped",
+   "base": "https://pipedapi.nosebs.ru",
+   "host": "pipedapi.nosebs.ru",
+   "dns": {
+    "ok": false,
+    "err": "gaierror: [Errno 11001] getaddrinfo failed"
+   },
+   "verdict": "dns_fail"
+  },
+  {
+   "kind": "piped",
+   "base": "https://pipedapi.orangenet.cc",
+   "host": "pipedapi.orangenet.cc",
+   "dns": {
+    "ok": true,
+    "ms": 28,
+    "ips": [
+     "146.212.74.11"
+    ]
+   },
+   "api": {
+    "status": null,
+    "ms": 15004,
+    "len": null,
+    "err": "URLError: <urlopen error timed out>"
+   },
+   "verdict": "api_fail"
+  },
+  {
+   "kind": "piped",
+   "base": "https://pipedapi.r4fo.com",
+   "host": "pipedapi.r4fo.com",
+   "dns": {
+    "ok": false,
+    "err": "gaierror: [Errno 11001] getaddrinfo failed"
+   },
+   "verdict": "dns_fail"
+  },
+  {
+   "kind": "piped",
+   "base": "https://pipedapi.astartes.nl",
+   "host": "pipedapi.astartes.nl",
+   "dns": {
+    "ok": true,
+    "ms": 98,
+    "ips": [
+     "45.138.230.95"
+    ]
+   },
+   "api": {
+    "status": null,
+    "ms": 15005,
+    "len": null,
+    "err": "URLError: <urlopen error timed out>"
+   },
+   "verdict": "api_fail"
+  },
+  {
+   "kind": "piped",
+   "base": "https://piped-api.piped.tokhmi.xyz",
+   "host": "piped-api.piped.tokhmi.xyz",
+   "dns": {
+    "ok": true,
+    "ms": 87,
+    "ips": [
+     "139.162.174.209",
+     "139.162.181.76",
+     "172.104.149.86"
+    ]
+   },
+   "api": {
+    "status": null,
+    "ms": 156,
+    "len": null,
+    "err": "URLError: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: Hostname mismatch, certificate is not valid for 'piped-api.piped.tokhmi.xyz'. (_ssl.c"
+   },
+   "verdict": "api_fail"
+  },
+  {
+   "kind": "cobalt",
+   "base": "https://api.cobalt.tools",
+   "host": "api.cobalt.tools",
+   "dns": {
+    "ok": true,
+    "ms": 47,
+    "ips": [
+     "104.21.88.171",
+     "172.67.151.137",
+     "2606:4700:3033::ac43:9789"
+    ]
+   },
+   "api": {
+    "status": 400,
+    "ms": 369,
+    "err": "HTTP 400",
+    "snippet": "{\"status\":\"error\",\"error\":{\"code\":\"error.api.auth.jwt.missing\"}}",
+    "status_field": "error",
+    "error": {
+     "code": "error.api.auth.jwt.missing"
+    }
+   },
+   "verdict": "api_no_url"
+  },
+  {
+   "kind": "cobalt",
+   "base": "https://cobalt-api.kwiatekmiki.com",
+   "host": "cobalt-api.kwiatekmiki.com",
+   "dns": {
+    "ok": false,
+    "err": "gaierror: [Errno 11001] getaddrinfo failed"
+   },
+   "verdict": "dns_fail"
+  },
+  {
+   "kind": "cobalt",
+   "base": "https://cobalt-api.meowing.de",
+   "host": "cobalt-api.meowing.de",
+   "dns": {
+    "ok": true,
+    "ms": 46,
+    "ips": [
+     "104.21.94.58",
+     "172.67.220.42",
+     "2606:4700:3035::ac43:dc2a"
+    ]
+   },
+   "api": {
+    "status": 400,
+    "ms": 234,
+    "err": "HTTP 400",
+    "snippet": "{\"status\":\"error\",\"error\":{\"code\":\"error.api.auth.jwt.missing\"}}",
+    "status_field": "error",
+    "error": {
+     "code": "error.api.auth.jwt.missing"
+    }
+   },
+   "verdict": "api_no_url"
+  },
+  {
+   "kind": "cobalt",
+   "base": "https://co.eepy.today",
+   "host": "co.eepy.today",
+   "dns": {
+    "ok": true,
+    "ms": 64,
+    "ips": [
+     "104.21.86.100",
+     "172.67.217.211",
+     "2606:4700:3032::6815:5664"
+    ]
+   },
+   "api": {
+    "status": 502,
+    "ms": 215,
+    "err": "HTTP 502",
+    "snippet": "{\"type\":\"https://developers.cloudflare.com/support/troubleshooting/http-status-codes/cloudflare-5xx-errors/error-502/\",\"title\":\"Error 502: Bad gateway\",\"status\":502,\"detail\":\"The origin web server returned an invalid or incomplete response to Cloudflare. This typically indicates the origin is overlo"
+   },
+   "verdict": "api_fail"
+  }
+ ]
+}

@@ -1,0 +1,7 @@
+[
+  {"label": "DISCOVERY api.invidious.io", "host": "api.invidious.io", "path": "/instances.json", "limit": 2},
+  {"label": "yt.chocolatemoo53.com audio", "host": "yt.chocolatemoo53.com", "path": "/latest_version?id=dQw4w9WgXcQ&itag=140&local=true", "limit": 2},
+  {"label": "inv.us.projectsegfau.lt audio", "host": "inv.us.projectsegfau.lt", "path": "/latest_version?id=dQw4w9WgXcQ&itag=140&local=true", "limit": 2},
+  {"label": "protokolla audio 2nd video", "host": "invidious.protokolla.fi", "path": "/latest_version?id=jNQXAC9IVRw&itag=140&local=true", "limit": 2},
+  {"label": "protokolla api videos", "host": "invidious.protokolla.fi", "path": "/api/v1/videos/dQw4w9WgXcQ?fields=title,formatStreams", "limit": 2}
+]

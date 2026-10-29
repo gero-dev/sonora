@@ -53,6 +53,8 @@ class AppGraph private constructor(context: Context) {
         app.sonora.data.remote.youtube.innertube.InnerTubeSession.restore(secure)
         // yt-dlp — источник потока и резерв для ограниченных видео.
         app.sonora.data.remote.ytdlp.YtDlpBridge.init(ytDlp, settings)
+        // Медиашлюз без VPN/WARP: публичные зеркала на случай блокировки IP.
+        app.sonora.net.relay.RelayGateway.init(settings)
     }
 
     val scanner = MediaStoreScanner(appContext)

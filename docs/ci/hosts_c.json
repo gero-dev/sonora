@@ -1,0 +1,22 @@
+[
+  {"label": "invidious.protokolla.fi api", "host": "invidious.protokolla.fi", "path": "/api/v1/videos/dQw4w9WgXcQ?fields=title,adaptiveFormats", "limit": 2},
+  {"label": "invidious.protokolla.fi audio", "host": "invidious.protokolla.fi", "path": "/latest_version?id=dQw4w9WgXcQ&itag=140&local=true", "limit": 2},
+  {"label": "inv.nadeko.net audio", "host": "inv.nadeko.net", "path": "/latest_version?id=dQw4w9WgXcQ&itag=140&local=true", "limit": 2},
+  {"label": "yewtu.be audio", "host": "yewtu.be", "path": "/latest_version?id=dQw4w9WgXcQ&itag=140&local=true", "limit": 2},
+  {"label": "invidious.f5.si audio", "host": "invidious.f5.si", "path": "/latest_version?id=dQw4w9WgXcQ&itag=140&local=true", "limit": 2},
+  {"label": "iv.melmac.space audio", "host": "iv.melmac.space", "path": "/latest_version?id=dQw4w9WgXcQ&itag=140&local=true", "limit": 2},
+  {"label": "yt.artemislena.eu audio", "host": "yt.artemislena.eu", "path": "/latest_version?id=dQw4w9WgXcQ&itag=140&local=true", "limit": 2},
+  {"label": "invidious.nerdvpn.de audio", "host": "invidious.nerdvpn.de", "path": "/latest_version?id=dQw4w9WgXcQ&itag=140&local=true", "limit": 2},
+  {"label": "invidious.einfachzocken.eu audio", "host": "invidious.einfachzocken.eu", "path": "/latest_version?id=dQw4w9WgXcQ&itag=140&local=true", "limit": 2},
+  {"label": "invidious.reallyaweso.me audio", "host": "invidious.reallyaweso.me", "path": "/latest_version?id=dQw4w9WgXcQ&itag=140&local=true", "limit": 2},
+  {"label": "invidious.materialio.us audio", "host": "invidious.materialio.us", "path": "/latest_version?id=dQw4w9WgXcQ&itag=140&local=true", "limit": 2},
+  {"label": "inv.tux.pizza audio", "host": "inv.tux.pizza", "path": "/latest_version?id=dQw4w9WgXcQ&itag=140&local=true", "limit": 2},
+  {"label": "iv.ggtyler.dev audio", "host": "iv.ggtyler.dev", "path": "/latest_version?id=dQw4w9WgXcQ&itag=140&local=true", "limit": 2},
+  {"label": "invidious.jing.rocks audio", "host": "invidious.jing.rocks", "path": "/latest_version?id=dQw4w9WgXcQ&itag=140&local=true", "limit": 2},
+  {"label": "piped.piped.tokhmi.xyz streams", "host": "piped-api.piped.tokhmi.xyz", "path": "/streams/dQw4w9WgXcQ", "limit": 2},
+  {"label": "api.piped.private.coffee streams", "host": "api.piped.private.coffee", "path": "/streams/dQw4w9WgXcQ", "limit": 2},
+  {"label": "pipedapi.ducks.party streams", "host": "pipedapi.ducks.party", "path": "/streams/dQw4w9WgXcQ", "limit": 2},
+  {"label": "pipedapi.adminforge.de streams", "host": "pipedapi.adminforge.de", "path": "/streams/dQw4w9WgXcQ", "limit": 2},
+  {"label": "pipedapi.kavin.rocks streams", "host": "pipedapi.kavin.rocks", "path": "/streams/dQw4w9WgXcQ", "limit": 2},
+  {"label": "pipedapi.reallyaweso.me streams", "host": "pipedapi.reallyaweso.me", "path": "/streams/dQw4w9WgXcQ", "limit": 2}
+]

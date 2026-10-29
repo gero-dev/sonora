@@ -1,0 +1,44 @@
+[
+ {
+  "base": "https://invidious.nerdvpn.de",
+  "api_listed": false,
+  "code": null,
+  "ms": 1636,
+  "err": "HTTPError: HTTP Error 403: Forbidden"
+ },
+ {
+  "base": "https://inv.nadeko.net",
+  "api_listed": false,
+  "code": null,
+  "ms": 1065,
+  "err": "HTTPError: HTTP Error 500: Internal Server Error"
+ },
+ {
+  "base": "https://yt.chocolatemoo53.com",
+  "api_listed": true,
+  "code": null,
+  "ms": 16212,
+  "err": "TimeoutError: The read operation timed out"
+ },
+ {
+  "base": "https://invidious.tiekoetter.com",
+  "api_listed": false,
+  "code": null,
+  "ms": 1673,
+  "err": "HTTPError: HTTP Error 400: Bad Request"
+ },
+ {
+  "base": "https://inv-ygg.nadeko.net",
+  "api_listed": true,
+  "code": null,
+  "ms": 15053,
+  "err": "URLError: <urlopen error timed out>"
+ },
+ {
+  "base": "https://inv.nadeko.ygg",
+  "api_listed": true,
+  "code": null,
+  "ms": 437,
+  "err": "URLError: <urlopen error [Errno 11001] getaddrinfo failed>"
+ }
+]

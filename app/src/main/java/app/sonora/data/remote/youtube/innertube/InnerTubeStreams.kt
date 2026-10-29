@@ -1,7 +1,10 @@
 package app.sonora.data.remote.youtube.innertube
 
 import app.sonora.core.settings.AudioQuality
+import app.sonora.core.settings.StreamSource
+import app.sonora.data.remote.StreamProbe
 import app.sonora.data.remote.ytdlp.YtDlpBridge
+import app.sonora.net.relay.RelayGateway
 import com.metrolist.innertubex.extraction.AudioQuality as EngineQuality
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
@@ -26,8 +29,8 @@ internal object InnerTubeStreams {
     /** Запас, ниже которого формат считается «попавшим» в целевой битрейт. */
     private const val BITRATE_TOLERANCE = 16_000
 
-    /** Ссылка yt-dlp живёт недолго: кэшируем её на 15 минут. */
-    private const val YTDLP_TTL_MS = 15 * 60_000L
+    /** Ссылка yt-dlp/шлюза живёт недолго: кэшируем её на 5 минут. */
+    private const val RELAY_TTL_MS = 5 * 60_000L
 
     private val api = InnerTubeApi()
     private val cache = ConcurrentHashMap<String, StreamInfo>()
@@ -41,24 +44,40 @@ internal object InnerTubeStreams {
     }
 
     /**
-     * Двухступенчатый резолв:
-     * 1. InnerTubeX — быстрый и устойчивый путь, сам выбирает формат.
-     * 2. Если нужен более низкий битрейт (Низкое/Обычное), чем отдал движок,
-     *    пробуем прямой `player`-ответ с целевым битрейтом: там доступны
-     *    отдельные форматы 64/128/160 кбит/с.
+     * Цепочка источников. В РФ прямой `googlevideo` часто отдаёт 403 по IP,
+     * поэтому каждая ссылка проверяется Range-запросом, а последним шагом
+     * идёт медиашлюз без VPN/WARP:
      *
-     * Если дешёвый формат получить не удалось, играем то, что есть, — качество
-     * не должно ломать воспроизведение.
+     *  1. InnerTubeX — быстрый и устойчивый путь, сам выбирает формат.
+     *  2. Прямой `player`-ответ с целевым битрейтом (64/128/160 кбит/с).
+     *  3. yt-dlp — обновлённый рантайм, перебор клиентов и IPv4/IPv6.
+     *  4. Медиашлюз (Invidious/Piped) — если провайдер блокирует YouTube.
+     *
+     * Если пользователь выбрал «Шлюз» — сразу шаг 4; если «InnerTube» —
+     * только шаги 1–2; если «yt-dlp» — сразу шаг 3.
      */
     private suspend fun resolveStream(videoId: String, level: AudioQuality): StreamInfo {
         val targetKbps = level.targetKbps
+        val source = YtDlpBridge.source()
 
-        // Пользователь выбрал yt-dlp основным: он обходит ограничения InnerTube,
-        // но стартует дольше. При неудаче всё равно пробуем встроенный путь.
-        if (YtDlpBridge.isPrimary()) {
+        if (source == StreamSource.RELAY) {
+            return resolveViaRelay(videoId, targetKbps)
+                ?: throw IllegalStateException(
+                    "Медиашлюз не смог получить звук. Добавьте свои зеркала " +
+                        "в Настройки → Поток и сеть или включите WARP.",
+                )
+        }
+        if (source == StreamSource.YTDLP) {
             YtDlpBridge.resolve(videoId)?.let { return it.toStreamInfo(videoId) }
+            throw IllegalStateException(
+                "yt-dlp не получил играющую ссылку: YouTube блокирует медиа с вашего IP. " +
+                    "Медиашлюз тоже не ответил — включите WARP или укажите прокси.",
+            )
         }
 
+        val failures = ArrayList<String>(4)
+
+        // 1. InnerTubeX — быстрый путь.
         var engineStream: StreamInfo? = null
         var engineFailure: Exception? = null
         try {
@@ -67,35 +86,81 @@ internal object InnerTubeStreams {
             engineFailure = error
         }
 
-        // Авто и «Очень высокое» — отдаём максимум, который нашёл движок.
-        if (engineStream != null && targetKbps == null) return engineStream
-
-        val engineTooHigh = engineStream != null &&
-            engineStream.bitrate > targetKbps!! * 1000 + BITRATE_TOLERANCE
-        if (engineStream == null || engineTooHigh) {
-            val direct = try {
-                api.stream(videoId, targetKbps)
-            } catch (error: Exception) {
-                null
+        if (engineStream != null) {
+            val playable = playableOrNull(engineStream)
+            if (playable != null) {
+                val tooHigh = targetKbps != null &&
+                    playable.bitrate > targetKbps * 1000 + BITRATE_TOLERANCE
+                if (!tooHigh) return playable
+                // Нужен битрейт пониже — спросим прямой player-ответ.
+                val direct = runCatching { api.stream(videoId, targetKbps) }.getOrNull()
+                val directPlayable = direct?.let { playableOrNull(it) }
+                return directPlayable ?: playable
             }
-            if (direct != null) {
-                // Для «Авто» сравниваем оба варианта и берём лучший.
-                if (targetKbps == null && engineStream != null) {
-                    return if (engineStream.bitrate >= direct.bitrate) engineStream else direct
-                }
-                return direct
-            }
+            failures += "InnerTubeX: ссылка не играет"
+        } else {
+            failures += "InnerTubeX: ${engineFailure?.message ?: "нет потока"}"
         }
 
-        if (engineStream != null) return engineStream
+        // 2. Прямой player-ответ InnerTube с целевым битрейтом.
+        val direct = runCatching { api.stream(videoId, targetKbps) }.getOrNull()
+        if (direct != null) {
+            playableOrNull(direct)?.let { return it }
+            failures += "InnerTube: ссылка не играет"
+        } else {
+            failures += "InnerTube: нет потока"
+        }
 
-        // Последний рубеж: yt-dlp. Он медленный, зато умеет видео, которые
-        // InnerTube/InnerTubeX не отдают (возраст, регион, SABR-only).
-        if (YtDlpBridge.isEnabled()) {
+        // 3–4. yt-dlp → медиашлюз без VPN/WARP.
+        return resolveFallbacks(videoId, targetKbps, failures, source)
+    }
+
+    /** yt-dlp → медиашлюз; общая часть для AUTO-цепочки. */
+    private suspend fun resolveFallbacks(
+        videoId: String,
+        targetKbps: Int?,
+        failures: MutableList<String>,
+        source: StreamSource,
+    ): StreamInfo {
+        // 3. yt-dlp: обновлённый рантайм сам перебирает клиентов и протоколы.
+        if (source != StreamSource.INNERTUBE && YtDlpBridge.isEnabled()) {
             YtDlpBridge.resolve(videoId)?.let { return it.toStreamInfo(videoId) }
+            failures += "yt-dlp: 403/нет ссылки"
         }
 
-        throw (engineFailure ?: IllegalStateException("Не удалось получить поток YouTube"))
+        // 4. Медиашлюз без VPN/WARP.
+        if (source != StreamSource.INNERTUBE && RelayGateway.isEnabled()) {
+            resolveViaRelay(videoId, targetKbps)?.let { return it }
+            failures += "медиашлюз: зеркала не ответили"
+        }
+
+        throw IllegalStateException(
+            "YouTube не отдал воспроизводимый поток (${failures.joinToString("; ")}). " +
+                "Проверьте «Настройки → Поток и сеть → Проверить поток».",
+        )
+    }
+
+    /** Проверка ссылки настоящим Range-запросом до отдачи в плеер. */
+    private suspend fun playableOrNull(stream: StreamInfo): StreamInfo? {
+        if (!RelayGateway.probeBeforePlay()) return stream
+        // Bounded-range потоки нельзя проверять обычным Range — доверяем.
+        if (stream.needsRangeRequests) return stream
+        val probe = StreamProbe.probe(stream.url, stream.headers)
+        return if (probe.ok) stream else null
+    }
+
+    private suspend fun resolveViaRelay(videoId: String, targetKbps: Int?): StreamInfo? {
+        if (!RelayGateway.isEnabled()) return null
+        val relay = RelayGateway.resolve(videoId, targetKbps) ?: return null
+        return StreamInfo(
+            videoId = videoId,
+            url = relay.url,
+            mimeType = relay.mimeType,
+            bitrate = relay.bitrate,
+            itag = 0,
+            expiresAtMs = relay.expiresAtMs,
+            headers = relay.headers,
+        )
     }
 
     private fun app.sonora.data.remote.ytdlp.StreamHandle.toStreamInfo(
@@ -106,15 +171,50 @@ internal object InnerTubeStreams {
         mimeType = mimeType,
         bitrate = 0,
         itag = 0,
-        expiresAtMs = System.currentTimeMillis() + YTDLP_TTL_MS,
+        expiresAtMs = System.currentTimeMillis() + RELAY_TTL_MS,
         headers = headers,
     )
+
+    /**
+     * Диагностика прямого пути: что именно отвечает InnerTubeX/player и играет
+     * ли полученная ссылка. Возвращает короткий отчёт для «Проверить поток».
+     */
+    internal suspend fun diagnoseDirect(videoId: String): String {
+        val lines = ArrayList<String>(2)
+        val engine = runCatching { InnerTubeXEngine.resolve(videoId, EngineQuality.AUTO) }
+        val engineStream = engine.getOrNull()
+        if (engineStream != null) {
+            val probe = StreamProbe.probe(engineStream.url, engineStream.headers)
+            if (probe.ok) {
+                return "InnerTubeX: OK · ${engineStream.bitrate / 1000} кбит/с · ${probe.elapsedMs} мс"
+            }
+            lines += "InnerTubeX: ${probe.reason()}"
+        } else {
+            lines += "InnerTubeX: ${engine.exceptionOrNull()?.message?.take(80) ?: "нет потока"}"
+        }
+        val direct = runCatching { api.stream(videoId) }
+        val directStream = direct.getOrNull()
+        if (directStream != null) {
+            val probe = StreamProbe.probe(directStream.url, directStream.headers)
+            if (probe.ok) {
+                return "InnerTube: OK · ${directStream.bitrate / 1000} кбит/с · ${probe.elapsedMs} мс"
+            }
+            lines += "InnerTube: ${probe.reason()}"
+        } else {
+            lines += "InnerTube: ${direct.exceptionOrNull()?.message?.take(80) ?: "нет потока"}"
+        }
+        return lines.joinToString(" · ")
+    }
 
     /** MP4-поток для скачивания: m4a лучше подходит для офлайн-файла. */
     suspend fun resolveDownload(videoId: String): StreamInfo =
         cached("$videoId|MP4") {
             runCatching { InnerTubeXEngine.resolve(videoId, EngineQuality.MP4) }
                 .recoverCatching { api.stream(videoId) }
+                .recoverCatching {
+                    // Прямой CDN может быть заблокирован — шлюз отдаёт тот же файл.
+                    resolveViaRelay(videoId, targetKbps = 128) ?: throw it
+                }
                 .getOrThrow()
         }
 

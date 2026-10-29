@@ -14,18 +14,32 @@ import androidx.compose.ui.platform.LocalContext
 import app.sonora.core.settings.AppSettings
 import app.sonora.core.settings.ThemeMode
 
-/** Дополнительные цвета, которых нет в MaterialTheme. */
+/**
+ * Дополнительные цвета, которых нет в MaterialTheme.
+ *
+ * [gradient] — акцентный градиент палитры (кнопки Play, прогресс, hero-карточки).
+ * [header] — тот же акцент, растворённый в фоне: мягкая «шапка» экрана в духе
+ * Spotify, которая работает и в тёмной, и в светлой теме, и с динамическим цветом.
+ */
 data class SonoraColors(
     val gradient: List<Color>,
+    val header: List<Color>,
 )
 
 val LocalSonoraColors = staticCompositionLocalOf {
-    SonoraColors(gradient = listOf(VioletPalette.gradientStart, VioletPalette.gradientEnd))
+    SonoraColors(
+        gradient = listOf(VioletPalette.gradientStart, VioletPalette.gradientEnd),
+        header = listOf(
+            VioletPalette.gradientStart.copy(alpha = 0.30f),
+            VioletPalette.gradientStart.copy(alpha = 0.10f),
+            DarkBackground.copy(alpha = 0f),
+        ),
+    )
 }
 
 /**
- * Тема приложения: 6 акцентных палитр + системный динамический цвет (Android 12+),
- * новый типографический масштаб и скругления. В динамическом режиме акцентный
+ * Тема приложения: 12 акцентных палитр + системный динамический цвет (Android 12+),
+ * плотный типографический масштаб и скругления. В динамическом режиме акцентный
  * градиент тоже подстраивается под обои — из primary/tertiary системной схемы.
  */
 @Composable
@@ -58,9 +72,18 @@ fun SonoraTheme(
             listOf(palette.gradientStart, palette.gradientEnd)
         }
     }
+    // Шапка экрана: акцент, плавно растворяющийся в фоне. Тот же приём, что в
+    // Spotify, но на своём акценте (и на цвете обоев при dynamicColor).
+    val header = remember(scheme.background, gradient) {
+        listOf(
+            gradient.first().copy(alpha = 0.30f),
+            gradient.first().copy(alpha = 0.10f),
+            scheme.background.copy(alpha = 0f),
+        )
+    }
 
     CompositionLocalProvider(
-        LocalSonoraColors provides SonoraColors(gradient = gradient),
+        LocalSonoraColors provides SonoraColors(gradient = gradient, header = header),
     ) {
         MaterialTheme(
             colorScheme = scheme,

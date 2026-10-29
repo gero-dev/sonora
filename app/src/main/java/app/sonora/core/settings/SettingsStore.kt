@@ -64,15 +64,32 @@ enum class AudioQuality(
 /**
  * Откуда брать прямой аудио-поток YouTube.
  *
- * AUTO — сначала InnerTube/InnerTubeX, при ошибке yt-dlp.
+ * AUTO — сначала InnerTube/InnerTubeX, при ошибке yt-dlp, затем встроенный
+ * медиашлюз (публичные зеркала) — работает без VPN и WARP.
  * YTDLP — всегда yt-dlp: медленнее, но умеет видео, которые встроенный
  * резолвер не открывает (возраст, регион, SABR-only).
+ * RELAY — только медиашлюз: когда прямой YouTube недоступен по IP.
  */
 @Serializable
 enum class StreamSource(val label: String, val hint: String) {
-    AUTO("Авто", "InnerTube, при ошибке — yt-dlp"),
+    AUTO("Авто", "InnerTube → yt-dlp → медиашлюз без VPN"),
     YTDLP("yt-dlp", "Всегда yt-dlp: медленнее, но обходит ограничения InnerTube"),
-    INNERTUBE("InnerTube", "Быстрый встроенный резолвер, без Python"),
+    INNERTUBE("InnerTube", "Быстрый встроенный резолвер, без Python и шлюза"),
+    RELAY("Шлюз", "Только медиашлюз: без прямого YouTube, VPN и WARP"),
+}
+
+/**
+ * Какой IP-протокол предпочитать для YouTube.
+ *
+ * AUTO — как решит yt-dlp (обычно IPv4), при 403 пробуем другой протокол.
+ * На части российских провайдеров IPv6 не попадает под ограничение трафика,
+ * поэтому явный IPv6 иногда оживляет поток без VPN.
+ */
+@Serializable
+enum class YoutubeIpMode(val label: String, val hint: String) {
+    AUTO("Авто", "Пробовать оба протокола"),
+    IPV4("IPv4", "Принудительно IPv4"),
+    IPV6("IPv6", "Принудительно IPv6 (если провайдер его не ограничивает)"),
 }
 
 /** Тонкая настройка «Моей волны»: что и как подбирается в рекомендации. */
@@ -157,6 +174,26 @@ data class AppSettings(
     val streamSource: StreamSource = StreamSource.AUTO,
     /** HTTP/SOCKS-прокси только для yt-dlp; пусто — напрямую. */
     val ytDlpProxy: String = "",
+    /**
+     * Медиашлюз без VPN: если прямой YouTube отдаёт 403, звук берётся через
+     * публичные Invidious/Piped-зеркала. Включён по умолчанию — именно это
+     * даёт стриминг в РФ без VPN и WARP.
+     */
+    val relayEnabled: Boolean = true,
+    /** Свой список зеркал (по одному в строке). Пусто — встроенный список. */
+    val relayInstances: String = "",
+    /** Проверять ссылку настоящим Range-запросом перед отдачей в плеер. */
+    val probeBeforePlay: Boolean = true,
+    /** Предпочтительный IP-протокол для YouTube. */
+    val youtubeIpMode: YoutubeIpMode = YoutubeIpMode.AUTO,
+    /** Автоматически обновлять yt-dlp из GitHub: встроенная версия быстро устаревает. */
+    val ytDlpAutoUpdate: Boolean = true,
+    /** Время последней успешной проверки/обновления yt-dlp (мс). */
+    val ytDlpCheckedAtMs: Long = 0L,
+    /** Версия установленного yt-dlp (для настроек и диагностики). */
+    val ytDlpVersion: String = "",
+    /** Набор клиентов yt-dlp, который последним дал рабочую ссылку. */
+    val ytDlpLastClient: String = "",
     /** Считать аудио-фичи (BPM, energy) для играющего трека через ReccoBeats. */
     val audioTelemetry: Boolean = true,
 

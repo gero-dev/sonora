@@ -1,6 +1,7 @@
 package app.sonora.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -22,7 +23,6 @@ import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -40,13 +40,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.sonora.playback.PlayerUiState
 import app.sonora.ui.theme.LocalSonoraColors
-import kotlin.math.abs
 
 /**
- * Мини-плеер над нижней навигацией: обложка, название, тонкий прогресс,
- * play/pause и «следующий трек». Тап по карточке открывает полный плеер,
- * свайп влево/вправо переключает трек (работает на любой вкладке),
- * свайп вверх открывает плеер.
+ * Мини-плеер в духе Spotify: плавающая скруглённая панель над навигацией,
+ * тонкая акцентная полоса прогресса, обложка 48dp, крупное название и
+ * заметные play/pause. Поведение прежнее: тап открывает полный плеер,
+ * свайп влево/вправо переключает трек, свайп вверх открывает плеер.
  */
 @Composable
 fun MiniPlayer(
@@ -64,12 +63,18 @@ fun MiniPlayer(
     val swipeThresholdPx = with(density) { 56.dp.toPx() }
     var horizontalDrag by remember { mutableStateOf(0f) }
     var verticalDrag by remember { mutableStateOf(0f) }
+    val shape = RoundedCornerShape(16.dp)
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 6.dp)
-            .clip(RoundedCornerShape(20.dp))
+            .padding(horizontal = 12.dp, vertical = 6.dp)
+            .clip(shape)
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .border(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
+                shape = shape,
+            )
             .pointerInput(Unit) {
                 detectHorizontalDragGestures(
                     onDragStart = { horizontalDrag = 0f },
@@ -122,24 +127,25 @@ fun MiniPlayer(
                     .background(Brush.linearGradient(gradient)),
             )
         }
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             CoverArt(
                 url = track.artworkUrl ?: track.artworkUri,
-                size = 44.dp,
-                cornerRadius = 14.dp,
+                size = 48.dp,
+                cornerRadius = 10.dp,
             )
-            Spacer(Modifier.width(10.dp))
+            Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(
                     text = track.title,
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.titleSmall,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+                Spacer(Modifier.height(2.dp))
                 Text(
                     text = track.artist,
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodySmall,
                     color = if (onArtistClick != null) {
                         MaterialTheme.colorScheme.primary
                     } else {
@@ -154,23 +160,37 @@ fun MiniPlayer(
                         .padding(vertical = 2.dp),
                 )
             }
-            IconButton(onClick = onTogglePlay) {
+            Spacer(Modifier.width(4.dp))
+            // Крупная акцентная play/pause — как главная кнопка Spotify.
+            Box(
+                modifier = Modifier
+                    .size(42.dp)
+                    .clip(CircleShape)
+                    .background(Brush.linearGradient(gradient))
+                    .clickable(onClick = onTogglePlay),
+                contentAlignment = Alignment.Center,
+            ) {
                 Icon(
                     imageVector = if (state.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                     contentDescription = if (state.isPlaying) "Пауза" else "Играть",
-                    tint = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.size(24.dp),
+                    tint = accentContentColor(),
+                    modifier = Modifier.size(22.dp),
                 )
             }
-            IconButton(onClick = onNext) {
+            Box(
+                modifier = Modifier
+                    .size(42.dp)
+                    .clip(CircleShape)
+                    .clickable(onClick = onNext),
+                contentAlignment = Alignment.Center,
+            ) {
                 Icon(
                     imageVector = Icons.Rounded.SkipNext,
                     contentDescription = "Следующий трек",
-                    tint = MaterialTheme.colorScheme.onSurface,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(24.dp),
                 )
             }
         }
     }
 }
-

@@ -1,12 +1,13 @@
-# Интеграция yt-dlp + ReccoBeats в Sonora
+﻿# Интеграция yt-dlp + ReccoBeats в Sonora
 
-> **Статус 1.4.0.** yt-dlp уже встроен как резервный источник потока:
-> `data/remote/ytdlp/` + ветка `ytdlp:` в `InnerTubeDataSource` + fallback
-> в `InnerTubeStreams`. Формат — `-f bestaudio`, URL и `http_headers` берутся
-> из `--dump-json`, кэш ссылок 5 минут, Python прогревается в фоне.
-> ffmpeg и ReccoBeats **не подключены** намеренно: это +100 МБ APK и
-> теле-метрия, которая не влияет на воспроизведение. Разделы ниже — план на
-> случай, если телеметрия понадобится.
+> **Статус 1.6.0.** yt-dlp встроен как источник и резерв: `data/remote/ytdlp/`,
+> ветка `ytdlp:` в `InnerTubeDataSource`, цепочка InnerTubeX → InnerTube →
+> yt-dlp → медиашлюз в `InnerTubeStreams`. Рантайм **обновляется сам** (прямое
+> скачивание zipapp с GitHub Releases, smoke-тест и откат), перебираются
+> `player_client` и IPv4/IPv6, каждая ссылка проверяется Range-запросом.
+> ffmpeg и ReccoBeats подключены. Как это работает без VPN/WARP и что
+> блокируется — [STREAMING-RF.md](STREAMING-RF.md). Разделы ниже — исходный
+> план интеграции (частично уже неактуален: см. код и STREAMING-RF).
 
 Документ описывает минимальный путь добавления бесплатного поиска/потока и
 аудио-телеметрии. UI намеренно не рассматривается.

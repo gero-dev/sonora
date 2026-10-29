@@ -1,6 +1,7 @@
 package app.sonora.data.library
 
 import android.content.Context
+import android.util.Log
 import app.sonora.core.model.Album
 import app.sonora.core.model.Artist
 import app.sonora.core.model.Playlist
@@ -10,11 +11,13 @@ import app.sonora.core.model.TrackMetadata
 import app.sonora.core.settings.SettingsStore
 import app.sonora.core.util.JsonFile
 import app.sonora.data.metadata.ArtistNames
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.serializer
 import java.util.UUID
@@ -48,6 +51,15 @@ class LibraryRepository(
     private val scanMutex = Mutex()
     private var initialized = false
 
+    /** Версия библиотеки: растёт при каждом изменении tracks и сбрасывает поисковый индекс. */
+    @Volatile
+    private var libraryVersion: Long = 0L
+
+    /** Кэш поискового индекса: (версия библиотеки, готовый индекс). */
+    @Volatile
+    private var searchIndexCache: Pair<Long, LibrarySearchIndex>? = null
+    private val searchIndexLock = Any()
+
     private val trackSerializer = ListSerializer(Track.serializer())
     private val playlistSerializer = ListSerializer(Playlist.serializer())
     private val favoritesSerializer = ListSerializer(String.serializer())
@@ -57,31 +69,43 @@ class LibraryRepository(
         mutex.withLock {
             if (initialized) return
             val savedTracks = JsonFile.read(context, FILE_TRACKS, trackSerializer, emptyList())
-            _tracks.value = savedTracks
+            publishTracks(savedTracks)
             _playlists.value = JsonFile.read(context, FILE_PLAYLISTS, playlistSerializer, emptyList())
             _favorites.value = JsonFile.read(context, FILE_FAVORITES, favoritesSerializer, emptyList()).toSet()
             initialized = true
         }
         if (settings.current.scanOnStart) {
             scanLocal()
+        } else {
+            // Индекс строим в фоне, чтобы первый поиск не делал этого на Main.
+            warmSearchIndex()
         }
     }
 
-    /** Пересканировать устройство и смёржить с кэшем внешних источников. */
-    suspend fun scanLocal(): Int {
+    /**
+     * Пересканировать устройство и смёржить с кэшем внешних источников.
+     *
+     * @param forceFull игнорировать инкрементальный кэш сканера и перечитать
+     * метаданные всех файлов (например, после ручного изменения sidecar-файлов).
+     * По умолчанию — быстрый инкрементальный скан, поведение прежнее.
+     */
+    suspend fun scanLocal(forceFull: Boolean = false): Int {
         scanMutex.lock()
         _scanning.value = true
+        val startedAt = System.nanoTime()
         return try {
             val fromMediaStore = scanner.scan(
                 settings.current.excludeShortTracks,
                 settings.current.useEmbeddedArtwork,
                 settings.current.readSidecarMetadata,
+                forceFull,
             )
             val fromFolders = extraDirs().flatMap { dir ->
                 scanner.scanFolder(
                     dir,
                     settings.current.useEmbeddedArtwork,
                     settings.current.readSidecarMetadata,
+                    forceFull,
                 )
             }
             // distinctBy: файл мог попасть и в MediaStore, и в папку импорта.
@@ -92,6 +116,7 @@ class LibraryRepository(
             // Пустой ответ при непустой библиотеке почти всегда означает сбой/отзыв
             // разрешения, а не «все файлы удалены». Не затираем библиотеку.
             if (scanned.isEmpty() && previousLocal.isNotEmpty()) {
+                Log.w(TAG, "scan returned no files — keeping ${previousLocal.size} local tracks")
                 return previousLocal.size
             }
             val local = scanned.map { fresh ->
@@ -105,8 +130,12 @@ class LibraryRepository(
                 old.uri != null && old.uri !in scannedUris && uriExists(old.uri)
             }
             val remote = _tracks.value.filter { it.source != Source.LOCAL }
-            _tracks.value = (local + preserved).distinctBy { it.id } + remote
+            publishTracks((local + preserved).distinctBy { it.id } + remote)
             persistTracks()
+            Log.i(TAG, "scan total: ${elapsedMs(startedAt)} ms, ${local.size} local tracks")
+            // Прогреваем поисковый индекс в фоне: первый запрос после скана
+            // не должен строить его на главном потоке.
+            warmSearchIndex()
             local.size
         } finally {
             _scanning.value = false
@@ -193,7 +222,7 @@ class LibraryRepository(
                 )
             }
         }
-        _tracks.value = map.values.toList()
+        publishTracks(map.values.toList())
         persistTracks()
     }
 
@@ -204,7 +233,7 @@ class LibraryRepository(
         val map = LinkedHashMap<String, Track>()
         _tracks.value.forEach { map[it.id] = it }
         remoteOnly.forEach { map[it.id] = it }
-        _tracks.value = map.values.toList()
+        publishTracks(map.values.toList())
         persistTracks()
     }
 
@@ -422,7 +451,7 @@ class LibraryRepository(
             )
         }
         if (changed) {
-            _tracks.value = updated
+            publishTracks(updated)
             persistTracks()
         }
     }
@@ -454,7 +483,7 @@ class LibraryRepository(
         )
         val list = _tracks.value.toMutableList()
         list[index] = updated
-        _tracks.value = list
+        publishTracks(list)
         persistTracks()
     }
 
@@ -502,7 +531,7 @@ class LibraryRepository(
             }
         }
         if (changed) {
-            _tracks.value = updated
+            publishTracks(updated)
             persistTracks()
         }
     }
@@ -519,7 +548,7 @@ class LibraryRepository(
             }
         }
         if (changed) {
-            _tracks.value = updated
+            publishTracks(updated)
             persistTracks()
         }
     }
@@ -573,44 +602,65 @@ class LibraryRepository(
             .sortedBy { it.name.lowercase() }
     }
 
+    /**
+     * Поиск по локальной фонотеке.
+     *
+     * Нормализованные поля и токены индексируются один раз на версию библиотеки
+     * (см. [currentSearchIndex]): на каждый запрос больше нет нормализации всех
+     * треков и аллокаций regexp'ом. Ранжирование прежнее: title > artist > album,
+     * при равенстве score — по названию трека.
+     */
     fun searchLocal(query: String): List<Track> {
-        val q = normalizeSearch(query)
-        if (q.isEmpty()) return emptyList()
+        val trimmed = query.trim()
+        if (trimmed.isEmpty()) return emptyList()
+        val startedAt = System.nanoTime()
         // Только файлы на устройстве: кэш онлайн-треков не должен попадать
         // в секцию «На устройстве» и дублировать результаты стриминга.
-        return _tracks.value
-            .asSequence()
-            .filter { it.source == Source.LOCAL && !it.isVideoContent }
-            .mapNotNull { track ->
-                val title = normalizeSearch(track.title)
-                val artist = normalizeSearch(track.artist)
-                val album = normalizeSearch(track.album.orEmpty())
-                val score = when {
-                    title == q -> 100
-                    title.startsWith(q) -> 80
-                    artist == q -> 70
-                    artist.startsWith(q) -> 60
-                    title.contains(q) -> 50
-                    artist.contains(q) -> 40
-                    album.contains(q) -> 30
-                    else -> null
-                }
-                score?.let { it to track }
-            }
-            .sortedWith(
-                compareByDescending<Pair<Int, Track>> { it.first }
-                    .thenBy { it.second.title.lowercase() },
+        val results = currentSearchIndex().search(trimmed)
+        if (LOG_SEARCH_TIMING) {
+            Log.i(
+                TAG,
+                "search '${trimmed}': ${elapsedMs(startedAt)} ms, ${results.size} local results",
             )
-            .map { it.second }
-            .toList()
+        }
+        return results
     }
 
-    /** Поиск без регистра, лишних пробелов и различий «ё/е». */
-    private fun normalizeSearch(value: String): String = value
-        .lowercase()
-        .replace('ё', 'е')
-        .replace(Regex("\\s+"), " ")
-        .trim()
+    /**
+     * Актуальный поисковый индекс. Перестраивается только после изменения
+     * библиотеки ([publishTracks] увеличивает версию), поэтому повторные запросы
+     * бесплатны. Потокобезопасно: immutable-индекс читается без блокировки.
+     */
+    private fun currentSearchIndex(): LibrarySearchIndex {
+        val version = libraryVersion
+        val cached = searchIndexCache
+        if (cached != null && cached.first == version) return cached.second
+        synchronized(searchIndexLock) {
+            val versionNow = libraryVersion
+            val current = searchIndexCache
+            if (current != null && current.first == versionNow) return current.second
+            val built = LibrarySearchIndex.build(_tracks.value)
+            searchIndexCache = versionNow to built
+            return built
+        }
+    }
+
+    /** Публикует новый список треков и сбрасывает кэш поискового индекса. */
+    private fun publishTracks(next: List<Track>) {
+        _tracks.value = next
+        synchronized(searchIndexLock) {
+            libraryVersion += 1
+            searchIndexCache = null
+        }
+    }
+
+    /** Строит поисковый индекс вне главного потока (для прогрева после скана/старта). */
+    private suspend fun warmSearchIndex() {
+        withContext(Dispatchers.Default) { currentSearchIndex() }
+    }
+
+    private fun elapsedMs(startedAtNanos: Long): Long =
+        (System.nanoTime() - startedAtNanos) / 1_000_000
 
     // ---------- persistence ----------
 
@@ -624,6 +674,12 @@ class LibraryRepository(
         const val FILE_TRACKS = "library_tracks.json"
         const val FILE_PLAYLISTS = "library_playlists.json"
         const val FILE_FAVORITES = "library_favorites.json"
+
+        /** Тег logcat-метрик производительности: `adb logcat -s LibraryPerf`. */
+        private const val TAG = "LibraryPerf"
+
+        /** Логировать время поиска (дёшево, но полезно для ловли регрессий). */
+        private const val LOG_SEARCH_TIMING = true
 
         /** Префикс «битых» обложек альбомов MediaStore (Android 10+ часто пустые). */
         const val MEDIASTORE_ALBUM_ART_PREFIX = "content://media/external/audio/albumart"

@@ -165,6 +165,10 @@ class YouTubeSource(
     internal fun invalidateStream(videoId: String) =
         app.sonora.data.remote.youtube.innertube.InnerTubeStreams.invalidate(videoId)
 
+    /** Диагностика прямого пути InnerTube (для «Проверить поток»). */
+    internal suspend fun diagnoseDirectStream(videoId: String): String =
+        app.sonora.data.remote.youtube.innertube.InnerTubeStreams.diagnoseDirect(videoId)
+
     /** Обложка в большем размере, чем превью 120×120 из поиска. */
     fun largeArtworkUrl(url: String?): String? = url
         ?.replace(Regex("""=w\d+-h\d+"""), "=w1080-h1080")

@@ -83,6 +83,7 @@ import app.sonora.core.settings.AudioQuality
 import app.sonora.core.settings.PlaybackMode
 import app.sonora.core.settings.StreamSource
 import app.sonora.core.settings.ThemeMode
+import app.sonora.core.settings.YoutubeIpMode
 import app.sonora.net.warp.WarpState
 import app.sonora.ui.MainViewModel
 import app.sonora.ui.nav.Routes
@@ -125,6 +126,8 @@ fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
     var showPlaylistImportHelp by rememberSaveable { mutableStateOf(false) }
     var showWaveSettings by remember { mutableStateOf(false) }
     var showProxyDialog by remember { mutableStateOf(false) }
+    var showRelayServersDialog by remember { mutableStateOf(false) }
+    var showStreamDetails by remember { mutableStateOf(false) }
     var jamendoClientId by rememberSaveable(settings.jamendoClientId) {
         mutableStateOf(settings.jamendoClientId)
     }
@@ -152,6 +155,12 @@ fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
         vm.startWarp()
     }
     LaunchedEffect(Unit) { vm.refreshWarp() }
+    // Версия yt-dlp нужна в карточке «Поток и сеть».
+    LaunchedEffect(Unit) { vm.refreshYtDlpStatus() }
+    val streamCheckDetails by vm.streamCheckDetails.collectAsState()
+    val relayCheckState by vm.relayCheck.collectAsState()
+    val ytDlpStatusState by vm.ytDlpStatus.collectAsState()
+    val relayHealthState by vm.relayHealth.collectAsState()
     val takeoutLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(),
     ) { uri ->
@@ -362,6 +371,60 @@ fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
             )
             Spacer(Modifier.height(4.dp))
             SwitchRow(
+                title = "Медиашлюз без VPN",
+                subtitle = "Если YouTube блокирует IP, звук идёт через публичные зеркала — " +
+                    "без WARP и VPN",
+                checked = settings.relayEnabled,
+                onCheckedChange = vm::setRelayEnabled,
+            )
+            ClickRow(
+                title = "Серверы шлюза",
+                subtitle = settings.relayInstances.ifBlank {
+                    "Встроенный список зеркал (Invidious/Piped)"
+                },
+                onClick = { showRelayServersDialog = true },
+            )
+            ClickRow(
+                title = "Проверить шлюзы",
+                subtitle = relayCheckState ?: "Какие зеркала реально отдают звук",
+                onClick = { vm.checkRelayHealth() },
+            )
+            SettingsLabel("Сеть YouTube")
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(YoutubeIpMode.values().size) { index ->
+                    val mode = YoutubeIpMode.values()[index]
+                    FilterChip(
+                        selected = settings.youtubeIpMode == mode,
+                        onClick = { vm.setYoutubeIpMode(mode) },
+                        label = { Text(mode.label) },
+                    )
+                }
+            }
+            Text(
+                text = settings.youtubeIpMode.hint,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            Spacer(Modifier.height(4.dp))
+            SwitchRow(
+                title = "Обновлять yt-dlp",
+                subtitle = ytDlpStatusState ?: "Сборка yt-dlp устаревает за недели: обновление из GitHub",
+                checked = settings.ytDlpAutoUpdate,
+                onCheckedChange = vm::setYtDlpAutoUpdate,
+            )
+            ClickRow(
+                title = "Обновить yt-dlp сейчас",
+                subtitle = "Скачать свежий yt-dlp (STABLE) с GitHub",
+                onClick = { vm.updateYtDlp() },
+            )
+            SwitchRow(
+                title = "Проверять ссылку перед воспроизведением",
+                subtitle = "Range-запрос: в плеер попадает только реально играющий поток",
+                checked = settings.probeBeforePlay,
+                onCheckedChange = vm::setProbeBeforePlay,
+            )
+            SwitchRow(
                 title = "Аудио-фичи ReccoBeats",
                 subtitle = "BPM и энергия для играющего трека (бесплатно, без ключей)",
                 checked = settings.audioTelemetry,
@@ -375,17 +438,19 @@ fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
             val streamCheckState by vm.streamCheck.collectAsState()
             ClickRow(
                 title = "Проверить поток",
-                subtitle = streamCheckState ?: "Реальный Range-запрос к YouTube",
-                onClick = { vm.checkStreamAccess() },
+                subtitle = streamCheckState ?: "Прямой YouTube · yt-dlp · медиашлюз",
+                onClick = {
+                    vm.checkStreamAccess()
+                    showStreamDetails = true
+                },
             )
-            if (settings.streamSource == StreamSource.YTDLP) {
-                Text(
-                    text = "yt-dlp сам по себе не обходит блокировки провайдера: если YouTube " +
-                        "недоступен, включите WARP на Главной или укажите прокси.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            Text(
+                text = "Прямой YouTube в РФ обычно отдаёт 403 на медиа. Порядок: InnerTube → " +
+                    "yt-dlp (свежий рантайм, перебор клиентов и IPv4/IPv6) → медиашлюз без VPN. " +
+                    "Если ничего не работает — добавьте своё зеркало или включите WARP.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
 
         // ---------- Воспроизведение ----------
@@ -1080,6 +1145,99 @@ fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
                 },
                 dismissButton = {
                     TextButton(onClick = { showProxyDialog = false }) { Text("Отмена") }
+                },
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            )
+        }
+
+        if (showRelayServersDialog) {
+            var draft by remember(settings.relayInstances) {
+                mutableStateOf(settings.relayInstances)
+            }
+            AlertDialog(
+                onDismissRequest = { showRelayServersDialog = false },
+                title = { Text("Серверы шлюза") },
+                text = {
+                    Column(
+                        Modifier
+                            .height(380.dp)
+                            .verticalScroll(rememberScrollState()),
+                    ) {
+                        Text(
+                            text = "Публичные зеркала Invidious/Piped: по одному адресу в " +
+                                "строке. Пустое поле — встроенный список. Тип зеркала " +
+                                "определяется по имени: `piped` — Piped, иначе Invidious.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = draft,
+                            onValueChange = { draft = it },
+                            minLines = 4,
+                            label = { Text("Зеркала") },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        if (relayHealthState.isNotEmpty()) {
+                            Spacer(Modifier.height(10.dp))
+                            Text(
+                                text = "Последняя проверка",
+                                style = MaterialTheme.typography.labelLarge,
+                            )
+                            relayHealthState.take(12).forEach { health ->
+                                Text(
+                                    text = if (health.ok) {
+                                        "✓ ${health.instance.label} · ${health.latencyMs} мс"
+                                    } else {
+                                        "✕ ${health.instance.label} · ${health.detail}"
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (health.ok) {
+                                        MaterialTheme.colorScheme.onSurface
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    },
+                                    modifier = Modifier.padding(top = 2.dp),
+                                )
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showRelayServersDialog = false
+                            vm.setRelayInstances(draft)
+                        },
+                    ) { Text("Сохранить") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showRelayServersDialog = false }) { Text("Отмена") }
+                },
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            )
+        }
+
+        if (showStreamDetails && streamCheckDetails != null) {
+            AlertDialog(
+                onDismissRequest = {
+                    showStreamDetails = false
+                    vm.dismissStreamCheckDetails()
+                },
+                title = { Text("Проверка потока") },
+                text = {
+                    Text(
+                        text = streamCheckDetails.orEmpty(),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showStreamDetails = false
+                            vm.dismissStreamCheckDetails()
+                        },
+                    ) { Text("Понятно") }
                 },
                 containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
             )

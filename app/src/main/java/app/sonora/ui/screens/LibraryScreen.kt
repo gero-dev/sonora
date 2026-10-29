@@ -1,50 +1,41 @@
 package app.sonora.ui.screens
 
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Download
-import androidx.compose.material.icons.rounded.DownloadDone
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.LibraryMusic
+import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.PlayCircle
@@ -54,9 +45,7 @@ import androidx.compose.material.icons.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.Sort
-import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -72,7 +61,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -80,10 +68,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInParent
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -95,19 +80,38 @@ import app.sonora.core.model.Track
 import app.sonora.data.download.TrackSaveState
 import app.sonora.playback.PlayerUiState
 import app.sonora.ui.MainViewModel
-import app.sonora.ui.components.CoverArt
-import app.sonora.ui.components.CoverArtBox
+import app.sonora.ui.components.AlbumCard
+import app.sonora.ui.components.ArtistCard
+import app.sonora.ui.components.CircularPlayButton
 import app.sonora.ui.components.CreatePlaylistDialog
+import app.sonora.ui.components.CreatePlaylistTile
 import app.sonora.ui.components.EmptyState
-import app.sonora.ui.components.SourceChip
+import app.sonora.ui.components.PlaylistCard
+import app.sonora.ui.components.SectionHeader
 import app.sonora.ui.components.TrackActionSheet
 import app.sonora.ui.components.TrackRow
-import app.sonora.ui.components.sourceColor
+import app.sonora.ui.components.accentContentColor
+import app.sonora.ui.components.tracksLabel
 import app.sonora.ui.nav.Routes
-import kotlin.math.roundToInt
+import app.sonora.ui.theme.LocalSonoraColors
 
-private val LIBRARY_TABS =
-    listOf("Треки", "Альбомы", "Артисты", "Плейлисты", "Избранное", "YouTube")
+/**
+ * Разделы медиатеки. Порядок чипов — как в Spotify: «Все», затем плейлисты,
+ * альбомы, исполнители, треки, избранное и YouTube.
+ *
+ * [tabIndex] сохраняет прежнюю нумерацию вкладок экрана (0 — Треки, 1 — Альбомы,
+ * 2 — Исполнители, 3 — Плейлисты, 4 — Избранное, 5 — YouTube), поэтому вся
+ * логика и навигация остались теми же — изменилась только подача.
+ */
+private enum class LibrarySection(val label: String, val tabIndex: Int) {
+    ALL("Все", 0),
+    PLAYLISTS("Плейлисты", 3),
+    ALBUMS("Альбомы", 1),
+    ARTISTS("Исполнители", 2),
+    TRACKS("Треки", 0),
+    FAVORITES("Избранное", 4),
+    YOUTUBE("YouTube", 5),
+}
 
 /** Сортировка треков в медиатеке — как в Spotify: заголовок, артист, альбом и т. д. */
 private enum class LibrarySort(val label: String) {
@@ -127,8 +131,13 @@ private enum class LibraryFilter(val label: String) {
 }
 
 /**
- * Медиатека: треки, альбомы, исполнители, плейлисты и избранное.
- * Долгое нажатие на трек открывает общий лист действий.
+ * Медиатека в духе Spotify, но со своими акцентами и темами Sonora:
+ * крупный заголовок на мягком градиенте, горизонтальные фильтры-чипы,
+ * карточки-плейлисты с коллажем обложек и круглым Play, плотные строки треков.
+ *
+ * Вся прежняя функциональность на месте: сортировка/фильтры треков,
+ * сканирование, переходы в плейлист/альбом/исполнителя, долгое нажатие
+ * открывает те же листы действий, YouTube-импорт и создание плейлистов.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -138,8 +147,10 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
     val playlists by vm.playlists.collectAsState()
     val player by vm.player.collectAsState()
     val scanning by vm.scanning.collectAsState()
+    val saveStates by vm.saveStates.collectAsState()
+    val importError by vm.playlistImportError.collectAsState()
 
-    var tabIndex by rememberSaveable { mutableStateOf(0) }
+    var sectionName by rememberSaveable { mutableStateOf(LibrarySection.ALL.name) }
     var sortName by rememberSaveable { mutableStateOf(LibrarySort.TITLE.name) }
     var sortDescending by rememberSaveable { mutableStateOf(false) }
     var filterName by rememberSaveable { mutableStateOf(LibraryFilter.ALL.name) }
@@ -148,12 +159,13 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
     var actionTrack by remember { mutableStateOf<Track?>(null) }
     var playlistForNewTrack by remember { mutableStateOf<Track?>(null) }
     var playlistMenu by remember { mutableStateOf<Playlist?>(null) }
-    var albumMenu by remember { mutableStateOf<app.sonora.core.model.Album?>(null) }
-    var artistMenu by remember { mutableStateOf<app.sonora.core.model.Artist?>(null) }
+    var albumMenu by remember { mutableStateOf<Album?>(null) }
+    var artistMenu by remember { mutableStateOf<Artist?>(null) }
     var playlistPickerIds by remember { mutableStateOf<List<String>?>(null) }
     var renameTarget by remember { mutableStateOf<Playlist?>(null) }
     var deleteTarget by remember { mutableStateOf<Playlist?>(null) }
 
+    val section = LibrarySection.valueOf(sectionName)
     val sort = LibrarySort.valueOf(sortName)
     val filter = LibraryFilter.valueOf(filterName)
 
@@ -194,7 +206,24 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
             tracks.filter { it.source == Source.YOUTUBE && !it.isVideoContent },
         )
     }
+    // Обложки плейлистов для коллажей: постер плейлиста или до 4 обложек треков.
+    val playlistCovers = remember(playlists, tracks) {
+        playlists.associate { playlist ->
+            val own = playlist.artworkUrl?.takeIf { it.isNotBlank() }
+            val covers = if (own != null) {
+                listOf(own)
+            } else {
+                vm.playlistTracks(playlist)
+                    .mapNotNull { it.artworkUrl ?: it.artworkUri }
+                    .filter { it.isNotBlank() }
+                    .distinct()
+                    .take(4)
+            }
+            playlist.id to covers
+        }
+    }
     val bottomPadding = padding.calculateBottomPadding()
+    val playlistPlay: (Playlist) -> Unit = { vm.playPlaylist(it) }
 
     Box(Modifier.fillMaxSize()) {
         Column(
@@ -202,34 +231,76 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
                 .fillMaxSize()
                 .padding(top = padding.calculateTopPadding()),
         ) {
-            Row(
-                modifier = Modifier
+            // Мягкая «шапка»: акцент палитры растворяется в фоне экрана.
+            Box(
+                Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
+                    .background(Brush.verticalGradient(LocalSonoraColors.current.header)),
             ) {
-                Column(Modifier.weight(1f)) {
-                    Text("Медиатека", style = MaterialTheme.typography.headlineLarge)
-                    Text(
-                        text = buildString {
-                            append("На устройстве: ${localTracks.size}")
-                            if (savedFromStreaming > 0) {
-                                append(" · сохранено из стриминга: $savedFromStreaming")
-                            }
-                        },
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                Column {
+                    LibraryHeader(
+                        localCount = localTracks.size,
+                        savedFromStreaming = savedFromStreaming,
+                        playlistCount = playlists.size,
+                        scanning = scanning,
+                        onScan = { vm.scanLibrary() },
+                        onAvatarClick = { navigate(Routes.SETTINGS) },
                     )
+                    Spacer(Modifier.height(6.dp))
+                    LibraryChips(
+                        selected = section,
+                        onSelect = { sectionName = it.name },
+                    )
+                    Spacer(Modifier.height(8.dp))
                 }
             }
-            LibraryTabBar(
-                tabs = LIBRARY_TABS,
-                selectedIndex = tabIndex,
-                onSelect = { tabIndex = it },
-            )
-            Spacer(Modifier.height(6.dp))
-            when (tabIndex) {
-                0 -> TracksTab(
+            when (section) {
+                LibrarySection.ALL -> AllTab(
+                    playlists = playlists,
+                    playlistCovers = playlistCovers,
+                    albums = albums,
+                    artists = artists,
+                    recentTracks = localTracks.take(8),
+                    favorites = favorites,
+                    player = player,
+                    bottomPadding = bottomPadding,
+                    onSelectSection = { sectionName = it.name },
+                    onCreatePlaylist = { showCreateDialog = true },
+                    navigate = navigate,
+                    onPlaylistLongClick = { playlistMenu = it },
+                    onPlayPlaylist = playlistPlay,
+                    onAlbumLongClick = { albumMenu = it },
+                    onPlayAlbum = { vm.playQueue(vm.tracksByIds(it.trackIds)) },
+                    onArtistLongClick = { artistMenu = it },
+                    onPlayArtist = { vm.playQueue(vm.tracksByIds(it.trackIds)) },
+                    onClickTrack = { vm.playOrOpen(it) },
+                    onLongClickTrack = { actionTrack = it },
+                    onFavoriteTrack = { vm.toggleFavorite(it.id) },
+                )
+                LibrarySection.PLAYLISTS -> PlaylistsTab(
+                    playlists = playlists,
+                    playlistCovers = playlistCovers,
+                    bottomPadding = bottomPadding,
+                    onCreatePlaylist = { showCreateDialog = true },
+                    onLongClick = { playlistMenu = it },
+                    onPlay = playlistPlay,
+                    navigate = navigate,
+                )
+                LibrarySection.ALBUMS -> AlbumsTab(
+                    albums = albums,
+                    navigate = navigate,
+                    bottomPadding = bottomPadding,
+                    onPlay = { vm.playQueue(vm.tracksByIds(it.trackIds)) },
+                    onLongClick = { albumMenu = it },
+                )
+                LibrarySection.ARTISTS -> ArtistsTab(
+                    artists = artists,
+                    navigate = navigate,
+                    bottomPadding = bottomPadding,
+                    onPlay = { vm.playQueue(vm.tracksByIds(it.trackIds)) },
+                    onLongClick = { artistMenu = it },
+                )
+                LibrarySection.TRACKS -> TracksTab(
                     tracks = sortedTracks,
                     favorites = favorites,
                     player = player,
@@ -246,29 +317,17 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
                     onFavorite = { vm.toggleFavorite(it.id) },
                     bottomPadding = bottomPadding,
                 )
-                1 -> AlbumsTab(
-                    albums = albums,
-                    navigate = navigate,
+                LibrarySection.FAVORITES -> FavoritesTab(
+                    tracks = favoriteTracks,
+                    favorites = favorites,
+                    player = player,
+                    onPlayAll = { vm.playQueue(favoriteTracks) },
+                    onClick = { vm.playOrOpen(it) },
+                    onLongClick = { actionTrack = it },
+                    onFavorite = { vm.toggleFavorite(it.id) },
                     bottomPadding = bottomPadding,
-                    onPlay = { vm.playQueue(vm.tracksByIds(it.trackIds)) },
-                    onLongClick = { albumMenu = it },
                 )
-                2 -> ArtistsTab(
-                    artists = artists,
-                    navigate = navigate,
-                    bottomPadding = bottomPadding,
-                    onPlay = { vm.playQueue(vm.tracksByIds(it.trackIds)) },
-                    onLongClick = { artistMenu = it },
-                )
-                3 -> PlaylistsTab(
-                    playlists = playlists,
-                    navigate = navigate,
-                    bottomPadding = bottomPadding,
-                    onCreatePlaylist = { showCreateDialog = true },
-                    onLongClick = { playlistMenu = it },
-                    onPlay = { vm.playPlaylist(it) },
-                )
-                5 -> YouTubeTab(
+                LibrarySection.YOUTUBE -> YouTubeTab(
                     tracks = importedTracks,
                     favorites = favorites,
                     player = player,
@@ -277,18 +336,8 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
                     onFavorite = { vm.toggleFavorite(it.id) },
                     onImport = { navigate(Routes.SETTINGS) },
                     onImportLink = { showYouTubeImport = true },
-                    importError = vm.playlistImportError.collectAsState().value,
-                    saveStates = vm.saveStates.collectAsState().value,
-                    bottomPadding = bottomPadding,
-                )
-                else -> FavoritesTab(
-                    tracks = favoriteTracks,
-                    favorites = favorites,
-                    player = player,
-                    onPlayAll = { vm.playQueue(favoriteTracks) },
-                    onClick = { vm.playOrOpen(it) },
-                    onLongClick = { actionTrack = it },
-                    onFavorite = { vm.toggleFavorite(it.id) },
+                    importError = importError,
+                    saveStates = saveStates,
                     bottomPadding = bottomPadding,
                 )
             }
@@ -423,7 +472,7 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
         artistMenu?.let { artist ->
             LibraryItemSheet(
                 title = artist.name,
-                subtitle = "Исполнитель · ${artist.trackIds.size} трек(ов)",
+                subtitle = "Исполнитель · ${tracksLabel(artist.trackIds.size)}",
                 onDismiss = { artistMenu = null },
                 onPlay = {
                     artistMenu = null
@@ -517,9 +566,275 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
     }
 }
 
-/** Вкладка «Треки»: счётчик, сортировка, пересканирование и список. */
-/** Вкладка «Треки»: сортировка, фильтры и список файлов на устройстве. */
-@OptIn(ExperimentalLayoutApi::class)
+/**
+ * Шапка медиатеки: огромное «Медиатека», строка-сводка и компактные действия
+ * (сканирование фонотеки + аватар-«профиль», ведущий в настройки).
+ */
+@Composable
+private fun LibraryHeader(
+    localCount: Int,
+    savedFromStreaming: Int,
+    playlistCount: Int,
+    scanning: Boolean,
+    onScan: () -> Unit,
+    onAvatarClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 20.dp, end = 16.dp, top = 10.dp, bottom = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = "Медиатека",
+                style = MaterialTheme.typography.displaySmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = buildString {
+                    append(tracksLabel(localCount))
+                    append(" на устройстве")
+                    if (savedFromStreaming > 0) append(" · из стриминга: $savedFromStreaming")
+                    if (playlistCount > 0) append(" · плейлистов: $playlistCount")
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        IconButton(onClick = onScan) {
+            if (scanning) {
+                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+            } else {
+                Icon(
+                    imageVector = Icons.Rounded.Refresh,
+                    contentDescription = "Сканировать фонотеку",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        Box(
+            modifier = Modifier
+                .size(42.dp)
+                .clip(CircleShape)
+                .background(Brush.linearGradient(LocalSonoraColors.current.gradient))
+                .clickable(onClick = onAvatarClick),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.Person,
+                contentDescription = "Настройки профиля",
+                tint = accentContentColor(),
+                modifier = Modifier.size(22.dp),
+            )
+        }
+    }
+}
+
+/** Горизонтальные фильтры-чипы в духе Spotify; выбранный залит акцентом. */
+@Composable
+private fun LibraryChips(
+    selected: LibrarySection,
+    onSelect: (LibrarySection) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        LibrarySection.entries.forEach { section ->
+            val isSelected = section == selected
+            Box(
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .background(
+                        if (isSelected) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.surfaceContainerHigh
+                        },
+                    )
+                    .clickable { onSelect(section) }
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+            ) {
+                Text(
+                    text = section.label,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = if (isSelected) {
+                        MaterialTheme.colorScheme.onPrimary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    maxLines = 1,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * «Все»: сводка медиатеки рельсами, как стартовая страница Spotify.
+ * Плейлисты идут первыми и запускаются верхней кнопкой Play.
+ */
+@Composable
+private fun AllTab(
+    playlists: List<Playlist>,
+    playlistCovers: Map<String, List<String>>,
+    albums: List<Album>,
+    artists: List<Artist>,
+    recentTracks: List<Track>,
+    favorites: Set<String>,
+    player: PlayerUiState,
+    bottomPadding: Dp,
+    onSelectSection: (LibrarySection) -> Unit,
+    onCreatePlaylist: () -> Unit,
+    navigate: (String) -> Unit,
+    onPlaylistLongClick: (Playlist) -> Unit,
+    onPlayPlaylist: (Playlist) -> Unit,
+    onAlbumLongClick: (Album) -> Unit,
+    onPlayAlbum: (Album) -> Unit,
+    onArtistLongClick: (Artist) -> Unit,
+    onPlayArtist: (Artist) -> Unit,
+    onClickTrack: (Track) -> Unit,
+    onLongClickTrack: (Track) -> Unit,
+    onFavoriteTrack: (Track) -> Unit,
+) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(
+            start = 16.dp,
+            end = 16.dp,
+            top = 2.dp,
+            bottom = bottomPadding + 24.dp,
+        ),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        item(key = "all-playlists-header") {
+            SectionHeader(
+                title = "Плейлисты",
+                subtitle = if (playlists.isEmpty()) {
+                    "Создайте свой первый плейлист"
+                } else {
+                    tracksLabel(playlists.size) + " · запуск одним нажатием"
+                },
+                actionLabel = if (playlists.isNotEmpty()) "Все" else null,
+                onAction = { onSelectSection(LibrarySection.PLAYLISTS) },
+            )
+        }
+        item(key = "all-playlists-rail") {
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                if (playlists.isEmpty()) {
+                    item(key = "all-create-playlist") {
+                        CreatePlaylistTile(
+                            onClick = onCreatePlaylist,
+                            modifier = Modifier.width(156.dp),
+                        )
+                    }
+                } else {
+                    items(playlists.take(8), key = { "all-pl-${it.id}" }) { playlist ->
+                        PlaylistCard(
+                            playlist = playlist,
+                            coverUrls = playlistCovers[playlist.id].orEmpty(),
+                            onClick = { navigate(Routes.playlist(playlist.id)) },
+                            onLongClick = { onPlaylistLongClick(playlist) },
+                            onPlay = { onPlayPlaylist(playlist) },
+                            modifier = Modifier.width(156.dp),
+                        )
+                    }
+                    item(key = "all-create-playlist") {
+                        CreatePlaylistTile(
+                            onClick = onCreatePlaylist,
+                            modifier = Modifier.width(156.dp),
+                        )
+                    }
+                }
+            }
+        }
+        if (albums.isEmpty() && artists.isEmpty() && recentTracks.isEmpty()) {
+            item(key = "all-empty") {
+                EmptyState(
+                    icon = Icons.Rounded.LibraryMusic,
+                    title = "Фонотека пуста",
+                    subtitle = "Нажмите «Сканировать» в шапке — найдём аудиофайлы на устройстве.",
+                )
+            }
+        }
+        if (albums.isNotEmpty()) {
+            item(key = "all-albums-header") {
+                SectionHeader(
+                    title = "Альбомы",
+                    subtitle = tracksLabel(albums.size) + " в фонотеке",
+                    actionLabel = "Все",
+                    onAction = { onSelectSection(LibrarySection.ALBUMS) },
+                )
+            }
+            item(key = "all-albums-rail") {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    items(albums.take(10), key = { "all-alb-${it.name}|${it.artist}" }) { album ->
+                        AlbumCard(
+                            album = album,
+                            onClick = { navigate(Routes.album(album.name, album.artist)) },
+                            onLongClick = { onAlbumLongClick(album) },
+                            onPlay = { onPlayAlbum(album) },
+                            modifier = Modifier.width(150.dp),
+                        )
+                    }
+                }
+            }
+        }
+        if (artists.isNotEmpty()) {
+            item(key = "all-artists-header") {
+                SectionHeader(
+                    title = "Исполнители",
+                    subtitle = tracksLabel(artists.size) + " в фонотеке",
+                    actionLabel = "Все",
+                    onAction = { onSelectSection(LibrarySection.ARTISTS) },
+                )
+            }
+            item(key = "all-artists-rail") {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    items(artists.take(10), key = { "all-art-${it.name}" }) { artist ->
+                        ArtistCard(
+                            artist = artist,
+                            onClick = { navigate(Routes.artist(artist.name)) },
+                            onLongClick = { onArtistLongClick(artist) },
+                            onPlay = { onPlayArtist(artist) },
+                            modifier = Modifier.width(140.dp),
+                        )
+                    }
+                }
+            }
+        }
+        if (recentTracks.isNotEmpty()) {
+            item(key = "all-recent-header") {
+                SectionHeader(
+                    title = "Недавно добавленные",
+                    actionLabel = "Все треки",
+                    onAction = { onSelectSection(LibrarySection.TRACKS) },
+                )
+            }
+            items(recentTracks, key = { "all-track-${it.id}" }) { track ->
+                TrackRow(
+                    track = track,
+                    isFavorite = track.id in favorites,
+                    isPlaying = player.current?.id == track.id && player.isPlaying,
+                    onClick = { onClickTrack(track) },
+                    onLongClick = { onLongClickTrack(track) },
+                    onFavorite = { onFavoriteTrack(track) },
+                )
+            }
+        }
+    }
+}
+
+/** Вкладка «Треки»: счётчики, сортировка, фильтры и плотный список. */
 @Composable
 private fun TracksTab(
     tracks: List<Track>,
@@ -544,12 +859,12 @@ private fun TracksTab(
         contentPadding = PaddingValues(
             start = 16.dp,
             end = 16.dp,
-            top = 4.dp,
+            top = 8.dp,
             bottom = bottomPadding + 24.dp,
         ),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        item {
+        item(key = "tracks-controls") {
             Column {
                 Row(
                     modifier = Modifier
@@ -558,7 +873,7 @@ private fun TracksTab(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = "${tracks.size} трек(ов)",
+                        text = tracksLabel(tracks.size),
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.weight(1f),
@@ -580,7 +895,7 @@ private fun TracksTab(
                             expanded = sortMenuOpen,
                             onDismissRequest = { sortMenuOpen = false },
                         ) {
-                            LibrarySort.values().forEach { option ->
+                            LibrarySort.entries.forEach { option ->
                                 DropdownMenuItem(
                                     text = { Text(option.label) },
                                     leadingIcon = {
@@ -622,35 +937,25 @@ private fun TracksTab(
                         }
                     }
                 }
-                FlowRow(
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
                         .padding(bottom = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    LibraryFilter.values().forEach { option ->
+                    LibraryFilter.entries.forEach { option ->
                         FilterChip(
                             selected = filter == option,
                             onClick = { onFilterChange(option) },
                             label = { Text(option.label) },
-                            leadingIcon = if (option == LibraryFilter.STREAMING) {
-                                {
-                                    Icon(
-                                        imageVector = Icons.Rounded.DownloadDone,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp),
-                                    )
-                                }
-                            } else {
-                                null
-                            },
                         )
                     }
                 }
             }
         }
         if (tracks.isEmpty()) {
-            item {
+            item(key = "tracks-empty") {
                 EmptyState(
                     icon = Icons.Rounded.LibraryMusic,
                     title = if (filter == LibraryFilter.STREAMING) {
@@ -684,8 +989,7 @@ private fun TracksTab(
     }
 }
 
-/** Вкладка «Альбомы»: сетка обложек. */
-@OptIn(ExperimentalFoundationApi::class)
+/** Вкладка «Альбомы»: сетка обложек с круглым Play и подписью. */
 @Composable
 private fun AlbumsTab(
     albums: List<Album>,
@@ -709,74 +1013,25 @@ private fun AlbumsTab(
         contentPadding = PaddingValues(
             start = 16.dp,
             end = 16.dp,
-            top = 4.dp,
+            top = 8.dp,
             bottom = bottomPadding + 24.dp,
         ),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         gridItems(albums, key = { "${it.name}|${it.artist}" }) { album ->
-            Column(
-                Modifier
-                    .clip(RoundedCornerShape(18.dp))
-                    .combinedClickable(
-                        onClick = { navigate(Routes.album(album.name, album.artist)) },
-                        onLongClick = { onLongClick(album) },
-                    )
-                    .padding(4.dp),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(1f),
-                ) {
-                    CoverArtBox(
-                        url = album.artworkUrl ?: album.artworkUri,
-                        cornerRadius = 14.dp,
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                    // Play поверх обложки — как в Spotify.
-                    IconButton(
-                        onClick = { onPlay(album) },
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(6.dp)
-                            .size(38.dp)
-                            .background(MaterialTheme.colorScheme.primary, CircleShape),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.PlayArrow,
-                            contentDescription = "Играть альбом",
-                            tint = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.size(22.dp),
-                        )
-                    }
-                }
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    text = album.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(horizontal = 2.dp),
-                )
-                Text(
-                    text = listOfNotNull(album.artist, album.year?.toString())
-                        .joinToString(" · "),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(horizontal = 2.dp),
-                )
-                Spacer(Modifier.height(4.dp))
-            }
+            AlbumCard(
+                album = album,
+                onClick = { navigate(Routes.album(album.name, album.artist)) },
+                onLongClick = { onLongClick(album) },
+                onPlay = { onPlay(album) },
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
     }
 }
 
-/** Вкладка «Исполнители»: круглые аватары, play и меню действий. */
-@OptIn(ExperimentalFoundationApi::class)
+/** Вкладка «Исполнители»: сетка круглых аватаров, Play поверх обложки. */
 @Composable
 private fun ArtistsTab(
     artists: List<Artist>,
@@ -794,100 +1049,67 @@ private fun ArtistsTab(
         )
         return
     }
-    LazyColumn(
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(2),
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(
             start = 16.dp,
             end = 16.dp,
-            top = 4.dp,
+            top = 8.dp,
             bottom = bottomPadding + 24.dp,
         ),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        items(artists, key = { it.name }) { artist ->
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
-                    .combinedClickable(
-                        onClick = { navigate(Routes.artist(artist.name)) },
-                        onLongClick = { onLongClick(artist) },
-                    )
-                    .padding(horizontal = 6.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                CoverArt(
-                    url = artist.artworkUrl ?: artist.artworkUri,
-                    size = 52.dp,
-                    cornerRadius = 26.dp,
-                )
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        text = artist.name,
-                        style = MaterialTheme.typography.titleMedium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        text = "${artist.trackIds.size} трек(ов)",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                IconButton(onClick = { onPlay(artist) }) {
-                    Icon(
-                        imageVector = Icons.Rounded.PlayCircle,
-                        contentDescription = "Играть исполнителя",
-                        tint = MaterialTheme.colorScheme.primary,
-                    )
-                }
-                Icon(
-                    imageVector = Icons.Rounded.ChevronRight,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+        gridItems(artists, key = { it.name }) { artist ->
+            ArtistCard(
+                artist = artist,
+                onClick = { navigate(Routes.artist(artist.name)) },
+                onLongClick = { onLongClick(artist) },
+                onPlay = { onPlay(artist) },
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
     }
 }
 
-/** Вкладка «Плейлисты»: свои и синхронизированные из сервисов. */
-/** Вкладка «Плейлисты»: создание, переход и действия по долгому нажатию. */
-@OptIn(ExperimentalFoundationApi::class)
+/**
+ * Вкладка «Плейлисты»: 2 колонки карточек с коллажем обложек и круглым Play,
+ * который сразу запускает весь плейлист. Долгое нажатие — прежний лист действий.
+ */
 @Composable
 private fun PlaylistsTab(
     playlists: List<Playlist>,
+    playlistCovers: Map<String, List<String>>,
     navigate: (String) -> Unit,
     bottomPadding: Dp,
     onCreatePlaylist: () -> Unit,
     onLongClick: (Playlist) -> Unit,
     onPlay: (Playlist) -> Unit,
 ) {
-    LazyColumn(
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(2),
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(
             start = 16.dp,
             end = 16.dp,
-            top = 4.dp,
+            top = 8.dp,
             bottom = bottomPadding + 24.dp,
         ),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        item {
-            Button(
+        item(key = "create-playlist") {
+            CreatePlaylistTile(
                 onClick = onCreatePlaylist,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 4.dp),
-            ) {
-                Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("Создать плейлист")
-            }
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
         if (playlists.isEmpty()) {
-            item {
+            item(
+                key = "playlists-empty",
+                span = { GridItemSpan(maxLineSpan) },
+            ) {
                 EmptyState(
                     icon = Icons.Rounded.PlaylistPlay,
                     title = "Плейлистов нет",
@@ -895,65 +1117,21 @@ private fun PlaylistsTab(
                 )
             }
         } else {
-            items(playlists, key = { it.id }) { playlist ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .combinedClickable(
-                            onClick = { navigate(Routes.playlist(playlist.id)) },
-                            onLongClick = { onLongClick(playlist) },
-                        )
-                        .padding(horizontal = 6.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    CoverArt(
-                        url = playlist.artworkUrl,
-                        size = 52.dp,
-                        cornerRadius = 14.dp,
-                    )
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            text = playlist.name,
-                            style = MaterialTheme.typography.titleMedium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "${playlist.trackIds.size} трек(ов)",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            if (playlist.source != Source.LOCAL) {
-                                Spacer(Modifier.width(8.dp))
-                                SourceChip(
-                                    label = playlist.source.title,
-                                    color = sourceColor(playlist.source),
-                                )
-                            }
-                        }
-                    }
-                    IconButton(onClick = { onPlay(playlist) }) {
-                        Icon(
-                            imageVector = Icons.Rounded.PlayCircle,
-                            contentDescription = "Играть плейлист",
-                            tint = MaterialTheme.colorScheme.primary,
-                        )
-                    }
-                    Icon(
-                        imageVector = Icons.Rounded.ChevronRight,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+            gridItems(playlists, key = { it.id }) { playlist ->
+                PlaylistCard(
+                    playlist = playlist,
+                    coverUrls = playlistCovers[playlist.id].orEmpty(),
+                    onClick = { navigate(Routes.playlist(playlist.id)) },
+                    onLongClick = { onLongClick(playlist) },
+                    onPlay = { onPlay(playlist) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
         }
     }
 }
 
-/** Вкладка «Избранное»: список сердечком отмеченных треков. */
+/** Вкладка «Избранное»: крупный Play и тот же плотный ритм строк. */
 @Composable
 private fun FavoritesTab(
     tracks: List<Track>,
@@ -970,33 +1148,41 @@ private fun FavoritesTab(
         contentPadding = PaddingValues(
             start = 16.dp,
             end = 16.dp,
-            top = 4.dp,
+            top = 8.dp,
             bottom = bottomPadding + 24.dp,
         ),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        item {
+        item(key = "favorites-header") {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 4.dp),
+                    .padding(bottom = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = "${tracks.size} трек(ов)",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(1f),
-                )
-                TextButton(onClick = onPlayAll, enabled = tracks.isNotEmpty()) {
-                    Icon(Icons.Rounded.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("Играть все")
+                if (tracks.isNotEmpty()) {
+                    CircularPlayButton(
+                        onClick = onPlayAll,
+                        size = 52.dp,
+                        contentDescription = "Играть все избранные",
+                    )
+                    Spacer(Modifier.width(14.dp))
+                }
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = tracksLabel(tracks.size),
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    Text(
+                        text = "Всё, что отмечено сердечком",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
         }
         if (tracks.isEmpty()) {
-            item {
+            item(key = "favorites-empty") {
                 EmptyState(
                     icon = Icons.Rounded.FavoriteBorder,
                     title = "Пока пусто",
@@ -1038,45 +1224,48 @@ private fun YouTubeTab(
         contentPadding = PaddingValues(
             start = 16.dp,
             end = 16.dp,
-            top = 4.dp,
+            top = 8.dp,
             bottom = bottomPadding + 24.dp,
         ),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        item {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = "${tracks.size} трек(ов)",
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.weight(1f),
-                )
-                TextButton(onClick = onImportLink) {
-                    Icon(
-                        imageVector = Icons.Rounded.Link,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
+        item(key = "youtube-header") {
+            Column {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = tracksLabel(tracks.size),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f),
                     )
-                    Spacer(Modifier.width(4.dp))
-                    Text("По ссылке")
+                    TextButton(onClick = onImportLink) {
+                        Icon(
+                            imageVector = Icons.Rounded.Link,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text("По ссылке")
+                    }
+                    TextButton(onClick = onImport) { Text("Takeout") }
                 }
-                TextButton(onClick = onImport) { Text("Takeout") }
-            }
-            if (!importError.isNullOrBlank()) {
-                Text(
-                    text = importError,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(bottom = 8.dp),
-                )
+                if (!importError.isNullOrBlank()) {
+                    Text(
+                        text = importError,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(bottom = 8.dp),
+                    )
+                }
             }
         }
         if (tracks.isEmpty()) {
-            item {
+            item(key = "youtube-empty") {
                 EmptyState(
                     icon = Icons.Rounded.PlayCircle,
                     title = "Библиотека YouTube Music пуста",
@@ -1095,92 +1284,6 @@ private fun YouTubeTab(
                     onFavorite = { onFavorite(track) },
                     saveState = saveStates[track.id],
                 )
-            }
-        }
-    }
-}
-
-private val TabHeight = 36.dp
-
-/**
- * Сегментированные вкладки медиатеки: скроллируемая капсула с анимированным
- * индикатором, который «переезжает» под выбранную вкладку. Набор вкладок и
- * индексы те же, что были у ScrollableTabRow, поэтому вся логика экрана цела.
- */
-@Composable
-private fun LibraryTabBar(
-    tabs: List<String>,
-    selectedIndex: Int,
-    onSelect: (Int) -> Unit,
-) {
-    val scrollState = rememberScrollState()
-    val density = LocalDensity.current
-    // Позиции вкладок запоминаем после первого layout: индикатор должен ехать и
-    // тогда, когда выбранная вкладка меняется без повторного layout.
-    val tabBounds = remember { mutableStateMapOf<Int, Pair<Int, Int>>() }
-    val selectedBounds = tabBounds[selectedIndex]
-
-    val indicatorLeft by animateDpAsState(
-        targetValue = with(density) { (selectedBounds?.first ?: 0).toDp() },
-        animationSpec = tween(durationMillis = 220),
-    )
-    val indicatorWidth by animateDpAsState(
-        targetValue = with(density) { (selectedBounds?.second ?: 0).toDp() },
-        animationSpec = tween(durationMillis = 220),
-    )
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-            .padding(4.dp),
-    ) {
-        Box(modifier = Modifier.horizontalScroll(scrollState)) {
-            Box {
-                // Индикатор рисуется первым — подписи вкладок лежат поверх него.
-                Box(
-                    modifier = Modifier
-                        .offset(x = indicatorLeft)
-                        .width(indicatorWidth)
-                        .height(TabHeight)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)),
-                )
-                Row {
-                    tabs.forEachIndexed { index, title ->
-                        val selected = index == selectedIndex
-                        Box(
-                            modifier = Modifier
-                                .onGloballyPositioned { coordinates ->
-                                    val bounds = coordinates.positionInParent().x.roundToInt() to
-                                        coordinates.size.width
-                                    if (tabBounds[index] != bounds) {
-                                        tabBounds[index] = bounds
-                                    }
-                                }
-                                .height(TabHeight)
-                                .clip(RoundedCornerShape(12.dp))
-                                .clickable { onSelect(index) }
-                                .padding(horizontal = 11.dp),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text(
-                                text = title,
-                                style = MaterialTheme.typography.labelLarge.copy(
-                                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-                                ),
-                                color = if (selected) {
-                                    MaterialTheme.colorScheme.primary
-                                } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                                },
-                                maxLines = 1,
-                            )
-                        }
-                    }
-                }
             }
         }
     }
@@ -1258,7 +1361,7 @@ private fun PlaylistActionsSheet(
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
             )
             Text(
-                text = "${playlist.trackIds.size} трек(ов)",
+                text = tracksLabel(playlist.trackIds.size),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp),
@@ -1272,7 +1375,7 @@ private fun PlaylistActionsSheet(
                 onDownload,
             )
             PlaylistSheetAction(
-                Icons.Rounded.Sort,
+                Icons.Rounded.QueueMusic,
                 "Играть следующими",
                 onPlayNext,
             )
@@ -1444,7 +1547,7 @@ private fun PlaylistPickerDialog(
                             Column {
                                 Text(playlist.name, style = MaterialTheme.typography.titleMedium)
                                 Text(
-                                    text = " трек(ов)",
+                                    text = tracksLabel(playlist.trackIds.size),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )

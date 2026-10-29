@@ -1,0 +1,6 @@
+[
+  {"label": "www.youtube.com via IP+SNI", "target": "74.125.131.93", "hostHeader": "www.youtube.com", "path": "/"},
+  {"label": "googlevideo media host via IP+SNI", "target": "74.125.173.198", "hostHeader": "rr1---sn-4g5e6nzz.googlevideo.com", "path": "/"},
+  {"label": "youtubei via IP+SNI", "target": "172.217.119.4", "hostHeader": "youtubei.googleapis.com", "path": "/youtubei/v1/player"},
+  {"label": "youtube media (alt IP) via SNI", "target": "142.251.1.99", "hostHeader": "rr1---sn-4g5e6nzz.googlevideo.com", "path": "/"}
+]

@@ -22,6 +22,7 @@ import app.sonora.core.settings.PlaybackMode
 import app.sonora.core.settings.StreamSource
 import app.sonora.core.settings.ThemeMode
 import app.sonora.core.settings.WaveSettings
+import app.sonora.core.settings.YoutubeIpMode
 import app.sonora.core.util.AppLinks
 import app.sonora.data.download.SaveStatus
 import app.sonora.data.download.TrackSaveState
@@ -30,9 +31,12 @@ import app.sonora.data.metadata.MetadataFileEntry
 import app.sonora.data.telemetry.AudioFeature
 import app.sonora.data.metadata.MetadataFiles
 import app.sonora.data.library.LibraryRepository
+import app.sonora.data.remote.StreamProbe
 import app.sonora.data.remote.youtube.innertube.StreamInfo
 import app.sonora.data.wave.WaveEngine
 import app.sonora.data.wave.WaveHistoryEntry
+import app.sonora.net.relay.RelayGateway
+import app.sonora.net.relay.RelayHealth
 import app.sonora.net.warp.WarpConfigEntry
 import app.sonora.net.warp.WarpConfigSummary
 import app.sonora.net.warp.WarpState
@@ -188,6 +192,10 @@ private const val METADATA_SCHEMA_VERSION = 4
 
 /** Сколько треков просить у InnerTube в поиске и в очереди «дальше». */
 private const val REMOTE_SEARCH_LIMIT = 30
+
+/** Тестовый ролик для диагностики потока, когда ничего не играет. */
+private const val TEST_VIDEO_ID = "dQw4w9WgXcQ"
+
 private const val RELATED_LIMIT = 25
 private const val WAVE_LIMIT = 30
 /** Сколько треков добавляет кнопка «Ещё» в бесконечной волне. */
@@ -2857,40 +2865,154 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
     private val _streamCheck = MutableStateFlow<String?>(null)
     val streamCheck: StateFlow<String?> = _streamCheck.asStateFlow()
 
+    private val _streamCheckDetails = MutableStateFlow<String?>(null)
+    val streamCheckDetails: StateFlow<String?> = _streamCheckDetails.asStateFlow()
+
+    private val _relayCheck = MutableStateFlow<String?>(null)
+    val relayCheck: StateFlow<String?> = _relayCheck.asStateFlow()
+
+    private val _relayHealth = MutableStateFlow<List<RelayHealth>>(emptyList())
+    val relayHealth: StateFlow<List<RelayHealth>> = _relayHealth.asStateFlow()
+
+    private val _ytDlpStatus = MutableStateFlow<String?>(null)
+    val ytDlpStatus: StateFlow<String?> = _ytDlpStatus.asStateFlow()
+
+    fun dismissStreamCheckDetails() {
+        _streamCheckDetails.value = null
+    }
+
+    /** Медиашлюз без VPN и WARP: резервный путь через публичные зеркала. */
+    fun setRelayEnabled(enabled: Boolean) {
+        updateSettings { it.copy(relayEnabled = enabled) }
+        RelayGateway.clear()
+        toast(if (enabled) "Медиашлюз без VPN включён" else "Медиашлюз выключен")
+    }
+
+    /** Свой список зеркал: по одному в строке, пусто — встроенный список. */
+    fun setRelayInstances(value: String) {
+        updateSettings { it.copy(relayInstances = value.trim()) }
+        RelayGateway.clear()
+        _relayCheck.value = null
+        toast(if (value.isBlank()) "Зеркала: встроенный список" else "Список зеркал сохранён")
+    }
+
+    /** Предпочтительный IP-протокол YouTube (IPv6 иногда работает без WARP). */
+    fun setYoutubeIpMode(mode: YoutubeIpMode) {
+        updateSettings { it.copy(youtubeIpMode = mode) }
+        toast("YouTube: ${mode.label}")
+    }
+
+    /** Проверять ссылку Range-запросом перед отдачей в плеер. */
+    fun setProbeBeforePlay(enabled: Boolean) {
+        updateSettings { it.copy(probeBeforePlay = enabled) }
+    }
+
+    /** Автообновление рантайма yt-dlp из GitHub. */
+    fun setYtDlpAutoUpdate(enabled: Boolean) {
+        updateSettings { it.copy(ytDlpAutoUpdate = enabled) }
+        if (enabled) updateYtDlp()
+    }
+
+    /** Обновление yt-dlp по кнопке: встроенная сборка быстро устаревает. */
+    fun updateYtDlp() {
+        viewModelScope.launch(Dispatchers.IO) {
+            _ytDlpStatus.value = "Обновляем yt-dlp…"
+            val version = runCatching { graph.ytDlp.ensureUpToDate(force = true) }.getOrNull()
+            _ytDlpStatus.value = if (version != null) {
+                "yt-dlp $version"
+            } else {
+                "yt-dlp: обновить не удалось (нет сети?)"
+            }
+            toast(_ytDlpStatus.value!!)
+        }
+    }
+
+    /** Показать текущую версию yt-dlp в настройках. */
+    fun refreshYtDlpStatus() {
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching { graph.ytDlp.ensureInit() }
+            val version = graph.ytDlp.versionLabel()
+            _ytDlpStatus.value = version?.let { "yt-dlp $it" } ?: "yt-dlp: версия неизвестна"
+        }
+    }
+
+    /** Проверка зеркал медиашлюза: какие реально отдают звук. */
+    fun checkRelayHealth() {
+        viewModelScope.launch(Dispatchers.IO) {
+            _relayCheck.value = "Проверяем зеркала…"
+            val list = runCatching { RelayGateway.healthCheck() }.getOrDefault(emptyList())
+            _relayHealth.value = list
+            val working = list.count { it.ok }
+            _relayCheck.value = when {
+                list.isEmpty() -> "Зеркала не настроены"
+                working == 0 -> "Ни одно из ${list.size} зеркал не ответило"
+                else -> "Работают $working из ${list.size}"
+            }
+            toast(_relayCheck.value!!)
+        }
+    }
+
     /**
-     * Диагностика потока: резолвит URL текущего трека (или тестового видео)
-     * и делает реальный Range-запрос к googlevideo. Именно он показывает,
-     * блокирует ли провайдер/YouTube медиа-трафик (403).
+     * Диагностика потока: прямой YouTube, yt-dlp и медиашлюз по очереди.
+     * Показывает, что именно блокируется и какой путь работает без VPN/WARP.
      */
     fun checkStreamAccess() {
         viewModelScope.launch(Dispatchers.IO) {
             _streamCheck.value = "Проверяем поток…"
             val current = graph.playback.state.value.current
-            val videoId = current?.let { youtubeVideoId(it) } ?: "dQw4w9WgXcQ"
-            val handle = runCatching { graph.ytDlp.streamHandle(videoId) }.getOrNull()
-            if (handle == null) {
-                _streamCheck.value = "yt-dlp не получил ссылку на поток"
-                toast(_streamCheck.value!!)
-                return@launch
-            }
-            val ok = runCatching {
-                val request = okhttp3.Request.Builder()
-                    .url(handle.url)
-                    .header("Range", "bytes=0-2047")
-                    .apply {
-                        handle.headers.forEach { (name, value) -> header(name, value) }
-                    }
-                    .build()
-                okhttp3.OkHttpClient().newCall(request).execute().use { it.isSuccessful }
-            }.getOrDefault(false)
-            _streamCheck.value = if (ok) {
-                "OK: поток доступен (${handle.mimeType})"
+            val videoId = current?.let { youtubeVideoId(it) } ?: TEST_VIDEO_ID
+            val lines = ArrayList<String>()
+            lines += "Видео: $videoId"
+
+            val direct = runCatching { graph.youtube.diagnoseDirectStream(videoId) }
+                .getOrElse { "ошибка: ${it.message?.take(80)}" }
+            lines += "Прямой YouTube → $direct"
+            val directOk = direct.contains("OK")
+
+            val ytDlpVersion = runCatching { graph.ytDlp.ensureInit(); graph.ytDlp.versionLabel() }
+                .getOrNull()
+            val ytDlpHandle = runCatching { graph.ytDlp.streamHandle(videoId) }.getOrNull()
+            lines += if (ytDlpHandle != null) {
+                "yt-dlp ${ytDlpVersion ?: ""} → OK (${ytDlpHandle.mimeType})"
             } else {
-                "403: YouTube блокирует медиа с вашего IP. Включите WARP или укажите прокси."
+                "yt-dlp ${ytDlpVersion ?: ""} → нет играющей ссылки"
             }
-            toast(_streamCheck.value!!)
+
+            val relay = runCatching { RelayGateway.resolve(videoId, null) }.getOrNull()
+            lines += if (relay != null) {
+                "Медиашлюз → OK · ${relay.instance} · ${relay.bitrate / 1000} кбит/с"
+            } else {
+                "Медиашлюз → ни одно зеркало не ответило"
+            }
+
+            val summary = when {
+                directOk -> "OK: прямой поток доступен"
+                ytDlpHandle != null -> "OK: yt-dlp получил играющую ссылку"
+                relay != null -> "OK: играет через медиашлюз, без VPN и WARP"
+                else -> "Поток недоступен: добавьте зеркало или включите WARP"
+            }
+            _streamCheck.value = summary
+            _streamCheckDetails.value = buildString {
+                appendLine(summary)
+                appendLine()
+                appendLine(lines.joinToString("\n"))
+                appendLine()
+                when {
+                    directOk -> append("Прямой доступ работает: VPN и WARP не нужны.")
+                    relay != null -> append(
+                        "Прямой YouTube блокируется с вашего IP, но медиашлюз отдаёт звук — " +
+                            "стриминг работает без VPN и WARP.",
+                    )
+                    else -> append(
+                        "Ни один путь не дал звук. Проверьте интернет, добавьте своё зеркало " +
+                            "в «Серверы шлюза» или включите WARP.",
+                    )
+                }
+            }
+            toast(summary)
         }
     }
+
     fun setScanOnStart(enabled: Boolean) = updateSettings { it.copy(scanOnStart = enabled) }
 
     fun setReadSidecarMetadata(enabled: Boolean) =

@@ -1,4 +1,4 @@
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+﻿import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     id("com.android.application")
@@ -14,8 +14,8 @@ android {
         applicationId = "app.sonora"
         minSdk = 26
         targetSdk = 34
-        versionCode = 27
-        versionName = "1.5.0"
+        versionCode = 28
+        versionName = "1.6.0"
         vectorDrawables.useSupportLibrary = true
     }
 
@@ -30,7 +30,7 @@ android {
     }
 
     compileOptions {
-        // innertubex (движок InnerTubeX из Metrolist) собран под Java 21.
+        // innertubex (РґРІРёР¶РѕРє InnerTubeX РёР· Metrolist) СЃРѕР±СЂР°РЅ РїРѕРґ Java 21.
         isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_21
         targetCompatibility = JavaVersion.VERSION_21
@@ -54,8 +54,8 @@ android {
 
     packaging {
         resources.excludes += setOf("/META-INF/{AL2.0,LGPL2.1}")
-        // Python-рантайм yt-dlp должен распаковываться из APK: .so нельзя
-        // грузить прямо из архива.
+        // Python-СЂР°РЅС‚Р°Р№Рј yt-dlp РґРѕР»Р¶РµРЅ СЂР°СЃРїР°РєРѕРІС‹РІР°С‚СЊСЃСЏ РёР· APK: .so РЅРµР»СЊР·СЏ
+        // РіСЂСѓР·РёС‚СЊ РїСЂСЏРјРѕ РёР· Р°СЂС…РёРІР°.
         jniLibs.useLegacyPackaging = true
     }
 }
@@ -77,23 +77,23 @@ dependencies {
     implementation("androidx.navigation:navigation-compose:2.7.7")
     debugImplementation("androidx.compose.ui:ui-tooling")
 
-    // Media3: воспроизведение + медиасессия
+    // Media3: РІРѕСЃРїСЂРѕРёР·РІРµРґРµРЅРёРµ + РјРµРґРёР°СЃРµСЃСЃРёСЏ
     implementation("androidx.media3:media3-exoplayer:1.3.1")
     implementation("androidx.media3:media3-session:1.3.1")
     implementation("androidx.media3:media3-common:1.3.1")
 
-    // Сеть / JSON
+    // РЎРµС‚СЊ / JSON
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
 
-    // InnerTubeX — движок потоков из Metrolist: cipher, SABR, PoToken-контракты.
+    // InnerTubeX вЂ” РґРІРёР¶РѕРє РїРѕС‚РѕРєРѕРІ РёР· Metrolist: cipher, SABR, PoToken-РєРѕРЅС‚СЂР°РєС‚С‹.
     implementation("com.github.MetrolistGroup.innertubex:innertubex:v0.11.0")
-    // yt-dlp: источник потока и поиск в обход ограничений InnerTube
-    // (возрастные/региональные видео, SABR-only).
+    // yt-dlp: РёСЃС‚РѕС‡РЅРёРє РїРѕС‚РѕРєР° Рё РїРѕРёСЃРє РІ РѕР±С…РѕРґ РѕРіСЂР°РЅРёС‡РµРЅРёР№ InnerTube
+    // (РІРѕР·СЂР°СЃС‚РЅС‹Рµ/СЂРµРіРёРѕРЅР°Р»СЊРЅС‹Рµ РІРёРґРµРѕ, SABR-only).
     implementation("io.github.junkfood02.youtubedl-android:library:0.18.1")
-    // ffmpeg нужен для нарезки 30-секундного фрагмента под ReccoBeats.
+    // ffmpeg РЅСѓР¶РµРЅ РґР»СЏ РЅР°СЂРµР·РєРё 30-СЃРµРєСѓРЅРґРЅРѕРіРѕ С„СЂР°РіРјРµРЅС‚Р° РїРѕРґ ReccoBeats.
     implementation("io.github.junkfood02.youtubedl-android:ffmpeg:0.18.1")
-    // ffmpeg: нарезка 30-секундного фрагмента и конвертация в MP3 для ReccoBeats.
+    // ffmpeg: РЅР°СЂРµР·РєР° 30-СЃРµРєСѓРЅРґРЅРѕРіРѕ С„СЂР°РіРјРµРЅС‚Р° Рё РєРѕРЅРІРµСЂС‚Р°С†РёСЏ РІ MP3 РґР»СЏ ReccoBeats.
     implementation("io.github.junkfood02.youtubedl-android:ffmpeg:0.18.1")
     implementation("io.ktor:ktor-client-core:3.6.0")
     implementation("io.ktor:ktor-client-okhttp:3.6.0")
@@ -101,17 +101,17 @@ dependencies {
     implementation("io.ktor:ktor-client-encoding:3.6.0")
     implementation("io.ktor:ktor-serialization-kotlinx-json:3.6.0")
 
-    // Картинки
+    // РљР°СЂС‚РёРЅРєРё
     implementation("io.coil-kt:coil-compose:2.6.0")
 
-    // WARP: официальная библиотека WireGuard (userspace wireguard-go).
-    // Используется только для per-app туннеля Sonora, см. app.sonora.net.warp.
+    // WARP: РѕС„РёС†РёР°Р»СЊРЅР°СЏ Р±РёР±Р»РёРѕС‚РµРєР° WireGuard (userspace wireguard-go).
+    // РСЃРїРѕР»СЊР·СѓРµС‚СЃСЏ С‚РѕР»СЊРєРѕ РґР»СЏ per-app С‚СѓРЅРЅРµР»СЏ Sonora, СЃРј. app.sonora.net.warp.
     implementation("com.wireguard.android:tunnel:1.0.20230706")
 
-    // Material Components нужен только ради XML-темы окна (Theme.Material3.*)
+    // Material Components РЅСѓР¶РµРЅ С‚РѕР»СЊРєРѕ СЂР°РґРё XML-С‚РµРјС‹ РѕРєРЅР° (Theme.Material3.*)
     implementation("com.google.android.material:material:1.12.0")
 
-    // Шифрованное хранилище OAuth-токенов
+    // РЁРёС„СЂРѕРІР°РЅРЅРѕРµ С…СЂР°РЅРёР»РёС‰Рµ OAuth-С‚РѕРєРµРЅРѕРІ
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
 
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")

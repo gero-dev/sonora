@@ -1,4 +1,4 @@
-# Sonora — музыкальный плеер для Android
+﻿# Sonora — музыкальный плеер для Android
 
 ![CI](https://img.shields.io/badge/CI-assembleDebug%20%2B%20lint-blue)
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.4.20-7F52FF?logo=kotlin&logoColor=white)
@@ -27,7 +27,7 @@
 
 | Главная | Плеер | Медиатека |
 |---|---|---|
-| ![Главная](docs/screenshots/home.png) | ![Плеер](docs/screenshots/player.png) | ![Медиатека](docs/screenshots/library.png) |
+| ![Главная](docs/screenshots/home.png) | ![Плеер](docs/screenshots/player.png) | ![Медиатека](docs/screenshots/library-spotify.png) |
 
 | Настройки | Подключения (InnerTube) | Поиск |
 |---|---|---|
@@ -56,6 +56,14 @@
 | WARP из коробки | Метаданные из файлов | Поиск пропущенных обложек |
 |---|---|---|
 | ![WARP](docs/screenshots/warp-builtin.png) | ![Метаданные](docs/screenshots/settings-metadata.png) | ![Обложки](docs/screenshots/covers-search.png) |
+
+| Медиатека в стиле Spotify | Плейлисты с Play на обложке | Стриминг без VPN: проверка |
+|---|---|---|
+| ![Медиатека](docs/screenshots/library-spotify.png) | ![Плейлисты](docs/screenshots/library-playlists.png) | ![Проверка потока](docs/screenshots/stream-check.png) |
+
+| Поток и сеть без VPN | | |
+|---|---|---|
+| ![Поток и сеть](docs/screenshots/settings-streaming.png) | | |
 
 Светлая тема и авто-очередь: [settings-light.png](docs/screenshots/settings-light.png), [queue.png](docs/screenshots/queue.png).
 
@@ -117,8 +125,11 @@
 | **Качество по сети**: «Авто» = Wi-Fi высокое / мобильная сеть по отдельной настройке | ✅ |
 | **Фильтры волны**: настроение влияет на локальные треки, «Избранное», сброс выдачи | ✅ |
 | **yt-dlp везде**: поток, поиск, загрузки + выбор источника и прокси | ✅ |
+| **Стриминг в РФ без VPN и WARP**: авто-обновление yt-dlp, перебор клиентов и IPv4/IPv6, Range-проверка, медиашлюз Invidious/Piped | ✅ |
+| **Медиатека в стиле Spotify**: плейлисты карточками с коллажами и Play на обложке, сетки альбомов и исполнителей | ✅ |
+| **Быстрая фонотека**: инкрементальный скан с кэшем и токен-индекс поиска вместо перебора на каждое нажатие | ✅ |
 | **ReccoBeats**: BPM и энергия в плеере, локальный ffmpeg-фрагмент, кэш | ✅ |
-| **Медиатека в стиле Spotify**: Play на альбомах/исполнителях, меню «В плейлист» | ✅ |
+| **Меню «В плейлист»** на альбомах и исполнителях | ✅ |
 | **Только музыка, без видео**: видеопотоки не играются и не скачиваются, клипы/концерты/подкасты отфильтрованы | ✅ |
 | **WARP на Главной**: подключение, статус и автоподхват после выключения своего VPN/WARP | ✅ |
 | **Настройки «Моей волны»**: только музыка без клипов, история прослушиваний, новизна, разнообразие, доля устройства | ✅ |
@@ -244,6 +255,7 @@ Gradle wrapper (9.7.1) лежит в репозитории, отдельно с
 - [docs/README.md](docs/README.md) — полный индекс документации
 - [docs/SETUP.md](docs/SETUP.md) — установка, Takeout, виджет, типовые ошибки
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — слои, потоки данных, InnerTube, воспроизведение, OAuth
+- [docs/STREAMING-RF.md](docs/STREAMING-RF.md) — стриминг без VPN/WARP: авто-обновление yt-dlp, probe, медиашлюз, диагностика, ограничения
 - [docs/DOWNLOADS.md](docs/DOWNLOADS.md) — сохранение треков: InnerTube, прямые ссылки, каталоги, ошибки
 - [docs/METADATA.md](docs/METADATA.md) — источники метаданных, sidecar-файлы, встроенные обложки, авторы
 - [docs/GOOGLE-ACCOUNT.md](docs/GOOGLE-ACCOUNT.md) — вход в Google, личные плейлисты, приватность
@@ -266,7 +278,7 @@ Gradle wrapper (9.7.1) лежит в репозитории, отдельно с
 
 ## Статус и лицензия
 
-Версия **0.9.8**. Проверено в среде разработки:
+Версия **1.6.0** (`versionCode 28`). Проверено в среде разработки:
 
 - `gradlew :app:assembleDebug` — **BUILD SUCCESSFUL**, APK в `app/build/outputs/apk/debug/`;
 - **WARP на главном экране**: статус и кнопка «Подключить/Выключить» без похода в Настройки;

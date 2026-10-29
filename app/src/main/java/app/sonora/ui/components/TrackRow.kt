@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -186,34 +187,53 @@ fun BackIconButton(
     }
 }
 
-/** Заголовок секции с необязательным действием справа. */
+/**
+ * Заголовок секции в духе Spotify: крупный жирный текст, приглушённый
+ * подзаголовок и компактное действие справа («Все» / «Показать все»).
+ */
 @Composable
 fun SectionHeader(
     title: String,
     actionLabel: String? = null,
     onAction: (() -> Unit)? = null,
+    subtitle: String? = null,
     modifier: Modifier = Modifier,
 ) {
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(top = 16.dp, bottom = 4.dp),
+            .padding(top = 18.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.headlineMedium,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
-        )
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.headlineMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (!subtitle.isNullOrBlank()) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
         if (actionLabel != null && onAction != null) {
-            TextButton(onClick = onAction) { Text(actionLabel) }
+            TextButton(
+                onClick = onAction,
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+            ) {
+                Text(actionLabel, style = MaterialTheme.typography.labelLarge)
+            }
         }
     }
 }
 
-/** Пустое состояние: иконка, заголовок и подсказка. */
+/** Пустое состояние: акцентная иконка в круге, заголовок и подсказка. */
 @Composable
 fun EmptyState(
     icon: ImageVector,
@@ -224,25 +244,29 @@ fun EmptyState(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = 28.dp, horizontal = 24.dp),
+            .padding(vertical = 32.dp, horizontal = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Box(
             modifier = Modifier
-                .size(72.dp)
+                .size(76.dp)
                 .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(32.dp),
+                modifier = Modifier.size(34.dp),
             )
         }
-        Spacer(Modifier.height(14.dp))
-        Text(title, style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
+        Spacer(Modifier.height(16.dp))
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleLarge,
+            textAlign = TextAlign.Center,
+        )
         Spacer(Modifier.height(6.dp))
         Text(
             text = subtitle,
@@ -298,18 +322,19 @@ fun TrackRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(8.dp))
             .background(
                 if (isPlaying) MaterialTheme.colorScheme.surfaceContainerHigh else Color.Transparent,
             )
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-            .padding(horizontal = 8.dp, vertical = 6.dp),
+            .padding(horizontal = 8.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // Плотная строка Spotify: обложка 56dp, крупное название, тишина вокруг.
         CoverArt(
             url = track.artworkUrl ?: track.artworkUri,
-            size = 48.dp,
-            cornerRadius = 10.dp,
+            size = 56.dp,
+            cornerRadius = 8.dp,
         )
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
@@ -327,7 +352,7 @@ fun TrackRow(
                     saveFailed -> "Ошибка сохранения — нажмите ↻"
                     else -> track.displaySubtitle
                 },
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodySmall,
                 color = when {
                     saving -> MaterialTheme.colorScheme.primary
                     saveFailed -> MaterialTheme.colorScheme.error

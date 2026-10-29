@@ -1,0 +1,3137 @@
+{
+ "runs": [
+  {
+   "label": "dns youtube.com",
+   "error": "unsupported format string passed to NoneType.__format__"
+  },
+  {
+   "label": "dns googlevideo.com",
+   "error": "unsupported format string passed to NoneType.__format__"
+  },
+  {
+   "label": "dns youtubei.googleapis.com",
+   "error": "unsupported format string passed to NoneType.__format__"
+  },
+  {
+   "label": "dns api.github.com",
+   "error": "unsupported format string passed to NoneType.__format__"
+  },
+  {
+   "label": "http youtube.com",
+   "error": "HTTP Error 400: Bad Request"
+  },
+  {
+   "label": "http youtubei player",
+   "error": "HTTP Error 400: Bad Request"
+  },
+  {
+   "label": "http api.github.com",
+   "error": "HTTP Error 400: Bad Request"
+  },
+  {
+   "label": "http googlevideo",
+   "error": "HTTP Error 400: Bad Request"
+  },
+  {
+   "label": "dns youtube.com",
+   "kind": "dns",
+   "target": "youtube.com",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "finished",
+     "code": 0,
+     "total_ms": null,
+     "headers": {},
+     "resolved": [
+      "142.251.1.190",
+      "142.251.1.93",
+      "142.251.1.136",
+      "142.251.1.91"
+     ],
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "finished",
+     "code": 0,
+     "total_ms": 24,
+     "headers": {},
+     "resolved": [
+      "142.250.150.190",
+      "142.250.150.136",
+      "142.250.150.91",
+      "142.250.150.93"
+     ],
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 200350,
+     "net": "Yandex.Cloud",
+     "status": "finished",
+     "code": 0,
+     "total_ms": 47,
+     "headers": {},
+     "resolved": [
+      "173.194.221.136",
+      "173.194.221.93",
+      "173.194.221.190",
+      "173.194.221.91"
+     ],
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 48347,
+     "net": "Mediasoft ekspert",
+     "status": "finished",
+     "code": 0,
+     "total_ms": 28,
+     "headers": {},
+     "resolved": [
+      "142.250.178.110"
+     ],
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "dns www.youtube.com",
+   "kind": "dns",
+   "target": "www.youtube.com",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "finished",
+     "code": 0,
+     "total_ms": 4,
+     "headers": {},
+     "resolved": [
+      "142.251.152.4",
+      "142.251.155.4",
+      "142.251.153.4",
+      "142.251.150.4",
+      "142.251.156.4",
+      "142.251.157.4",
+      "142.251.151.4",
+      "142.251.154.4"
+     ],
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "finished",
+     "code": 0,
+     "total_ms": 28,
+     "headers": {},
+     "resolved": [
+      "142.251.153.4",
+      "142.251.156.4",
+      "142.251.151.4",
+      "142.251.157.4",
+      "142.251.150.4",
+      "142.251.155.4",
+      "142.251.154.4",
+      "142.251.152.4"
+     ],
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 48347,
+     "net": "Mediasoft ekspert",
+     "status": "finished",
+     "code": 0,
+     "total_ms": 24,
+     "headers": {},
+     "resolved": [
+      "142.251.154.4",
+      "142.251.153.4",
+      "142.251.152.4",
+      "142.251.155.4",
+      "142.251.150.4",
+      "142.251.156.4",
+      "142.251.157.4",
+      "142.251.151.4"
+     ],
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "dns googlevideo.com",
+   "kind": "dns",
+   "target": "googlevideo.com",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "finished",
+     "code": 0,
+     "total_ms": null,
+     "headers": {},
+     "resolved": [
+      "64.233.162.147",
+      "64.233.162.106",
+      "64.233.162.104",
+      "64.233.162.103",
+      "64.233.162.105",
+      "64.233.162.99"
+     ],
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "finished",
+     "code": 0,
+     "total_ms": 4,
+     "headers": {},
+     "resolved": [
+      "142.251.142.228"
+     ],
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 200350,
+     "net": "Yandex.Cloud",
+     "status": "finished",
+     "code": 0,
+     "total_ms": 78,
+     "headers": {},
+     "resolved": [
+      "64.233.161.104",
+      "64.233.161.106",
+      "64.233.161.105",
+      "64.233.161.147",
+      "64.233.161.99",
+      "64.233.161.103"
+     ],
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 29182,
+     "net": "IOT",
+     "status": "finished",
+     "code": 0,
+     "total_ms": null,
+     "headers": {},
+     "resolved": [
+      "172.253.152.105",
+      "172.253.152.104",
+      "172.253.152.106",
+      "172.253.152.103",
+      "172.253.152.99",
+      "172.253.152.147"
+     ],
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "dns youtubei.googleapis.com",
+   "kind": "dns",
+   "target": "youtubei.googleapis.com",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "finished",
+     "code": 0,
+     "total_ms": 31,
+     "headers": {},
+     "resolved": [
+      "172.217.119.4",
+      "172.217.113.4",
+      "172.217.115.4",
+      "172.217.112.4",
+      "172.217.116.4",
+      "172.217.114.4",
+      "172.217.118.4",
+      "172.217.117.4"
+     ],
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "finished",
+     "code": 0,
+     "total_ms": null,
+     "headers": {},
+     "resolved": [
+      "172.217.114.4",
+      "172.217.115.4",
+      "172.217.112.4",
+      "172.217.117.4",
+      "172.217.119.4",
+      "172.217.116.4",
+      "172.217.113.4",
+      "172.217.118.4"
+     ],
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 48347,
+     "net": "Mediasoft ekspert",
+     "status": "finished",
+     "code": 0,
+     "total_ms": 1,
+     "headers": {},
+     "resolved": [
+      "172.217.112.4",
+      "172.217.113.4",
+      "172.217.114.4",
+      "172.217.115.4",
+      "172.217.116.4",
+      "172.217.117.4",
+      "172.217.118.4",
+      "172.217.119.4"
+     ],
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "dns api.github.com",
+   "kind": "dns",
+   "target": "api.github.com",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "finished",
+     "code": 0,
+     "total_ms": 41,
+     "headers": {},
+     "resolved": [
+      "140.82.121.6"
+     ],
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "finished",
+     "code": 0,
+     "total_ms": 32,
+     "headers": {},
+     "resolved": [
+      "140.82.121.6"
+     ],
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 200350,
+     "net": "Yandex.Cloud",
+     "status": "finished",
+     "code": 0,
+     "total_ms": 4,
+     "headers": {},
+     "resolved": [
+      "140.82.121.5"
+     ],
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "dns rr1---sn-4g5e6nzz.googlevideo.com",
+   "kind": "dns",
+   "target": "rr1---sn-4g5e6nzz.googlevideo.com",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "finished",
+     "code": 0,
+     "total_ms": null,
+     "headers": {},
+     "resolved": [
+      "rr1.sn-4g5e6nzz.googlevideo.com.",
+      "74.125.173.198"
+     ],
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "finished",
+     "code": 0,
+     "total_ms": 103,
+     "headers": {},
+     "resolved": [
+      "rr1.sn-4g5e6nzz.googlevideo.com.",
+      "74.125.173.198"
+     ],
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 208677,
+     "net": "Cloud.ru",
+     "status": "finished",
+     "code": 0,
+     "total_ms": 51,
+     "headers": {},
+     "resolved": [
+      "rr1.sn-4g5e6nzz.googlevideo.com.",
+      "74.125.173.198"
+     ],
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "http www.youtube.com",
+   "kind": "http",
+   "target": "www.youtube.com",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "finished",
+     "code": 200,
+     "total_ms": 315,
+     "headers": {
+      "content-type": "text/html; charset=utf-8",
+      "x-content-type-options": "nosniff",
+      "connection-allowlist-report-only": "(response-origin \"https://youtube.com\" \"https://*.youtube.com\" \"https://youtu.be\" \"https://www.youtubekids.com\" \"https://ytkids.app.goo.gl\" \"https://www.youtube-nocookie.com\" \"https://www.youtubeeducation.com\" \"https://accounts.google.com\" \"https://www.gstatic.com\" \"https://gstatic.com\" \"https://fonts.gstatic.com\" \"https://*.gstatic.com\" \"https://*.ytimg.com\" \"https://csp.withgoogle.com\" \"https://fonts.googleapis.com\" \"https://ajax.googleapis.com\" \"https://www.googletagmanager.com\" \"https://apis.google.com\" \"https://translate.googleapis.com\" \"https://translate-pa.googleapis.com\" \"https://translate.google.com\" \"https://feedback-pa.clients6.google.com\" \"https://scone-pa.clients6.google.com\" \"https://inputtools.google.com\" \"https://clients1.google.com\" \"https://clients2.google.com\" \"https://support.google.com\" \"https://myaccount.google.com\" \"https://myactivity.google.com\" \"https://families.google.com\" \"https://familylink.google.com\" \"https://policies.google.com\" \"https://payments.google.com\" \"https://one.google.com\" \"https://developers.google.com\" \"https://play.google.com\" \"https://analytics.google.com\" \"https://*.analytics.google.com\" \"https://www.google-analytics.com\" \"https://*.google-analytics.com\" \"https://www.googleadservices.com\" \"https://*.doubleclick.net\" \"https://fundingchoices.google.com\" \"https://ads.google.com\" \"https://myadcenter.google.com\" \"https://*.googlevideo.com\" \"https://docs.google.com\" \"https://forms.gle\" \"https://g.co\" \"https://messages.google.com\" \"https://lh3.googleusercontent.com\" \"https://lh4.googleusercontent.com\" \"https://lh5.googleusercontent.com\" \"https://lh6.googleusercontent.com\" \"https://play-lh.googleusercontent.com\" \"https://kstatic.googleusercontent.com\" \"https://lh3.ggpht.com\" \"https://lh4.ggpht.com\" \"https://lh5.ggpht.com\" \"https://lh6.ggpht.com\" \"https://yt3.ggpht.com\" \"https://yt4.ggpht.com\" \"https://jnn-pa.googleapis.com\" \"https://*.googlesyndication.com\" \"https://yt3.googleusercontent.com\" \"https://yt4.googleusercontent.com\" \"https://www.google.ad\" \"https://www.google.ae\" \"https://www.google.al\" \"https://www.google.am\" \"https://www.google.as\" \"https://www.google.at\" \"https://www.google.az\" \"https://www.google.ba\" \"https://www.google.be\" \"https://www.google.bf\" \"https://www.google.bg\" \"https://www.google.bi\" \"https://www.google.bj\" \"https://www.google.bs\" \"https://www.google.bt\" \"https://www.google.by\" \"https://www.google.ca\" \"https://www.google.cd\" \"https://www.google.cf\" \"https://www.google.cg\" \"https://www.google.ch\" \"https://www.google.ci\" \"https://www.google.cl\" \"https://www.google.cm\" \"https://www.google.cn\" \"https://www.google.co.ao\" \"https://www.google.co.bw\" \"https://www.google.co.ck\" \"https://www.google.co.cr\" \"https://www.google.co.id\" \"https://www.google.co.il\" \"https://www.google.co.im\" \"https://www.google.co.in\" \"https://www.google.co.je\" \"https://www.google.co.jp\" \"https://www.google.co.ke\" \"https://www.google.co.kr\" \"https://www.google.co.ls\" \"https://www.google.co.ma\" \"https://www.google.co.mz\" \"https://www.google.co.nz\" \"https://www.google.co.th\" \"https://www.google.co.tz\" \"https://www.google.co.ug\" \"https://www.google.co.uk\" \"https://www.google.co.uz\" \"https://www.google.co.ve\" \"https://www.google.co.vi\" \"https://www.google.co.za\" \"https://www.google.co.zm\" \"https://www.google.co.zw\" \"https://www.google.com\" \"https://www.google.com.af\" \"https://www.google.com.ag\" \"https://www.google.com.ai\" \"https://www.google.com.ar\" \"https://www.google.com.au\" \"https://www.google.com.bd\" \"https://www.google.com.bh\" \"https://www.google.com.bn\" \"https://www.google.com.bo\" \"https://www.google.com.br\" \"https://www.google.com.bz\" \"https://www.google.com.cn\" \"https://www.google.com.co\" \"https://www.google.com.cu\" \"https://www.google.com.cy\" \"https://www.google.com.do\" \"https://www.google.com.ec\" \"https://www.google.com.eg\" \"https://www.google.com.et\" \"https://www.google.com.fj\" \"https://www.google.com.gh\" \"https://www.google.com.gi\" \"https://www.google.com.gt\" \"https://www.google.com.hk\" \"https://www.google.com.jm\" \"https://www.google.com.kh\" \"https://www.google.com.kw\" \"https://www.google.com.lb\" \"https://www.google.com.ly\" \"https://www.google.com.mm\" \"https://www.google.com.mt\" \"https://www.google.com.mx\" \"https://www.google.com.my\" \"https://www.google.com.na\" \"https://www.google.com.ng\" \"https://www.google.com.ni\" \"https://www.google.com.np\" \"https://www.google.com.om\" \"https://www.google.com.pa\" \"https://www.google.com.pe\" \"https://www.google.com.pg\" \"https://www.google.com.ph\" \"https://www.google.com.pk\" \"https://www.google.com.pr\" \"https://www.google.com.py\" \"https://www.google.com.qa\" \"https://www.google.com.sa\" \"https://www.google.com.sb\" \"https://www.google.com.sg\" \"https://www.google.com.sl\" \"https://www.google.com.sv\" \"https://www.google.com.tj\" \"https://www.google.com.tn\" \"https://www.google.com.tr\" \"https://www.google.com.tw\" \"https://www.google.com.ua\" \"https://www.google.com.uy\" \"https://www.google.com.vc\" \"https://www.google.com.vn\" \"https://www.google.cv\" \"https://www.google.cz\" \"https://www.google.de\" \"https://www.google.dj\" \"https://www.google.dk\" \"https://www.google.dm\" \"https://www.google.dz\" \"https://www.google.e...[truncated]",
+      "cache-control": "no-cache, no-store, max-age=0, must-revalidate",
+      "pragma": "no-cache",
+      "expires": "Mon, 01 Jan 1990 00:00:00 GMT",
+      "date": "Thu, 29 Oct 2026 15:08:36 GMT",
+      "p3p": "CP=\"This is not a P3P policy! See http://support.google.com/accounts/answer/151657?hl=ru for more info.\"",
+      "x-frame-options": "SAMEORIGIN",
+      "strict-transport-security": "max-age=31536000",
+      "permissions-policy": "ch-ua-arch=*, ch-ua-bitness=*, ch-ua-full-version=*, ch-ua-full-version-list=*, ch-ua-model=*, ch-ua-wow64=*, ch-ua-form-factors=*, ch-ua-platform=*, ch-ua-platform-version=*",
+      "content-security-policy": [
+       "require-trusted-types-for 'script'",
+       "base-uri 'self';object-src 'none';script-src 'report-sample' 'nonce-TQY4x3UHGy7XgHgTLagASQ' 'unsafe-inline' 'strict-dynamic' https: http: 'unsafe-eval';report-uri https://csp.withgoogle.com/csp/youtube_main/strict"
+      ],
+      "report-to": "{\"group\":\"youtube_main\",\"max_age\":2592000,\"endpoints\":[{\"url\":\"https://csp.withgoogle.com/csp/report-to/youtube_main\"}]}",
+      "accept-ch": "Sec-CH-Viewport-Width, Sec-CH-DPR, Device-Memory",
+      "vary": "Sec-CH-Viewport-Width, Sec-CH-DPR, Device-Memory",
+      "origin-trial": [
+       "AmhMBR6zCLzDDxpW+HfpP67BqwIknWnyMOXOQGfzYswFmJe+fgaI6XZgAzcxOrzNtP7hEDsOo1jdjFnVr2IdxQ4AAAB4eyJvcmlnaW4iOiJodHRwczovL3lvdXR1YmUuY29tOjQ0MyIsImZlYXR1cmUiOiJXZWJWaWV3WFJlcXVlc3RlZFdpdGhEZXByZWNhdGlvbiIsImV4cGlyeSI6MTc1ODA2NzE5OSwiaXNTdWJkb21haW4iOnRydWV9",
+       "AiDEBptUfVeO93q48VdVMe/ubupazdAl8AaHP+NBzdnW8quUcHdzJUyGSfrmtpKJu7EOvwRp9ug2rEo3XU+WMAMAAAB2eyJvcmlnaW4iOiJodHRwczovL3lvdXR1YmUuY29tOjQ0MyIsImZlYXR1cmUiOiJEZXZpY2VCb3VuZFNlc3Npb25DcmVkZW50aWFsczIiLCJleHBpcnkiOjE3NzQzMTA0MDAsImlzU3ViZG9tYWluIjp0cnVlfQ==",
+       "Ao9lPbOYlYWEB+SVHe5mV2bIoTe0cN+xJ2b6VhNakYPBFQ5MGU1Eg+nxeSLMbqnFlr2xj72d2bsU3ei2gfOpKg8AAABreyJvcmlnaW4iOiJodHRwczovL3lvdXR1YmUuY29tOjQ0MyIsImZlYXR1cmUiOiJDb25uZWN0aW9uQWxsb3dsaXN0IiwiZXhwaXJ5IjoxNzg4ODI1NjAwLCJpc1N1YmRvbWFpbiI6dHJ1ZX0="
+      ],
+      "cross-origin-opener-policy": "same-origin-allow-popups; report-to=\"youtube_main\"",
+      "reporting-endpoints": "crash-reporting=\"/web-reports?context=eJwNyn9M1HUcx3HO57qYh3DHHXf3ve_n8xkZZb8wxCFtsjAsV24oWmrjKuTHmTo7TnagGCEFFhSSbDm6NLRUasbYjJZ_EBVIwxxEUg6HUs2yohCWAbKI6PPHY6_X-8fC1tuTHg9anllSYqlfE7ZMt4Qt2ZdKLWOJZRb_4jJLs_3pBXsnFuK_38anH9jo-NjGyG820kpj6IwsIqc3lkZtfC6WskActrI43qmLw3Mhjs4kO4NH7Fy9ZachzcHRTQ5G8hxkP--gosJBjZbV4OCL0w7MNgdi1MG1GQfza-PJ9seTMajTdDKz3sn1Kied7U7WXHYyP-HkrZtO_p11sjvGRY7HRUHYRWXExVivi2Cfi3ejEnjUnYDlcAI3uhK40-lm9kE3hwrd9O1y8-ErbiKjbiYXeChb5OHLez205noYr_OQ2uhh8KaHub89HJzRPdrLeq8X3xIvP-V7MYu8XNGWB71kN3jZ2uzlnniD4SyDyScNDuQa9OYb_B402F9pcEX7a7_BtPZek0HLEYM_ThlEf2JQ22FwbNjghTGD7ngf7aYP7vJx9j7dl_k4pw2s81G72UfUFh__lPjIrPdRoTUN-Yhob9zQe82vTDJDJvt2m7wfNnFWmjx0yMRzxqRfK-_Qc4_JYwMmXRdNhn42mRgzyZoyuW2V4PBqwcYnBDFrBfN-wUt5gsBOQU9YsLxckFklSHtZkF4t-K9GcLxOsKVeEG4QrD4h2HdKMHRaIFsFLe06PxNYPxf0advO6d4vWHlN_44L_NoebWBKkDEtKL4laHNLXk2U_JIu-WGVZDRH0rVJcrxQUh2UzIUkzr2S3Gq9r5UE6iQ1r0tONkoebpK0vC3ZGZGMaeuOSjZof56QbD-p72clMR2Sr7Srmr1bcsfXko39kswByXnN-q0k8aIkb1BS9Z2k4ZIkYUjyptb2oyR0XZJlUYRQJMUqul2KKUOxwVRsV4oebUWKIqJ9lKE4n6n4NUdx-SnFmc0K91bFfEDxSEjx3IuKokpFXY3-e03xjfa9NqyNaLPNigvHFBmtCsvdUdaZB6KszyZHWeNt0ZPdB4es9qqBAysXJ5cXl4ZLCwJL9wQKkreVFAfDyYFgUXJhyY7wjsL8XXmpKakrlqWkpi9NSc8LpfwPCHwohw\", youtube_main-connectionallowlist=\"https://csp.withgoogle.com/csp/report-to/youtube_main/connectionallowlist\"",
+      "document-policy": "include-js-call-stacks-in-crash-reports",
+      "content-encoding": "gzip",
+      "server": "ESF",
+      "x-xss-protection": "0",
+      "set-cookie": [
+       "__Secure-YNID=CtsBCAUSjQEBDB6PDETF6EZFO8bIM8vnFaS66FplxvgCEBc7np05lPMRGq3if6KC-P3tAmqlUe_8THlcaPJ3HcPnnLhM_n4s9eVzu-TpOLm9TqjLXlu72GtEyvaJCKUmssjAeDvOPirYg7jt2UhXCMVQ4-pYV4dcLvbXDafeV_ao92q5AO_7foMUB35BA6qRAr8KJAooBTJFARxY9Wru4S4ZlOyBUAzjKJwQM9NcBDtL7056CgZS4HbnkhBsN9WRJd-g34L-iIZ1pm3vYM-I8MOhd0i1285tmWQ_KuAN; expires=Tue, 27-Apr-2027 15:08:36 GMT; path=/; domain=.youtube.com; Secure; HttpOnly; SameSite=none",
+       "GPS=1; Domain=.youtube.com; Expires=Thu, 29-Oct-2026 15:38:36 GMT; Path=/; Secure; HttpOnly",
+       "YSC=FxAfpNuYgp0; Domain=.youtube.com; Path=/; Secure; HttpOnly; SameSite=none",
+       "__Secure-ROLLOUT_TOKEN=CPHH7cnG3qey4AEQzdmV7sDflwMYzdmV7sDflwM%3D; Domain=youtube.com; Expires=Tue, 27-Apr-2027 15:08:36 GMT; Path=/; Secure; HttpOnly; SameSite=none; Partitioned",
+       "__Secure-YEC=; Domain=.youtube.com; Expires=Fri, 02-Feb-2024 15:08:36 GMT; Path=/; Secure; HttpOnly; SameSite=lax",
+       "VISITOR_INFO1_LIVE=62QeB6PeZTk; Domain=.youtube.com; Expires=Tue, 27-Apr-2027 15:08:36 GMT; Path=/; Secure; HttpOnly; SameSite=none",
+       "VISITOR_PRIVACY_METADATA=CgJSVRIEGgAgSw%3D%3D; Domain=.youtube.com; Expires=Tue, 27-Apr-2027 15:08:36 GMT; Path=/; Secure; HttpOnly; SameSite=none"
+      ],
+      "alt-svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000",
+      "connection": "close",
+      "transfer-encoding": "chunked"
+     },
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "failed",
+     "code": null,
+     "total_ms": 10488,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 29182,
+     "net": "IOT",
+     "status": "failed",
+     "code": null,
+     "total_ms": 2,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 50340,
+     "net": "Selectel",
+     "status": "finished",
+     "code": 200,
+     "total_ms": 296,
+     "headers": {
+      "content-type": "text/html; charset=utf-8",
+      "x-content-type-options": "nosniff",
+      "connection-allowlist-report-only": "(response-origin \"https://youtube.com\" \"https://*.youtube.com\" \"https://youtu.be\" \"https://www.youtubekids.com\" \"https://ytkids.app.goo.gl\" \"https://www.youtube-nocookie.com\" \"https://www.youtubeeducation.com\" \"https://accounts.google.com\" \"https://www.gstatic.com\" \"https://gstatic.com\" \"https://fonts.gstatic.com\" \"https://*.gstatic.com\" \"https://*.ytimg.com\" \"https://csp.withgoogle.com\" \"https://fonts.googleapis.com\" \"https://ajax.googleapis.com\" \"https://www.googletagmanager.com\" \"https://apis.google.com\" \"https://translate.googleapis.com\" \"https://translate-pa.googleapis.com\" \"https://translate.google.com\" \"https://feedback-pa.clients6.google.com\" \"https://scone-pa.clients6.google.com\" \"https://inputtools.google.com\" \"https://clients1.google.com\" \"https://clients2.google.com\" \"https://support.google.com\" \"https://myaccount.google.com\" \"https://myactivity.google.com\" \"https://families.google.com\" \"https://familylink.google.com\" \"https://policies.google.com\" \"https://payments.google.com\" \"https://one.google.com\" \"https://developers.google.com\" \"https://play.google.com\" \"https://analytics.google.com\" \"https://*.analytics.google.com\" \"https://www.google-analytics.com\" \"https://*.google-analytics.com\" \"https://www.googleadservices.com\" \"https://*.doubleclick.net\" \"https://fundingchoices.google.com\" \"https://ads.google.com\" \"https://myadcenter.google.com\" \"https://*.googlevideo.com\" \"https://docs.google.com\" \"https://forms.gle\" \"https://g.co\" \"https://messages.google.com\" \"https://lh3.googleusercontent.com\" \"https://lh4.googleusercontent.com\" \"https://lh5.googleusercontent.com\" \"https://lh6.googleusercontent.com\" \"https://play-lh.googleusercontent.com\" \"https://kstatic.googleusercontent.com\" \"https://lh3.ggpht.com\" \"https://lh4.ggpht.com\" \"https://lh5.ggpht.com\" \"https://lh6.ggpht.com\" \"https://yt3.ggpht.com\" \"https://yt4.ggpht.com\" \"https://jnn-pa.googleapis.com\" \"https://*.googlesyndication.com\" \"https://yt3.googleusercontent.com\" \"https://yt4.googleusercontent.com\" \"https://www.google.ad\" \"https://www.google.ae\" \"https://www.google.al\" \"https://www.google.am\" \"https://www.google.as\" \"https://www.google.at\" \"https://www.google.az\" \"https://www.google.ba\" \"https://www.google.be\" \"https://www.google.bf\" \"https://www.google.bg\" \"https://www.google.bi\" \"https://www.google.bj\" \"https://www.google.bs\" \"https://www.google.bt\" \"https://www.google.by\" \"https://www.google.ca\" \"https://www.google.cd\" \"https://www.google.cf\" \"https://www.google.cg\" \"https://www.google.ch\" \"https://www.google.ci\" \"https://www.google.cl\" \"https://www.google.cm\" \"https://www.google.cn\" \"https://www.google.co.ao\" \"https://www.google.co.bw\" \"https://www.google.co.ck\" \"https://www.google.co.cr\" \"https://www.google.co.id\" \"https://www.google.co.il\" \"https://www.google.co.im\" \"https://www.google.co.in\" \"https://www.google.co.je\" \"https://www.google.co.jp\" \"https://www.google.co.ke\" \"https://www.google.co.kr\" \"https://www.google.co.ls\" \"https://www.google.co.ma\" \"https://www.google.co.mz\" \"https://www.google.co.nz\" \"https://www.google.co.th\" \"https://www.google.co.tz\" \"https://www.google.co.ug\" \"https://www.google.co.uk\" \"https://www.google.co.uz\" \"https://www.google.co.ve\" \"https://www.google.co.vi\" \"https://www.google.co.za\" \"https://www.google.co.zm\" \"https://www.google.co.zw\" \"https://www.google.com\" \"https://www.google.com.af\" \"https://www.google.com.ag\" \"https://www.google.com.ai\" \"https://www.google.com.ar\" \"https://www.google.com.au\" \"https://www.google.com.bd\" \"https://www.google.com.bh\" \"https://www.google.com.bn\" \"https://www.google.com.bo\" \"https://www.google.com.br\" \"https://www.google.com.bz\" \"https://www.google.com.cn\" \"https://www.google.com.co\" \"https://www.google.com.cu\" \"https://www.google.com.cy\" \"https://www.google.com.do\" \"https://www.google.com.ec\" \"https://www.google.com.eg\" \"https://www.google.com.et\" \"https://www.google.com.fj\" \"https://www.google.com.gh\" \"https://www.google.com.gi\" \"https://www.google.com.gt\" \"https://www.google.com.hk\" \"https://www.google.com.jm\" \"https://www.google.com.kh\" \"https://www.google.com.kw\" \"https://www.google.com.lb\" \"https://www.google.com.ly\" \"https://www.google.com.mm\" \"https://www.google.com.mt\" \"https://www.google.com.mx\" \"https://www.google.com.my\" \"https://www.google.com.na\" \"https://www.google.com.ng\" \"https://www.google.com.ni\" \"https://www.google.com.np\" \"https://www.google.com.om\" \"https://www.google.com.pa\" \"https://www.google.com.pe\" \"https://www.google.com.pg\" \"https://www.google.com.ph\" \"https://www.google.com.pk\" \"https://www.google.com.pr\" \"https://www.google.com.py\" \"https://www.google.com.qa\" \"https://www.google.com.sa\" \"https://www.google.com.sb\" \"https://www.google.com.sg\" \"https://www.google.com.sl\" \"https://www.google.com.sv\" \"https://www.google.com.tj\" \"https://www.google.com.tn\" \"https://www.google.com.tr\" \"https://www.google.com.tw\" \"https://www.google.com.ua\" \"https://www.google.com.uy\" \"https://www.google.com.vc\" \"https://www.google.com.vn\" \"https://www.google.cv\" \"https://www.google.cz\" \"https://www.google.de\" \"https://www.google.dj\" \"https://www.google.dk\" \"https://www.google.dm\" \"https://www.google.dz\" \"https://www.google.ee\" \"https://www.google.es\" \"https://www.google.fi\" \"https://www.google.fm\" \"https://www.google.fr\" \"https:/...[truncated]",
+      "cache-control": "no-cache, no-store, max-age=0, must-revalidate",
+      "pragma": "no-cache",
+      "expires": "Mon, 01 Jan 1990 00:00:00 GMT",
+      "date": "Thu, 29 Oct 2026 15:08:36 GMT",
+      "p3p": "CP=\"This is not a P3P policy! See http://support.google.com/accounts/answer/151657?hl=ru for more info.\"",
+      "strict-transport-security": "max-age=31536000",
+      "x-frame-options": "SAMEORIGIN",
+      "cross-origin-opener-policy": "same-origin-allow-popups; report-to=\"youtube_main\"",
+      "accept-ch": "Sec-CH-Viewport-Width, Sec-CH-DPR, Device-Memory",
+      "vary": "Sec-CH-Viewport-Width, Sec-CH-DPR, Device-Memory",
+      "permissions-policy": "ch-ua-arch=*, ch-ua-bitness=*, ch-ua-full-version=*, ch-ua-full-version-list=*, ch-ua-model=*, ch-ua-wow64=*, ch-ua-form-factors=*, ch-ua-platform=*, ch-ua-platform-version=*",
+      "report-to": "{\"group\":\"youtube_main\",\"max_age\":2592000,\"endpoints\":[{\"url\":\"https://csp.withgoogle.com/csp/report-to/youtube_main\"}]}",
+      "content-security-policy": [
+       "base-uri 'self';object-src 'none';script-src 'report-sample' 'nonce-hCGnnHBTuITDHIoyhtRoIQ' 'unsafe-inline' 'strict-dynamic' https: http: 'unsafe-eval';report-uri https://csp.withgoogle.com/csp/youtube_main/strict",
+       "require-trusted-types-for 'script'"
+      ],
+      "origin-trial": [
+       "AmhMBR6zCLzDDxpW+HfpP67BqwIknWnyMOXOQGfzYswFmJe+fgaI6XZgAzcxOrzNtP7hEDsOo1jdjFnVr2IdxQ4AAAB4eyJvcmlnaW4iOiJodHRwczovL3lvdXR1YmUuY29tOjQ0MyIsImZlYXR1cmUiOiJXZWJWaWV3WFJlcXVlc3RlZFdpdGhEZXByZWNhdGlvbiIsImV4cGlyeSI6MTc1ODA2NzE5OSwiaXNTdWJkb21haW4iOnRydWV9",
+       "AiDEBptUfVeO93q48VdVMe/ubupazdAl8AaHP+NBzdnW8quUcHdzJUyGSfrmtpKJu7EOvwRp9ug2rEo3XU+WMAMAAAB2eyJvcmlnaW4iOiJodHRwczovL3lvdXR1YmUuY29tOjQ0MyIsImZlYXR1cmUiOiJEZXZpY2VCb3VuZFNlc3Npb25DcmVkZW50aWFsczIiLCJleHBpcnkiOjE3NzQzMTA0MDAsImlzU3ViZG9tYWluIjp0cnVlfQ==",
+       "Ao9lPbOYlYWEB+SVHe5mV2bIoTe0cN+xJ2b6VhNakYPBFQ5MGU1Eg+nxeSLMbqnFlr2xj72d2bsU3ei2gfOpKg8AAABreyJvcmlnaW4iOiJodHRwczovL3lvdXR1YmUuY29tOjQ0MyIsImZlYXR1cmUiOiJDb25uZWN0aW9uQWxsb3dsaXN0IiwiZXhwaXJ5IjoxNzg4ODI1NjAwLCJpc1N1YmRvbWFpbiI6dHJ1ZX0="
+      ],
+      "reporting-endpoints": "crash-reporting=\"/web-reports?context=eJwNyH9MlGUAwPE7v-vmPOF-33vv-z7PO3OYtTo7aUBbtGNnuWpTUdOcsEDwLJkdJztOMVJUVmBIsuno0oyWXc6cm2n5B1mAbVSDTKrRUPrDsmJdtgyQZVTPH5_tu--8PkfBEwl75eIGe8fylH06m7LnFqTtFQvT9uPuDXOa_phHxf1O6iqdfPSek94PnIz_4qSocT4XM3mUD-bTpdyczScdd-FMu3ij3YX2pYuLBW5Gjrq5dttNZ5GHY-s8jFd5WPGch-ZmD61KrNPDp6c8mGc8iAkP12c8_PeUlxUVXpZlvJSOqDZ9zKzycaPFx_LvfRy-5eOfOz62z_dTrvmpSfnZnfGTG_STGPLzpi1Atz_AY8EAU3UB7EcC5PoD3HkwyKHaIEPbgpzcFyQzEWRyjkY6T6PvPo3TGzVutmsUdmmM3NKY_Uvj4IzGqlAIY3EIc3OI6uMh7vXqjMV0JtfqDG7S2bNb56ry5x6daeXtbp3sUZ3ikzpzz-u09er0XNF5a0znhZzOOdOARQbnlxpcUi6vNGhbb2B_xiDaYdCsdI8aZJRXfzf4WynzmbgKTKJJk13bTYoPmWhnTYaUhz8zefyySf8Vk9EfTWJTJneVCY4sE6x5UmCrFLxUJYjXCR5qEkRbBEV7BSX7Bf-2CnraBRs6BKlOQewdwa53BaOnBPK0IHtOsPOC6o8Fjk8EQ8qWS6qHBY9cFwxPCUqnBfW3BWeCkpcXSH4qkfxQJpkol_Svk6yplTyt9Cj7EpLZpMS3U7Jxv6SvTRJvl7QekJzokmRfl9RlJDll5THJauX5E5LoBUler-Sa4h6Q3P2FZO2wxPG1pHpE0vKNpPM7SWBU8pqSvKHeb5KY3SKJxaJ8iwG_xY6QxZRusdq0KI5YZJT3Sy32PmrxedTi53KLs-stgtUWz76o3isWXynfKmPKuPJh1sJ-j80x84DNURm2ObzOuZMDB0cd7l-vHpALw031janGmviSHfGa8JaG-kQqHE9sDtc2bE1trd20raowUli8NFJYsiRSUpWM_A9a7gLx\", youtube_main-connectionallowlist=\"https://csp.withgoogle.com/csp/report-to/youtube_main/connectionallowlist\"",
+      "document-policy": "include-js-call-stacks-in-crash-reports",
+      "content-encoding": "gzip",
+      "server": "ESF",
+      "x-xss-protection": "0",
+      "set-cookie": [
+       "__Secure-YNID=CtoBCAUSjAEBDB6PDIOdqBsumZTaTaJxsZnavMHMZrEc8C0y1PjQEymMOMbSV9M1CKrHLS2Au2NdKrNei5VjqWSi2N-oWoz6ebw_uFLQm4NIwsTaE_Y_veCZLcm11RtqvmjGyAGzsazWSEmAJizo-_LePDZKP13lbUN6X715qL8BwaKBUqqaVlFZ6BEF-NfX2PbcfCgFMkUBHFj1am_Pj7PLfHkaImMbAzPQtyapUN1flxJ4emLQ3BdZdftoN8BnCtRtWNCJ7aq4_9HgQrBAQmAEuEBmpVXBRYAMSAk; expires=Tue, 27-Apr-2027 15:08:36 GMT; path=/; domain=.youtube.com; Secure; HttpOnly; SameSite=none",
+       "GPS=1; Domain=.youtube.com; Expires=Thu, 29-Oct-2026 15:38:36 GMT; Path=/; Secure; HttpOnly",
+       "YSC=MqYHKA5U0-g; Domain=.youtube.com; Path=/; Secure; HttpOnly; SameSite=none",
+       "__Secure-YEC=; Domain=.youtube.com; Expires=Fri, 02-Feb-2024 15:08:36 GMT; Path=/; Secure; HttpOnly; SameSite=lax",
+       "VISITOR_INFO1_LIVE=wl3Drzm1slA; Domain=.youtube.com; Expires=Tue, 27-Apr-2027 15:08:36 GMT; Path=/; Secure; HttpOnly; SameSite=none",
+       "VISITOR_PRIVACY_METADATA=CgJSVRIEGgAgHA%3D%3D; Domain=.youtube.com; Expires=Tue, 27-Apr-2027 15:08:36 GMT; Path=/; Secure; HttpOnly; SameSite=none",
+       "__Secure-ROLLOUT_TOKEN=CK3Y6bqsqevd3AEQ8MKS7sDflwMY8MKS7sDflwM%3D; Domain=youtube.com; Expires=Tue, 27-Apr-2027 15:08:36 GMT; Path=/; Secure; HttpOnly; SameSite=none; Partitioned"
+      ],
+      "alt-svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000",
+      "connection": "close",
+      "transfer-encoding": "chunked"
+     },
+     "resolved": null,
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "http youtubei player",
+   "kind": "http",
+   "target": "youtubei.googleapis.com",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "finished",
+     "code": 405,
+     "total_ms": 289,
+     "headers": {
+      "content-type": "text/html; charset=UTF-8",
+      "referrer-policy": "no-referrer",
+      "content-length": "1606",
+      "date": "Thu, 29 Oct 2026 15:08:50 GMT",
+      "alt-svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000",
+      "connection": "close"
+     },
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "failed",
+     "code": null,
+     "total_ms": 10122,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 208677,
+     "net": "Cloud.ru",
+     "status": "failed",
+     "code": null,
+     "total_ms": 15000,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "http api.github.com",
+   "kind": "http",
+   "target": "api.github.com",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "finished",
+     "code": 200,
+     "total_ms": 118,
+     "headers": {
+      "date": "Thu, 29 Oct 2026 15:09:06 GMT",
+      "cache-control": "public, max-age=60, s-maxage=60",
+      "vary": "Accept,Accept-Encoding, Accept, X-Requested-With",
+      "etag": "\"9d253f275c72cb4e30a76d18c8fe6e25cbafc1e1005a23b6e58bed7b0831666c\"",
+      "last-modified": "Mon, 26 Oct 2026 22:25:26 GMT",
+      "x-github-api-version-selected": "2022-11-28",
+      "access-control-expose-headers": "ETag, Link, Location, Retry-After, X-GitHub-OTP, X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Used, X-RateLimit-Resource, X-RateLimit-Reset, X-OAuth-Scopes, X-Accepted-OAuth-Scopes, X-Poll-Interval, X-GitHub-Media-Type, X-GitHub-SSO, X-GitHub-Request-Id, Deprecation, Sunset, Warning",
+      "access-control-allow-origin": "*",
+      "strict-transport-security": "max-age=31536000; includeSubdomains; preload",
+      "x-frame-options": "deny",
+      "x-content-type-options": "nosniff",
+      "x-xss-protection": "0",
+      "referrer-policy": "origin-when-cross-origin, strict-origin-when-cross-origin",
+      "content-security-policy": "default-src 'none'",
+      "server": "github.com",
+      "content-type": "application/json; charset=utf-8",
+      "x-github-media-type": "github.v3; format=json",
+      "content-encoding": "gzip",
+      "accept-ranges": "bytes",
+      "x-ratelimit-limit": "60",
+      "x-ratelimit-remaining": "59",
+      "x-ratelimit-used": "1",
+      "x-ratelimit-resource": "core",
+      "x-ratelimit-reset": "1793290148",
+      "content-length": "5937",
+      "x-github-request-id": "B36E:3F994E:9F551CA:E985926:6AE36193",
+      "x-github-edge-region": "fra",
+      "connection": "close"
+     },
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "finished",
+     "code": 200,
+     "total_ms": 131,
+     "headers": {
+      "date": "Thu, 29 Oct 2026 15:08:58 GMT",
+      "cache-control": "public, max-age=60, s-maxage=60",
+      "vary": "Accept,Accept-Encoding, Accept, X-Requested-With",
+      "etag": "\"9d253f275c72cb4e30a76d18c8fe6e25cbafc1e1005a23b6e58bed7b0831666c\"",
+      "last-modified": "Mon, 26 Oct 2026 22:25:26 GMT",
+      "x-github-api-version-selected": "2022-11-28",
+      "access-control-expose-headers": "ETag, Link, Location, Retry-After, X-GitHub-OTP, X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Used, X-RateLimit-Resource, X-RateLimit-Reset, X-OAuth-Scopes, X-Accepted-OAuth-Scopes, X-Poll-Interval, X-GitHub-Media-Type, X-GitHub-SSO, X-GitHub-Request-Id, Deprecation, Sunset, Warning",
+      "access-control-allow-origin": "*",
+      "strict-transport-security": "max-age=31536000; includeSubdomains; preload",
+      "x-frame-options": "deny",
+      "x-content-type-options": "nosniff",
+      "x-xss-protection": "0",
+      "referrer-policy": "origin-when-cross-origin, strict-origin-when-cross-origin",
+      "content-security-policy": "default-src 'none'",
+      "server": "github.com",
+      "content-type": "application/json; charset=utf-8",
+      "x-github-media-type": "github.v3; format=json",
+      "content-encoding": "gzip",
+      "accept-ranges": "bytes",
+      "x-ratelimit-limit": "60",
+      "x-ratelimit-remaining": "59",
+      "x-ratelimit-used": "1",
+      "x-ratelimit-resource": "core",
+      "x-ratelimit-reset": "1793290148",
+      "content-length": "5555",
+      "x-github-request-id": "9C42:353E28:9EF92FF:E86E20C:6AE36194",
+      "x-github-edge-region": "fra",
+      "connection": "close"
+     },
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 50340,
+     "net": "Selectel",
+     "status": "finished",
+     "code": 200,
+     "total_ms": 166,
+     "headers": {
+      "date": "Thu, 29 Oct 2026 15:08:57 GMT",
+      "cache-control": "public, max-age=60, s-maxage=60",
+      "vary": "Accept,Accept-Encoding, Accept, X-Requested-With",
+      "etag": "\"9d253f275c72cb4e30a76d18c8fe6e25cbafc1e1005a23b6e58bed7b0831666c\"",
+      "last-modified": "Mon, 26 Oct 2026 22:25:26 GMT",
+      "x-github-api-version-selected": "2022-11-28",
+      "access-control-expose-headers": "ETag, Link, Location, Retry-After, X-GitHub-OTP, X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Used, X-RateLimit-Resource, X-RateLimit-Reset, X-OAuth-Scopes, X-Accepted-OAuth-Scopes, X-Poll-Interval, X-GitHub-Media-Type, X-GitHub-SSO, X-GitHub-Request-Id, Deprecation, Sunset, Warning",
+      "access-control-allow-origin": "*",
+      "strict-transport-security": "max-age=31536000; includeSubdomains; preload",
+      "x-frame-options": "deny",
+      "x-content-type-options": "nosniff",
+      "x-xss-protection": "0",
+      "referrer-policy": "origin-when-cross-origin, strict-origin-when-cross-origin",
+      "content-security-policy": "default-src 'none'",
+      "server": "github.com",
+      "content-type": "application/json; charset=utf-8",
+      "x-github-media-type": "github.v3; format=json",
+      "content-encoding": "gzip",
+      "accept-ranges": "bytes",
+      "x-ratelimit-limit": "60",
+      "x-ratelimit-remaining": "59",
+      "x-ratelimit-used": "1",
+      "x-ratelimit-resource": "core",
+      "x-ratelimit-reset": "1793290148",
+      "content-length": "5937",
+      "x-github-request-id": "E2DA:2A6D01:9BA9645:E379165:6AE36194",
+      "x-github-edge-region": "fra",
+      "connection": "close"
+     },
+     "resolved": null,
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "http googlevideo.com",
+   "kind": "http",
+   "target": "googlevideo.com",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "finished",
+     "code": 302,
+     "total_ms": 176,
+     "headers": {
+      "location": "https://www.google.com/",
+      "cache-control": "private",
+      "content-type": "text/html; charset=UTF-8",
+      "x-content-type-options": "nosniff",
+      "date": "Thu, 29 Oct 2026 15:09:11 GMT",
+      "server": "sffe",
+      "content-length": "220",
+      "x-xss-protection": "0",
+      "alt-svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000",
+      "connection": "close"
+     },
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "finished",
+     "code": 302,
+     "total_ms": 163,
+     "headers": {
+      "location": "https://www.google.com/",
+      "cache-control": "private",
+      "content-type": "text/html; charset=UTF-8",
+      "x-content-type-options": "nosniff",
+      "date": "Thu, 29 Oct 2026 15:09:11 GMT",
+      "server": "sffe",
+      "content-length": "220",
+      "x-xss-protection": "0",
+      "alt-svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000",
+      "connection": "close"
+     },
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 48347,
+     "net": "Mediasoft ekspert",
+     "status": "failed",
+     "code": null,
+     "total_ms": 15001,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "http github.com",
+   "kind": "http",
+   "target": "github.com",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "finished",
+     "code": 200,
+     "total_ms": 759,
+     "headers": {
+      "date": "Thu, 29 Oct 2026 15:09:29 GMT",
+      "content-type": "text/html; charset=utf-8",
+      "vary": "X-PJAX, X-PJAX-Container, Turbo-Visit, Turbo-Frame, X-Requested-With, X-GitHub-Client-Version, Sec-Fetch-Site,Accept-Encoding, Accept, X-Requested-With",
+      "etag": "W/\"c4e9b701b09e3a0a20457e442c7b5632\"",
+      "cache-control": "max-age=0, private, must-revalidate",
+      "strict-transport-security": "max-age=31536000; includeSubdomains; preload",
+      "x-frame-options": "deny",
+      "x-content-type-options": "nosniff",
+      "x-xss-protection": "0",
+      "referrer-policy": "no-referrer-when-downgrade",
+      "content-security-policy": "default-src 'none'; base-uri 'self'; child-src github.githubassets.com github.com/assets-cdn/worker/ github.com/assets/ gist.github.com/assets-cdn/worker/; connect-src 'self' uploads.github.com www.githubstatus.com collector.github.com raw.githubusercontent.com api.github.com github-cloud.s3.amazonaws.com github-production-repository-file-5c1aeb.s3.amazonaws.com github-production-upload-manifest-file-7fdce7.s3.amazonaws.com github-production-user-asset-6210df.s3.amazonaws.com *.rel.tunnels.api.visualstudio.com wss://*.rel.tunnels.api.visualstudio.com github.githubassets.com objects-origin.githubusercontent.com copilot-proxy.githubusercontent.com proxy.individual.githubcopilot.com proxy.business.githubcopilot.com proxy.enterprise.githubcopilot.com *.actions.githubusercontent.com wss://*.actions.githubusercontent.com productionresultssa0.blob.core.windows.net productionresultssa1.blob.core.windows.net productionresultssa2.blob.core.windows.net productionresultssa3.blob.core.windows.net productionresultssa4.blob.core.windows.net productionresultssa5.blob.core.windows.net productionresultssa6.blob.core.windows.net productionresultssa7.blob.core.windows.net productionresultssa8.blob.core.windows.net productionresultssa9.blob.core.windows.net productionresultssa10.blob.core.windows.net productionresultssa11.blob.core.windows.net productionresultssa12.blob.core.windows.net productionresultssa13.blob.core.windows.net productionresultssa14.blob.core.windows.net productionresultssa15.blob.core.windows.net productionresultssa16.blob.core.windows.net productionresultssa17.blob.core.windows.net productionresultssa18.blob.core.windows.net productionresultssa19.blob.core.windows.net productionresultssa30.blob.core.windows.net productionresultssa31.blob.core.windows.net productionresultssa32.blob.core.windows.net github-production-repository-image-32fea6.s3.amazonaws.com github-production-release-asset-2e65be.s3.amazonaws.com insights.github.com wss://alive.github.com wss://alive-staging.github.com api.githubcopilot.com api.individual.githubcopilot.com api.business.githubcopilot.com api.enterprise.githubcopilot.com wss://production-copilot-host.webpubsub.azure.com wss://production-copilot-host-centralus.webpubsub.azure.com wss://production-copilot-host-centralus-02.webpubsub.azure.com wss://production-copilot-host-westus.webpubsub.azure.com api.github.com/cmc_internal/api/; font-src github.githubassets.com; form-action 'self' github.com gist.github.com copilot-workspace.githubnext.com objects-origin.githubusercontent.com; frame-ancestors 'none'; frame-src viewscreen.githubusercontent.com notebooks.githubusercontent.com; img-src 'self' data: blob: github.githubassets.com media.githubusercontent.com camo.githubusercontent.com identicons.github.com avatars.githubusercontent.com private-avatars.githubusercontent.com github-cloud.s3.amazonaws.com objects.githubusercontent.com release-assets.githubusercontent.com secured-user-images.githubusercontent.com user-images.githubusercontent.com private-user-images.githubusercontent.com opengraph.githubassets.com repository-images.githubusercontent.com marketplace-screenshots.githubusercontent.com copilotprodattachments.blob.core.windows.net/github-production-copilot-attachments/ github-production-user-asset-6210df.s3.amazonaws.com customer-stories-feed.github.com spotlights-feed.github.com explore-feed.github.com *.googleusercontent.com objects-origin.githubusercontent.com *.githubusercontent.com; manifest-src 'self'; media-src github.com user-images.githubusercontent.com secured-user-images.githubusercontent.com private-user-images.githubusercontent.com github-production-user-asset-6210df.s3.amazonaws.com gist.github.com github.githubassets.com; script-src github.githubassets.com 'sha256-6AKuI+cDd1MoUL1u4eqrA9PXmnPAkOB4h7421hPUUm0='; style-src 'unsafe-inline' github.githubassets.com; upgrade-insecure-requests; worker-src github.githubassets.com github.com/assets-cdn/worker/ github.com/assets/ gist.github.com/assets-cdn/worker/",
+      "server": "github.com",
+      "content-encoding": "gzip",
+      "accept-ranges": "bytes",
+      "set-cookie": [
+       "_gh_sess=COf8MnBjBFbQzh3gFpYD%2BVxvZ%2BB7GCKVwW1anvaFuobDOVxSJ6Ho%2BRhpbcv61n1%2FVU5pSrmFD88oj5O0P1OCZaV4sDmIiWwd4nPI7aHIxD7w7qoLyOqSAxv3aSvwsHiGrAoneZh3HESEU5OJJQQ1zUCp6N4LRPaNRjA68f9OPLx%2FiutfL2xz5GFiSjqiFPjoq4h8IYQ8VTrSaruLnMJFDHX6lj81NvmsQlXYN2EkwX1lVgOphmD6th%2B2bubjvr80icpHvAwRJDYZFjYPxavhDQ%3D%3D--OhQuw3JRhwqLIsAJ--Un1tiQwia6HIzsRizAhqFg%3D%3D; path=/; HttpOnly; secure; SameSite=Lax",
+       "_octo=GH1.1.855315692.1793286569; expires=Fri, 29 Oct 2027 15:09:29 GMT; domain=.github.com; path=/; secure; SameSite=Lax",
+       "logged_in=no; expires=Fri, 29 Oct 2027 15:09:29 GMT; domain=.github.com; path=/; HttpOnly; secure; SameSite=Lax"
+      ],
+      "x-github-request-id": "956C:358572:8E1F333:C1EA0CB:6AE361A9",
+      "x-github-edge-region": "fra",
+      "connection": "close",
+      "transfer-encoding": "chunked"
+     },
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "finished",
+     "code": 200,
+     "total_ms": 1047,
+     "headers": {
+      "date": "Thu, 29 Oct 2026 15:09:30 GMT",
+      "content-type": "text/html; charset=utf-8",
+      "vary": "X-PJAX, X-PJAX-Container, Turbo-Visit, Turbo-Frame, X-Requested-With, X-GitHub-Client-Version, Sec-Fetch-Site,Accept-Encoding, Accept, X-Requested-With",
+      "etag": "W/\"3f30fed6d2b62f44418583ed634b377f\"",
+      "cache-control": "max-age=0, private, must-revalidate",
+      "strict-transport-security": "max-age=31536000; includeSubdomains; preload",
+      "x-frame-options": "deny",
+      "x-content-type-options": "nosniff",
+      "x-xss-protection": "0",
+      "referrer-policy": "no-referrer-when-downgrade",
+      "content-security-policy": "default-src 'none'; base-uri 'self'; child-src github.githubassets.com github.com/assets-cdn/worker/ github.com/assets/ gist.github.com/assets-cdn/worker/; connect-src 'self' uploads.github.com www.githubstatus.com collector.github.com raw.githubusercontent.com api.github.com github-cloud.s3.amazonaws.com github-production-repository-file-5c1aeb.s3.amazonaws.com github-production-upload-manifest-file-7fdce7.s3.amazonaws.com github-production-user-asset-6210df.s3.amazonaws.com *.rel.tunnels.api.visualstudio.com wss://*.rel.tunnels.api.visualstudio.com github.githubassets.com objects-origin.githubusercontent.com copilot-proxy.githubusercontent.com proxy.individual.githubcopilot.com proxy.business.githubcopilot.com proxy.enterprise.githubcopilot.com *.actions.githubusercontent.com wss://*.actions.githubusercontent.com productionresultssa0.blob.core.windows.net productionresultssa1.blob.core.windows.net productionresultssa2.blob.core.windows.net productionresultssa3.blob.core.windows.net productionresultssa4.blob.core.windows.net productionresultssa5.blob.core.windows.net productionresultssa6.blob.core.windows.net productionresultssa7.blob.core.windows.net productionresultssa8.blob.core.windows.net productionresultssa9.blob.core.windows.net productionresultssa10.blob.core.windows.net productionresultssa11.blob.core.windows.net productionresultssa12.blob.core.windows.net productionresultssa13.blob.core.windows.net productionresultssa14.blob.core.windows.net productionresultssa15.blob.core.windows.net productionresultssa16.blob.core.windows.net productionresultssa17.blob.core.windows.net productionresultssa18.blob.core.windows.net productionresultssa19.blob.core.windows.net productionresultssa30.blob.core.windows.net productionresultssa31.blob.core.windows.net productionresultssa32.blob.core.windows.net github-production-repository-image-32fea6.s3.amazonaws.com github-production-release-asset-2e65be.s3.amazonaws.com insights.github.com wss://alive.github.com wss://alive-staging.github.com api.githubcopilot.com api.individual.githubcopilot.com api.business.githubcopilot.com api.enterprise.githubcopilot.com wss://production-copilot-host.webpubsub.azure.com wss://production-copilot-host-centralus.webpubsub.azure.com wss://production-copilot-host-centralus-02.webpubsub.azure.com wss://production-copilot-host-westus.webpubsub.azure.com api.github.com/cmc_internal/api/; font-src github.githubassets.com; form-action 'self' github.com gist.github.com copilot-workspace.githubnext.com objects-origin.githubusercontent.com; frame-ancestors 'none'; frame-src viewscreen.githubusercontent.com notebooks.githubusercontent.com; img-src 'self' data: blob: github.githubassets.com media.githubusercontent.com camo.githubusercontent.com identicons.github.com avatars.githubusercontent.com private-avatars.githubusercontent.com github-cloud.s3.amazonaws.com objects.githubusercontent.com release-assets.githubusercontent.com secured-user-images.githubusercontent.com user-images.githubusercontent.com private-user-images.githubusercontent.com opengraph.githubassets.com repository-images.githubusercontent.com marketplace-screenshots.githubusercontent.com copilotprodattachments.blob.core.windows.net/github-production-copilot-attachments/ github-production-user-asset-6210df.s3.amazonaws.com customer-stories-feed.github.com spotlights-feed.github.com explore-feed.github.com *.googleusercontent.com objects-origin.githubusercontent.com *.githubusercontent.com; manifest-src 'self'; media-src github.com user-images.githubusercontent.com secured-user-images.githubusercontent.com private-user-images.githubusercontent.com github-production-user-asset-6210df.s3.amazonaws.com gist.github.com github.githubassets.com; script-src github.githubassets.com 'sha256-6AKuI+cDd1MoUL1u4eqrA9PXmnPAkOB4h7421hPUUm0='; style-src 'unsafe-inline' github.githubassets.com; upgrade-insecure-requests; worker-src github.githubassets.com github.com/assets-cdn/worker/ github.com/assets/ gist.github.com/assets-cdn/worker/",
+      "server": "github.com",
+      "content-encoding": "gzip",
+      "accept-ranges": "bytes",
+      "set-cookie": [
+       "_gh_sess=s5%2Fmdotl2m9VxUcgsdYFDQmm%2FY7Edu0F8qDCxvFRo0hpXB7iOjk%2FGLLUUM95MeCfPgQ2GrlnIgRirD2bEqDyIebcUxQLVnaPI79NGEhQel666aPYxgYnsmzDwv17EY0sASdjn5eTYAMWPkJCLfdBnjfv%2Bg2Ir9pd1FSnnDIB5afCnZiIdwCKQsZ%2FgSA9bZCBd6zpO5iL5b7a3PvqRv3X8VsZC8tB%2Bl4f3rMqhzsG%2F0JU4Q2TCESPDpFtn5bppGYrEYBY1hM%2BEVk%2BVrguORhfVA%3D%3D--U9%2B%2FWBj3Pi3aBarE--CQIAya5c4hcwvRUhzVQbUA%3D%3D; path=/; HttpOnly; secure; SameSite=Lax",
+       "_octo=GH1.1.913176154.1793286569; expires=Fri, 29 Oct 2027 15:09:29 GMT; domain=.github.com; path=/; secure; SameSite=Lax",
+       "logged_in=no; expires=Fri, 29 Oct 2027 15:09:29 GMT; domain=.github.com; path=/; HttpOnly; secure; SameSite=Lax"
+      ],
+      "x-github-request-id": "A572:27E48D:8D9F3D7:C159DA9:6AE361A9",
+      "x-github-edge-region": "fra",
+      "connection": "close",
+      "transfer-encoding": "chunked"
+     },
+     "resolved": null,
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "inv.nadeko.net",
+   "kind": "http",
+   "target": "inv.nadeko.net",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "failed",
+     "code": null,
+     "total_ms": 15000,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "failed",
+     "code": null,
+     "total_ms": 293,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "yewtu.be",
+   "kind": "http",
+   "target": "yewtu.be",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "failed",
+     "code": null,
+     "total_ms": 15000,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "failed",
+     "code": null,
+     "total_ms": 140,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "invidious.nerdvpn.de",
+   "kind": "http",
+   "target": "invidious.nerdvpn.de",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "failed",
+     "code": null,
+     "total_ms": 873,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "failed",
+     "code": null,
+     "total_ms": 796,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "invidious.f5.si",
+   "kind": "http",
+   "target": "invidious.f5.si",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "finished",
+     "code": 530,
+     "total_ms": 274,
+     "headers": {
+      "date": "Thu, 29 Oct 2026 15:10:11 GMT",
+      "content-type": "text/plain; charset=UTF-8",
+      "content-length": "17",
+      "connection": "close",
+      "cache-control": "private, max-age=0, no-store, no-cache, must-revalidate, post-check=0, pre-check=0",
+      "expires": "Thu, 01 Jan 1970 00:00:01 GMT",
+      "referrer-policy": "same-origin",
+      "x-frame-options": "SAMEORIGIN",
+      "server": "cloudflare",
+      "cf-ray": "a5231b06ac2cfe50-FRA",
+      "alt-svc": "h3=\":443\"; ma=86400"
+     },
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "failed",
+     "code": null,
+     "total_ms": 25,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "iv.melmac.space",
+   "kind": "http",
+   "target": "iv.melmac.space",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "failed",
+     "code": null,
+     "total_ms": 256,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "failed",
+     "code": null,
+     "total_ms": 14,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "invidious.jing.rocks",
+   "kind": "http",
+   "target": "invidious.jing.rocks",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "failed",
+     "code": null,
+     "total_ms": 1575,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "failed",
+     "code": null,
+     "total_ms": 376,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "iv.datura.network",
+   "kind": "http",
+   "target": "iv.datura.network",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "failed",
+     "code": null,
+     "total_ms": 81,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "failed",
+     "code": null,
+     "total_ms": 57,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "yt.artemislena.eu",
+   "kind": "http",
+   "target": "yt.artemislena.eu",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "failed",
+     "code": null,
+     "total_ms": 362,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "failed",
+     "code": null,
+     "total_ms": 15001,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "invidious.einfachzocken.eu",
+   "kind": "http",
+   "target": "invidious.einfachzocken.eu",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "finished",
+     "code": 404,
+     "total_ms": 233,
+     "headers": {
+      "alt-svc": "h3=\":443\"; ma=2592000",
+      "content-type": "text/plain; charset=utf-8",
+      "x-content-type-options": "nosniff",
+      "date": "Thu, 29 Oct 2026 15:10:42 GMT",
+      "content-length": "19",
+      "connection": "close"
+     },
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "failed",
+     "code": null,
+     "total_ms": 63,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "invidious.reallyaweso.me",
+   "kind": "http",
+   "target": "invidious.reallyaweso.me",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "failed",
+     "code": null,
+     "total_ms": 14999,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "failed",
+     "code": null,
+     "total_ms": 15001,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "invidious.materialio.us",
+   "kind": "http",
+   "target": "invidious.materialio.us",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "failed",
+     "code": null,
+     "total_ms": 14999,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "failed",
+     "code": null,
+     "total_ms": 316,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "invidious.protokolla.fi",
+   "kind": "http",
+   "target": "invidious.protokolla.fi",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "finished",
+     "code": 200,
+     "total_ms": 1941,
+     "headers": {
+      "server": "nginx/1.27.5",
+      "date": "Thu, 29 Oct 2026 15:11:22 GMT",
+      "content-type": "text/html; charset=UTF-8",
+      "content-length": "581",
+      "connection": "close",
+      "expires": "Thu, 19 Nov 1981 08:52:00 GMT",
+      "cache-control": "no-store, no-cache, must-revalidate",
+      "pragma": "no-cache",
+      "set-cookie": "PHPSESSID=eald445qa4i2ln9r12br6gu6vu; path=/",
+      "vary": "Accept-Encoding",
+      "content-encoding": "gzip",
+      "x-xss-protection": "0",
+      "x-content-type-options": "nosniff",
+      "x-frame-options": "SAMEORIGIN"
+     },
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "failed",
+     "code": null,
+     "total_ms": 266,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "invidious.lunivers.trade",
+   "kind": "http",
+   "target": "invidious.lunivers.trade",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "finished",
+     "code": 503,
+     "total_ms": 225,
+     "headers": {
+      "content-length": "107",
+      "cache-control": "no-cache",
+      "content-type": "text/html",
+      "connection": "close"
+     },
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "finished",
+     "code": 503,
+     "total_ms": 209,
+     "headers": {
+      "content-length": "107",
+      "cache-control": "no-cache",
+      "content-type": "text/html",
+      "connection": "close"
+     },
+     "resolved": null,
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "iv.ggtyler.dev",
+   "kind": "http",
+   "target": "iv.ggtyler.dev",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "failed",
+     "code": null,
+     "total_ms": 2292,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "failed",
+     "code": null,
+     "total_ms": 2276,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "invidious.nikkosphere.com",
+   "kind": "http",
+   "target": "invidious.nikkosphere.com",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "finished",
+     "code": 451,
+     "total_ms": 274,
+     "headers": {
+      "alt-svc": "h3=\":443\"; ma=2592000",
+      "server": "Caddy",
+      "date": "Thu, 29 Oct 2026 15:11:32 GMT",
+      "content-length": "0",
+      "connection": "close"
+     },
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "finished",
+     "code": 451,
+     "total_ms": 290,
+     "headers": {
+      "alt-svc": "h3=\":443\"; ma=2592000",
+      "server": "Caddy",
+      "date": "Thu, 29 Oct 2026 15:11:32 GMT",
+      "content-length": "0",
+      "connection": "close"
+     },
+     "resolved": null,
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "invidious.privacyredirect.com",
+   "kind": "http",
+   "target": "invidious.privacyredirect.com",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "failed",
+     "code": null,
+     "total_ms": 15002,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "failed",
+     "code": null,
+     "total_ms": 14999,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "inv.tux.pizza",
+   "kind": "http",
+   "target": "inv.tux.pizza",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "failed",
+     "code": null,
+     "total_ms": 15000,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "failed",
+     "code": null,
+     "total_ms": 15001,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "pipedapi.kavin.rocks",
+   "kind": "http",
+   "target": "pipedapi.kavin.rocks",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "finished",
+     "code": 502,
+     "total_ms": 371,
+     "headers": {
+      "date": "Thu, 29 Oct 2026 15:12:10 GMT",
+      "content-type": "text/plain; charset=UTF-8",
+      "content-length": "16",
+      "connection": "close",
+      "cache-control": "private, max-age=0, no-store, no-cache, must-revalidate, post-check=0, pre-check=0",
+      "expires": "Thu, 01 Jan 1970 00:00:01 GMT",
+      "referrer-policy": "same-origin",
+      "x-frame-options": "SAMEORIGIN",
+      "server": "cloudflare",
+      "cf-ray": "a5231df11b82eecf-WAW",
+      "alt-svc": "h3=\":443\"; ma=86400"
+     },
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "finished",
+     "code": 502,
+     "total_ms": 212,
+     "headers": {
+      "date": "Thu, 29 Oct 2026 15:12:10 GMT",
+      "content-type": "text/plain; charset=UTF-8",
+      "content-length": "16",
+      "connection": "close",
+      "cache-control": "private, max-age=0, no-store, no-cache, must-revalidate, post-check=0, pre-check=0",
+      "expires": "Thu, 01 Jan 1970 00:00:01 GMT",
+      "referrer-policy": "same-origin",
+      "x-frame-options": "SAMEORIGIN",
+      "server": "cloudflare",
+      "cf-ray": "a5231def9a2e0cb1-HEL",
+      "alt-svc": "h3=\":443\"; ma=86400"
+     },
+     "resolved": null,
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "pipedapi.adminforge.de",
+   "kind": "http",
+   "target": "pipedapi.adminforge.de",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "finished",
+     "code": 301,
+     "total_ms": 319,
+     "headers": {
+      "date": "Thu, 29 Oct 2026 15:12:13 GMT",
+      "server": "Apache",
+      "location": "https://adminforge.de/",
+      "cache-control": "max-age=0",
+      "expires": "Thu, 29 Oct 2026 15:12:13 GMT",
+      "content-length": "270",
+      "connection": "close",
+      "content-type": "text/html; charset=iso-8859-1"
+     },
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "finished",
+     "code": 301,
+     "total_ms": 228,
+     "headers": {
+      "date": "Thu, 29 Oct 2026 15:12:13 GMT",
+      "server": "Apache",
+      "location": "https://adminforge.de/",
+      "cache-control": "max-age=0",
+      "expires": "Thu, 29 Oct 2026 15:12:13 GMT",
+      "content-length": "270",
+      "connection": "close",
+      "content-type": "text/html; charset=iso-8859-1"
+     },
+     "resolved": null,
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "api.piped.private.coffee",
+   "kind": "http",
+   "target": "api.piped.private.coffee",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "finished",
+     "code": 302,
+     "total_ms": 2030,
+     "headers": {
+      "access-control-allow-headers": "*, Authorization",
+      "access-control-allow-methods": "*",
+      "access-control-allow-origin": "*",
+      "alt-svc": "h3=\":443\"; ma=2592000",
+      "content-length": "0",
+      "date": "Thu, 29 Oct 2026 15:12:18 GMT",
+      "location": "https://piped.private.coffee",
+      "server": [
+       "Caddy",
+       "nginx/1.29.8"
+      ],
+      "server-timing": "app;dur=0.089069",
+      "connection": "close"
+     },
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "finished",
+     "code": 302,
+     "total_ms": 823,
+     "headers": {
+      "access-control-allow-headers": "*, Authorization",
+      "access-control-allow-methods": "*",
+      "access-control-allow-origin": "*",
+      "alt-svc": "h3=\":443\"; ma=2592000",
+      "content-length": "0",
+      "date": "Thu, 29 Oct 2026 15:12:17 GMT",
+      "location": "https://piped.private.coffee",
+      "server": [
+       "Caddy",
+       "nginx/1.29.8"
+      ],
+      "server-timing": "app;dur=0.103548",
+      "connection": "close"
+     },
+     "resolved": null,
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "pipedapi.ducks.party",
+   "kind": "http",
+   "target": "pipedapi.ducks.party",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "finished",
+     "code": 302,
+     "total_ms": 212,
+     "headers": {
+      "server": "openresty",
+      "date": "Thu, 29 Oct 2026 15:12:21 GMT",
+      "content-length": "0",
+      "connection": "close",
+      "access-control-allow-origin": "*",
+      "server-timing": "app;dur=0.032883",
+      "access-control-allow-methods": "*",
+      "access-control-allow-headers": "*, Authorization",
+      "location": "https://piped.ducks.party",
+      "x-served-by": "pipedapi.ducks.party"
+     },
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "finished",
+     "code": 302,
+     "total_ms": 142,
+     "headers": {
+      "server": "openresty",
+      "date": "Thu, 29 Oct 2026 15:12:21 GMT",
+      "content-length": "0",
+      "connection": "close",
+      "access-control-allow-origin": "*",
+      "server-timing": "app;dur=0.026554",
+      "access-control-allow-methods": "*",
+      "access-control-allow-headers": "*, Authorization",
+      "location": "https://piped.ducks.party",
+      "x-served-by": "pipedapi.ducks.party"
+     },
+     "resolved": null,
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "pipedapi.reallyaweso.me",
+   "kind": "http",
+   "target": "pipedapi.reallyaweso.me",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "finished",
+     "code": 502,
+     "total_ms": 178,
+     "headers": {
+      "alt-svc": "h3=\":443\"; ma=2592000",
+      "server": "Caddy",
+      "date": "Thu, 29 Oct 2026 15:12:24 GMT",
+      "content-length": "0",
+      "connection": "close"
+     },
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "finished",
+     "code": 502,
+     "total_ms": 140,
+     "headers": {
+      "alt-svc": "h3=\":443\"; ma=2592000",
+      "server": "Caddy",
+      "date": "Thu, 29 Oct 2026 15:12:24 GMT",
+      "content-length": "0",
+      "connection": "close"
+     },
+     "resolved": null,
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "pipedapi.orangenet.cc",
+   "kind": "http",
+   "target": "pipedapi.orangenet.cc",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "failed",
+     "code": null,
+     "total_ms": 3185,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "failed",
+     "code": null,
+     "total_ms": 3180,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "piped-api.piped.tokhmi.xyz",
+   "kind": "http",
+   "target": "piped-api.piped.tokhmi.xyz",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "finished",
+     "code": 200,
+     "total_ms": 363,
+     "headers": {
+      "server": "openresty/1.29.2.5",
+      "date": "Thu, 29 Oct 2026 15:12:32 GMT",
+      "content-type": [
+       "application/octet-stream",
+       "text/plain"
+      ],
+      "content-length": "2",
+      "connection": "close"
+     },
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "finished",
+     "code": 200,
+     "total_ms": 270,
+     "headers": {
+      "server": "openresty/1.29.2.5",
+      "date": "Thu, 29 Oct 2026 15:12:32 GMT",
+      "content-type": [
+       "application/octet-stream",
+       "text/plain"
+      ],
+      "content-length": "2",
+      "connection": "close"
+     },
+     "resolved": null,
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "api.cobalt.tools",
+   "kind": "http",
+   "target": "api.cobalt.tools",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "finished",
+     "code": 200,
+     "total_ms": 451,
+     "headers": {
+      "date": "Thu, 29 Oct 2026 15:12:35 GMT",
+      "content-type": "application/json; charset=utf-8",
+      "transfer-encoding": "chunked",
+      "connection": "close",
+      "server": "cloudflare",
+      "access-control-allow-origin": "*",
+      "access-control-expose-headers": "Ratelimit-Limit,Ratelimit-Policy,Ratelimit-Remaining,Ratelimit-Reset",
+      "etag": "W/\"1cd-4xuOswyBpUykqDFJvUO6MUYspLE\"",
+      "cf-cache-status": "DYNAMIC",
+      "nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
+      "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+      "server-timing": [
+       "cfCacheStatus;desc=\"DYNAMIC\"",
+       "cfEdge;dur=23,cfOrigin;dur=160"
+      ],
+      "report-to": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=dAkN%2F%2FXHXtyVCeyQy%2BH1IjZcLpI2gEOo5a6o6PPq0JGR1CQC9oL%2FfLE7ciaNghoHfZRrzva5wZ6Lin1MpAuPDfQpZU0GIRIr864ktQ1JFsfefSUg155csoLxOVpPAHoDFGUu\"}]}",
+      "content-encoding": "br",
+      "cf-ray": "a5231e8c6d0356d5-DUB",
+      "alt-svc": "h3=\":443\"; ma=86400"
+     },
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "finished",
+     "code": 200,
+     "total_ms": 206,
+     "headers": {
+      "date": "Thu, 29 Oct 2026 15:12:35 GMT",
+      "content-type": "application/json; charset=utf-8",
+      "transfer-encoding": "chunked",
+      "connection": "close",
+      "server": "cloudflare",
+      "access-control-allow-origin": "*",
+      "access-control-expose-headers": "Ratelimit-Limit,Ratelimit-Policy,Ratelimit-Remaining,Ratelimit-Reset",
+      "etag": "W/\"1cd-4xuOswyBpUykqDFJvUO6MUYspLE\"",
+      "cf-cache-status": "DYNAMIC",
+      "nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
+      "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+      "server-timing": [
+       "cfCacheStatus;desc=\"DYNAMIC\"",
+       "cfEdge;dur=3,cfOrigin;dur=154"
+      ],
+      "report-to": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=7xASwQa0Sgp9hL%2BnUwTcvDDxQGT11Mzm0z%2B4ha6dZTDyb%2BSkql5aT5n13MOPcTArzpCg88aVTLflqtLMuC3R%2Bzfw5%2B1Woap0p5lTXQGwB2BGF%2BFNd46LHbfSRoDKCIsNTm%2F5\"}]}",
+      "content-encoding": "br",
+      "cf-ray": "a5231e8b3c24dd4c-HEL",
+      "alt-svc": "h3=\":443\"; ma=86400"
+     },
+     "resolved": null,
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "cobalt-api.meowing.de",
+   "kind": "http",
+   "target": "cobalt-api.meowing.de",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "finished",
+     "code": 200,
+     "total_ms": 332,
+     "headers": {
+      "date": "Thu, 29 Oct 2026 15:12:38 GMT",
+      "content-type": "application/json; charset=utf-8",
+      "transfer-encoding": "chunked",
+      "connection": "close",
+      "server": "cloudflare",
+      "access-control-allow-origin": "*",
+      "access-control-expose-headers": "Ratelimit-Limit,Ratelimit-Policy,Ratelimit-Remaining,Ratelimit-Reset",
+      "etag": "W/\"1e6-gODZ3idJXGM/pFvDksEh1gQXM9A\"",
+      "x-upstream": "127.0.0.1:9000",
+      "cf-cache-status": "DYNAMIC",
+      "nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
+      "report-to": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=EykknF%2FsH1MfMnV5YHkkdROeUvb2GzyCGp3bzES62AkzHjXnyG5B9NBgdM1wYCkiNi9LJklEy8LaK4Woadnj0Wo1OyYTHTEzbO38F2uZACtq18s38avqsedVl6iJ3W7JA032eYJPPzs%3D\"}]}",
+      "content-encoding": "br",
+      "cf-ray": "a5231e9f9de14d3f-WAW",
+      "alt-svc": "h3=\":443\"; ma=86400"
+     },
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "finished",
+     "code": 200,
+     "total_ms": 244,
+     "headers": {
+      "date": "Thu, 29 Oct 2026 15:12:38 GMT",
+      "content-type": "application/json; charset=utf-8",
+      "transfer-encoding": "chunked",
+      "connection": "close",
+      "server": "cloudflare",
+      "access-control-allow-origin": "*",
+      "access-control-expose-headers": "Ratelimit-Limit,Ratelimit-Policy,Ratelimit-Remaining,Ratelimit-Reset",
+      "etag": "W/\"1e6-wmH5iGVkftE/p9BMs5wz2LE7+ug\"",
+      "x-upstream": "127.0.0.1:9000",
+      "cf-cache-status": "DYNAMIC",
+      "nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
+      "report-to": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=m7D35W594oUNLQHxRDNSX%2By3iJ73vCs8SJdQhje1Y0ORIlHuGlxu3hoYMcCDS0O3wwfv8JQ6xTSwd4yXSnDo0TQpubA02OgKz0ZHZRYgVKE0aYHq1vyL24wa3cY%2FDapdTPV%2FPmEYBWs%3D\"}]}",
+      "content-encoding": "br",
+      "cf-ray": "a5231e9e5bc8c6b1-HEL",
+      "alt-svc": "h3=\":443\"; ma=86400"
+     },
+     "resolved": null,
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "tunelio.dev",
+   "kind": "http",
+   "target": "tunelio.dev",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "finished",
+     "code": 200,
+     "total_ms": 521,
+     "headers": {
+      "date": "Thu, 29 Oct 2026 15:12:41 GMT",
+      "content-type": "text/html",
+      "transfer-encoding": "chunked",
+      "connection": "close",
+      "server": "cloudflare",
+      "last-modified": "Fri, 23 Oct 2026 03:14:07 GMT",
+      "server-timing": [
+       "cfCacheStatus;desc=\"DYNAMIC\"",
+       "cfEdge;dur=25,cfOrigin;dur=102"
+      ],
+      "strict-transport-security": "max-age=15552000",
+      "x-frame-options": "DENY",
+      "x-content-type-options": "nosniff",
+      "referrer-policy": "strict-origin-when-cross-origin",
+      "permissions-policy": "camera=(), microphone=(), geolocation=(), payment=()",
+      "content-security-policy": "default-src 'self'; script-src 'self' https://www.googletagmanager.com https://mc.yandex.ru https://mc.yandex.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: https://*.google-analytics.com https://www.googletagmanager.com https://mc.yandex.ru https://mc.yandex.com https://yandex.ru; connect-src 'self' wss://mc.yandex.ru wss://mc.yandex.com https://*.google-analytics.com https://*.analytics.google.com https://www.googletagmanager.com https://mc.yandex.ru https://*.mc.yandex.ru https://mc.yandex.com https://*.mc.yandex.com https://cloudflareinsights.com https://static.cloudflareinsights.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'",
+      "link": "</.well-known/api-catalog>; rel=\"api-catalog\", </docs>; rel=\"service-doc\"",
+      "vary": [
+       "Accept",
+       "accept-encoding"
+      ],
+      "report-to": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=PbMcfrD6rNcqMjFMm2DmZS7YKrcQoiVz9Rpva1YlpuO%2FFjIb24wlwxDRhP67X8t22GCAWmZJkvOrOfpyEUXVVJ4JqzGatr23X6GM8k%2BLNnDkpTeTPyuwZOLlIvoEkg%3D%3D\"}]}",
+      "cf-cache-status": "DYNAMIC",
+      "nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
+      "speculation-rules": "\"/cdn-cgi/speculation\"",
+      "content-encoding": "br",
+      "cf-ray": "a5231eb348890dd2-DUB",
+      "alt-svc": "h3=\":443\"; ma=86400"
+     },
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "finished",
+     "code": 200,
+     "total_ms": 235,
+     "headers": {
+      "date": "Thu, 29 Oct 2026 15:12:41 GMT",
+      "content-type": "text/html",
+      "transfer-encoding": "chunked",
+      "connection": "close",
+      "server": "cloudflare",
+      "last-modified": "Fri, 23 Oct 2026 03:14:07 GMT",
+      "server-timing": [
+       "cfCacheStatus;desc=\"DYNAMIC\"",
+       "cfEdge;dur=9,cfOrigin;dur=120"
+      ],
+      "strict-transport-security": "max-age=15552000",
+      "x-frame-options": "DENY",
+      "x-content-type-options": "nosniff",
+      "referrer-policy": "strict-origin-when-cross-origin",
+      "permissions-policy": "camera=(), microphone=(), geolocation=(), payment=()",
+      "content-security-policy": "default-src 'self'; script-src 'self' https://www.googletagmanager.com https://mc.yandex.ru https://mc.yandex.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: https://*.google-analytics.com https://www.googletagmanager.com https://mc.yandex.ru https://mc.yandex.com https://yandex.ru; connect-src 'self' wss://mc.yandex.ru wss://mc.yandex.com https://*.google-analytics.com https://*.analytics.google.com https://www.googletagmanager.com https://mc.yandex.ru https://*.mc.yandex.ru https://mc.yandex.com https://*.mc.yandex.com https://cloudflareinsights.com https://static.cloudflareinsights.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'",
+      "link": "</.well-known/api-catalog>; rel=\"api-catalog\", </docs>; rel=\"service-doc\"",
+      "vary": [
+       "Accept",
+       "accept-encoding"
+      ],
+      "report-to": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=iEtbTo87JGHc8wm8l6s5RxGKQu2VNng52iOgb01ljzg1Wq8ty54gVWDKqp59K8Sfd7EltZfaB77EPVJsMGXtJUjLbSLh2J8N0%2BRusfvimIOVkUI3wKLztGQpjJTYLA%3D%3D\"}]}",
+      "cf-cache-status": "DYNAMIC",
+      "nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
+      "speculation-rules": "\"/cdn-cgi/speculation\"",
+      "content-encoding": "br",
+      "cf-ray": "a5231eb1da63daaa-HEL",
+      "alt-svc": "h3=\":443\"; ma=86400"
+     },
+     "resolved": null,
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "invidious.protokolla.fi api",
+   "kind": "http",
+   "target": "invidious.protokolla.fi",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "failed",
+     "code": null,
+     "total_ms": 15000,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "failed",
+     "code": null,
+     "total_ms": 384,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "invidious.protokolla.fi audio",
+   "kind": "http",
+   "target": "invidious.protokolla.fi",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "finished",
+     "code": 206,
+     "total_ms": 1933,
+     "headers": {
+      "server": "nginx/1.27.5",
+      "date": "Thu, 29 Oct 2026 15:13:21 GMT",
+      "content-type": "text/html; charset=UTF-8",
+      "content-length": "581",
+      "connection": "close",
+      "expires": "Thu, 19 Nov 1981 08:52:00 GMT",
+      "cache-control": "no-store, no-cache, must-revalidate",
+      "pragma": "no-cache",
+      "set-cookie": "PHPSESSID=dqvk3rggumlgllf2o5n6g2tpo9; path=/",
+      "vary": "Accept-Encoding",
+      "content-encoding": "gzip",
+      "content-range": "bytes 0-580/581",
+      "x-xss-protection": "0",
+      "x-content-type-options": "nosniff",
+      "x-frame-options": "SAMEORIGIN"
+     },
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "failed",
+     "code": null,
+     "total_ms": 378,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "inv.nadeko.net audio",
+   "kind": "http",
+   "target": "inv.nadeko.net",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "failed",
+     "code": null,
+     "total_ms": 15002,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "failed",
+     "code": null,
+     "total_ms": 268,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "yewtu.be audio",
+   "kind": "http",
+   "target": "yewtu.be",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "failed",
+     "code": null,
+     "total_ms": 14999,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "failed",
+     "code": null,
+     "total_ms": 223,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "invidious.f5.si audio",
+   "kind": "http",
+   "target": "invidious.f5.si",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "finished",
+     "code": 530,
+     "total_ms": 230,
+     "headers": {
+      "date": "Thu, 29 Oct 2026 15:13:57 GMT",
+      "content-type": "text/plain; charset=UTF-8",
+      "content-length": "17",
+      "connection": "close",
+      "cache-control": "private, max-age=0, no-store, no-cache, must-revalidate, post-check=0, pre-check=0",
+      "expires": "Thu, 01 Jan 1970 00:00:01 GMT",
+      "referrer-policy": "same-origin",
+      "x-frame-options": "SAMEORIGIN",
+      "server": "cloudflare",
+      "cf-ray": "a52320907c99dffa-ARN",
+      "alt-svc": "h3=\":443\"; ma=86400"
+     },
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "failed",
+     "code": null,
+     "total_ms": 55,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "iv.melmac.space audio",
+   "kind": "http",
+   "target": "iv.melmac.space",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "failed",
+     "code": null,
+     "total_ms": 148,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "failed",
+     "code": null,
+     "total_ms": 71,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "yt.artemislena.eu audio",
+   "kind": "http",
+   "target": "yt.artemislena.eu",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "failed",
+     "code": null,
+     "total_ms": 192,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "failed",
+     "code": null,
+     "total_ms": 238,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "invidious.nerdvpn.de audio",
+   "kind": "http",
+   "target": "invidious.nerdvpn.de",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "failed",
+     "code": null,
+     "total_ms": 857,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "failed",
+     "code": null,
+     "total_ms": 847,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "invidious.einfachzocken.eu audio",
+   "kind": "http",
+   "target": "invidious.einfachzocken.eu",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "finished",
+     "code": 404,
+     "total_ms": 279,
+     "headers": {
+      "alt-svc": "h3=\":443\"; ma=2592000",
+      "content-type": "text/plain; charset=utf-8",
+      "x-content-type-options": "nosniff",
+      "date": "Thu, 29 Oct 2026 15:14:09 GMT",
+      "content-length": "19",
+      "connection": "close"
+     },
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "failed",
+     "code": null,
+     "total_ms": 67,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "invidious.reallyaweso.me audio",
+   "kind": "http",
+   "target": "invidious.reallyaweso.me",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "failed",
+     "code": null,
+     "total_ms": 15000,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "failed",
+     "code": null,
+     "total_ms": 15001,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "invidious.materialio.us audio",
+   "kind": "http",
+   "target": "invidious.materialio.us",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "failed",
+     "code": null,
+     "total_ms": 15000,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "failed",
+     "code": null,
+     "total_ms": 345,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "inv.tux.pizza audio",
+   "kind": "http",
+   "target": "inv.tux.pizza",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "failed",
+     "code": null,
+     "total_ms": 15000,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "failed",
+     "code": null,
+     "total_ms": 15000,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "iv.ggtyler.dev audio",
+   "kind": "http",
+   "target": "iv.ggtyler.dev",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "failed",
+     "code": null,
+     "total_ms": 3252,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "failed",
+     "code": null,
+     "total_ms": 3243,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "invidious.jing.rocks audio",
+   "kind": "http",
+   "target": "invidious.jing.rocks",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "failed",
+     "code": null,
+     "total_ms": 1330,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "failed",
+     "code": null,
+     "total_ms": 1182,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "piped.piped.tokhmi.xyz streams",
+   "kind": "http",
+   "target": "piped-api.piped.tokhmi.xyz",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "finished",
+     "code": 200,
+     "total_ms": 305,
+     "headers": {
+      "server": "openresty/1.29.2.5",
+      "date": "Thu, 29 Oct 2026 15:15:16 GMT",
+      "content-type": [
+       "application/octet-stream",
+       "text/plain"
+      ],
+      "content-length": "2",
+      "connection": "close"
+     },
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "finished",
+     "code": 200,
+     "total_ms": 269,
+     "headers": {
+      "server": "openresty/1.29.2.5",
+      "date": "Thu, 29 Oct 2026 15:15:16 GMT",
+      "content-type": [
+       "application/octet-stream",
+       "text/plain"
+      ],
+      "content-length": "2",
+      "connection": "close"
+     },
+     "resolved": null,
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "api.piped.private.coffee streams",
+   "kind": "http",
+   "target": "api.piped.private.coffee",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "finished",
+     "code": 200,
+     "total_ms": 3280,
+     "headers": {
+      "access-control-allow-headers": "*, Authorization",
+      "access-control-allow-methods": "*",
+      "access-control-allow-origin": "*",
+      "alt-svc": "h3=\":443\"; ma=2592000",
+      "cache-control": "public, s-maxage=21540, max-age=30",
+      "content-length": "26128",
+      "content-type": "application/json",
+      "date": "Thu, 29 Oct 2026 15:15:22 GMT",
+      "link": "<https://proxy.piped.private.coffee>; rel=preconnect",
+      "server": [
+       "Caddy",
+       "nginx/1.29.8"
+      ],
+      "server-timing": "app;dur=1100.986033",
+      "connection": "close"
+     },
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "failed",
+     "code": null,
+     "total_ms": 6001,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "pipedapi.ducks.party streams",
+   "kind": "http",
+   "target": "pipedapi.ducks.party",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "finished",
+     "code": 200,
+     "total_ms": 302,
+     "headers": {
+      "server": "openresty",
+      "date": "Thu, 29 Oct 2026 15:15:27 GMT",
+      "content-type": "application/json",
+      "content-length": "26030",
+      "connection": "close",
+      "access-control-allow-origin": "*",
+      "cache-control": "public, s-maxage=21540, max-age=30",
+      "server-timing": "app;dur=1178.768602",
+      "link": "<https://piped-proxy.ducks.party>; rel=preconnect",
+      "access-control-allow-methods": "*",
+      "access-control-allow-headers": "*, Authorization",
+      "x-served-by": "pipedapi.ducks.party"
+     },
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "finished",
+     "code": 200,
+     "total_ms": 163,
+     "headers": {
+      "server": "openresty",
+      "date": "Thu, 29 Oct 2026 15:15:27 GMT",
+      "content-type": "application/json",
+      "content-length": "26030",
+      "connection": "close",
+      "access-control-allow-origin": "*",
+      "cache-control": "public, s-maxage=21540, max-age=30",
+      "server-timing": "app;dur=1178.768602",
+      "link": "<https://piped-proxy.ducks.party>; rel=preconnect",
+      "access-control-allow-methods": "*",
+      "access-control-allow-headers": "*, Authorization",
+      "x-served-by": "pipedapi.ducks.party"
+     },
+     "resolved": null,
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "pipedapi.adminforge.de streams",
+   "kind": "http",
+   "target": "pipedapi.adminforge.de",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "finished",
+     "code": 301,
+     "total_ms": 1291,
+     "headers": {
+      "date": "Thu, 29 Oct 2026 15:15:31 GMT",
+      "server": "Apache",
+      "location": "https://adminforge.de/streams/dQw4w9WgXcQ",
+      "cache-control": "max-age=0",
+      "expires": "Thu, 29 Oct 2026 15:15:31 GMT",
+      "content-length": "289",
+      "connection": "close",
+      "content-type": "text/html; charset=iso-8859-1"
+     },
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "finished",
+     "code": 301,
+     "total_ms": 247,
+     "headers": {
+      "date": "Thu, 29 Oct 2026 15:15:30 GMT",
+      "server": "Apache",
+      "location": "https://adminforge.de/streams/dQw4w9WgXcQ",
+      "cache-control": "max-age=0",
+      "expires": "Thu, 29 Oct 2026 15:15:30 GMT",
+      "content-length": "289",
+      "connection": "close",
+      "content-type": "text/html; charset=iso-8859-1"
+     },
+     "resolved": null,
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "pipedapi.kavin.rocks streams",
+   "kind": "http",
+   "target": "pipedapi.kavin.rocks",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "finished",
+     "code": 502,
+     "total_ms": 376,
+     "headers": {
+      "date": "Thu, 29 Oct 2026 15:15:33 GMT",
+      "content-type": "text/plain; charset=UTF-8",
+      "content-length": "16",
+      "connection": "close",
+      "cache-control": "private, max-age=0, no-store, no-cache, must-revalidate, post-check=0, pre-check=0",
+      "expires": "Thu, 01 Jan 1970 00:00:01 GMT",
+      "referrer-policy": "same-origin",
+      "x-frame-options": "SAMEORIGIN",
+      "server": "cloudflare",
+      "cf-ray": "a52322e75923b576-WAW",
+      "alt-svc": "h3=\":443\"; ma=86400"
+     },
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "finished",
+     "code": 502,
+     "total_ms": 253,
+     "headers": {
+      "date": "Thu, 29 Oct 2026 15:15:33 GMT",
+      "content-type": "text/plain; charset=UTF-8",
+      "content-length": "16",
+      "connection": "close",
+      "cache-control": "private, max-age=0, no-store, no-cache, must-revalidate, post-check=0, pre-check=0",
+      "expires": "Thu, 01 Jan 1970 00:00:01 GMT",
+      "referrer-policy": "same-origin",
+      "x-frame-options": "SAMEORIGIN",
+      "server": "cloudflare",
+      "cf-ray": "a52322e6c8b1ffde-HEL",
+      "alt-svc": "h3=\":443\"; ma=86400"
+     },
+     "resolved": null,
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "pipedapi.reallyaweso.me streams",
+   "kind": "http",
+   "target": "pipedapi.reallyaweso.me",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "finished",
+     "code": 502,
+     "total_ms": 257,
+     "headers": {
+      "alt-svc": "h3=\":443\"; ma=2592000",
+      "server": "Caddy",
+      "date": "Thu, 29 Oct 2026 15:15:36 GMT",
+      "content-length": "0",
+      "connection": "close"
+     },
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "finished",
+     "code": 502,
+     "total_ms": 219,
+     "headers": {
+      "alt-svc": "h3=\":443\"; ma=2592000",
+      "server": "Caddy",
+      "date": "Thu, 29 Oct 2026 15:15:36 GMT",
+      "content-length": "0",
+      "connection": "close"
+     },
+     "resolved": null,
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "www.youtube.com via IP+SNI",
+   "kind": "http",
+   "target": "74.125.131.93",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "failed",
+     "code": null,
+     "total_ms": 10183,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "failed",
+     "code": null,
+     "total_ms": 10294,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "googlevideo media host via IP+SNI",
+   "kind": "http",
+   "target": "74.125.173.198",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "finished",
+     "code": 404,
+     "total_ms": 158,
+     "headers": {
+      "date": "Thu, 29 Oct 2026 15:15:52 GMT",
+      "content-type": "text/html; charset=UTF-8",
+      "server": "gvs 1.0",
+      "connection": "Close",
+      "content-length": "1561",
+      "x-xss-protection": "0",
+      "x-frame-options": "SAMEORIGIN"
+     },
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "failed",
+     "code": null,
+     "total_ms": 15000,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "youtubei via IP+SNI",
+   "kind": "http",
+   "target": "172.217.119.4",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "finished",
+     "code": 405,
+     "total_ms": 258,
+     "headers": {
+      "content-type": "text/html; charset=UTF-8",
+      "referrer-policy": "no-referrer",
+      "content-length": "1606",
+      "date": "Thu, 29 Oct 2026 15:16:09 GMT",
+      "alt-svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000",
+      "connection": "close"
+     },
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "failed",
+     "code": null,
+     "total_ms": 15001,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "youtube media (alt IP) via SNI",
+   "kind": "http",
+   "target": "142.251.1.99",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "failed",
+     "code": null,
+     "total_ms": 10206,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "failed",
+     "code": null,
+     "total_ms": 10091,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "DISCOVERY api.invidious.io",
+   "kind": "http",
+   "target": "api.invidious.io",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "finished",
+     "code": 200,
+     "total_ms": 484,
+     "headers": {
+      "access-control-allow-origin": "*",
+      "content-encoding": "gzip",
+      "content-length": "1769",
+      "content-type": "application/json; charset=utf-8",
+      "referrer-policy": "same-origin",
+      "server": "Caddy",
+      "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+      "x-content-type-options": "nosniff",
+      "x-xss-protection": "1; mode=block",
+      "date": "Thu, 29 Oct 2026 15:16:54 GMT",
+      "connection": "close"
+     },
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "finished",
+     "code": 200,
+     "total_ms": 381,
+     "headers": {
+      "access-control-allow-origin": "*",
+      "content-encoding": "gzip",
+      "content-length": "1769",
+      "content-type": "application/json; charset=utf-8",
+      "referrer-policy": "same-origin",
+      "server": "Caddy",
+      "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+      "x-content-type-options": "nosniff",
+      "x-xss-protection": "1; mode=block",
+      "date": "Thu, 29 Oct 2026 15:16:54 GMT",
+      "connection": "close"
+     },
+     "resolved": null,
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "yt.chocolatemoo53.com audio",
+   "kind": "http",
+   "target": "yt.chocolatemoo53.com",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "failed",
+     "code": null,
+     "total_ms": 15000,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "failed",
+     "code": null,
+     "total_ms": 211,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "inv.us.projectsegfau.lt audio",
+   "kind": "http",
+   "target": "inv.us.projectsegfau.lt",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "failed",
+     "code": null,
+     "total_ms": 15001,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "failed",
+     "code": null,
+     "total_ms": 15000,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "protokolla audio 2nd video",
+   "kind": "http",
+   "target": "invidious.protokolla.fi",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "failed",
+     "code": null,
+     "total_ms": 15000,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "failed",
+     "code": null,
+     "total_ms": 953,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    }
+   ]
+  },
+  {
+   "label": "protokolla api videos",
+   "kind": "http",
+   "target": "invidious.protokolla.fi",
+   "rows": [
+    {
+     "city": null,
+     "country": null,
+     "asn": 9123,
+     "net": "Timeweb",
+     "status": "finished",
+     "code": 200,
+     "total_ms": 1936,
+     "headers": {
+      "server": "nginx/1.27.5",
+      "date": "Thu, 29 Oct 2026 15:17:53 GMT",
+      "content-type": "text/html; charset=UTF-8",
+      "content-length": "581",
+      "connection": "close",
+      "expires": "Thu, 19 Nov 1981 08:52:00 GMT",
+      "cache-control": "no-store, no-cache, must-revalidate",
+      "pragma": "no-cache",
+      "set-cookie": "PHPSESSID=dtjbtrak969dbp3mfl3gb3l6j7; path=/",
+      "vary": "Accept-Encoding",
+      "content-encoding": "gzip",
+      "x-xss-protection": "0",
+      "x-content-type-options": "nosniff",
+      "x-frame-options": "SAMEORIGIN"
+     },
+     "resolved": null,
+     "err": null
+    },
+    {
+     "city": null,
+     "country": null,
+     "asn": 49505,
+     "net": "Selectel",
+     "status": "failed",
+     "code": null,
+     "total_ms": 939,
+     "headers": {},
+     "resolved": null,
+     "err": null
+    }
+   ]
+  }
+ ]
+}
