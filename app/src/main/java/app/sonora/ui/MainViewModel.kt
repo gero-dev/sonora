@@ -3093,9 +3093,27 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
             // большое APK через него качается медленно и рвётся. Пауза туннеля
             // ускоряет загрузку, после — возвращаем WARP, если он был включён.
             val warpWasConnected = graph.warp.status.value.state == WarpState.CONNECTED
-            if (warpWasConnected) runCatching { graph.warp.stop() }
+            if (warpWasConnected) {
+                runCatching { graph.warp.stop() }
+                // Даём Android убрать VPN-интерфейс и вернуть обычную сеть:
+                // иначе первые запросы уходят в уже мёртвый туннель.
+                val deadline = System.currentTimeMillis() + 5_000
+                while (System.currentTimeMillis() < deadline &&
+                    graph.warp.status.value.state != WarpState.DISCONNECTED &&
+                    graph.warp.status.value.state != WarpState.NOT_CONFIGURED
+                ) {
+                    delay(150)
+                }
+                delay(400)
+            }
             try {
-                val ok = runCatching { UpdateManager.downloadAndInstall() }.getOrDefault(false)
+                var ok = runCatching { UpdateManager.downloadAndInstall() }.getOrDefault(false)
+                if (!ok && warpWasConnected) {
+                    // Резерв: если без туннеля скачать не вышло — возвращаем WARP
+                    // и пробуем ещё раз (медленнее, но работает).
+                    runCatching { StreamingAutoPilot.ensureWarp() }
+                    ok = runCatching { UpdateManager.downloadAndInstall() }.getOrDefault(false)
+                }
                 if (!ok) {
                     withContext(Dispatchers.Main) {
                         toast(UpdateManager.error.value ?: "Не удалось скачать обновление")

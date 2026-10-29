@@ -1,4 +1,4 @@
-﻿package app.sonora.data.update
+package app.sonora.data.update
 
 import android.content.Context
 import android.content.Intent
@@ -200,8 +200,12 @@ object UpdateManager {
      */
     private suspend fun downloadWithResume(info: UpdateInfo, target: File): Boolean {
         val expected = info.sizeBytes?.takeIf { it > 0 }
+        // Свежий пул соединений на каждую загрузку: после выключения WARP в пуле
+        // остаются сокеты мёртвой сети, из-за которых запросы висят до таймаута.
         val downloader = client.newBuilder()
             .readTimeout(2, TimeUnit.MINUTES)
+            .connectionPool(okhttp3.ConnectionPool(0, 1, TimeUnit.SECONDS))
+            .retryOnConnectionFailure(true)
             .build()
         var attempt = 0
         while (attempt < 3 && !cancelled) {
