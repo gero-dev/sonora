@@ -1,4 +1,4 @@
-package app.sonora.data.update
+﻿package app.sonora.data.update
 
 import android.content.Context
 import android.content.Intent
@@ -174,45 +174,7 @@ object UpdateManager {
             val dir = File(deps.context.cacheDir, "updates").apply { mkdirs() }
             dir.listFiles()?.forEach { it.delete() }
             val target = File(dir, "Sonora-${info.versionName}-debug.apk")
-            val request = Request.Builder().url(info.apkUrl).header("User-Agent", UA).build()
-            val downloader = client.newBuilder()
-                .readTimeout(2, TimeUnit.MINUTES)
-                .build()
-            val ok = downloader.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    _error.value = "HTTP ${response.code} при скачивании"
-                    return@use false
-                }
-                val body = response.body ?: return@use false
-                val total = body.contentLength().takeIf { it > 0 } ?: info.sizeBytes ?: -1L
-                var read = 0L
-                body.byteStream().use { input ->
-                    target.outputStream().use { output ->
-                        val buffer = ByteArray(64 * 1024)
-                        while (true) {
-                            if (cancelled) break
-                            val count = input.read(buffer)
-                            if (count < 0) break
-                            output.write(buffer, 0, count)
-                            read += count
-                            if (total > 0) {
-                                _progress.value = (read.toFloat() / total).coerceIn(0f, 1f)
-                            }
-                        }
-                    }
-                }
-                if (cancelled) {
-                    target.delete()
-                    false
-                } else if (target.length() < 1_000_000L) {
-                    target.delete()
-                    _error.value = "Скачанный файл повреждён"
-                    false
-                } else {
-                    true
-                }
-            }
-            if (!ok) return@withContext false
+            if (!downloadWithResume(info, target)) return@withContext false
             if (!verifySha256(target, info.sha256)) {
                 target.delete()
                 _error.value = "Контрольная сумма не совпала — скачивание отменено"
@@ -229,6 +191,93 @@ object UpdateManager {
         } finally {
             _downloading.value = false
         }
+    }
+
+    /**
+     * Скачивание с докачкой: GitHub-ассеты поддерживают `Range`, поэтому при
+     * обрыве (а на мобильных сетях это норма) продолжаем с места, а не с нуля.
+     * До трёх попыток, с проверкой итогового размера.
+     */
+    private suspend fun downloadWithResume(info: UpdateInfo, target: File): Boolean {
+        val expected = info.sizeBytes?.takeIf { it > 0 }
+        val downloader = client.newBuilder()
+            .readTimeout(2, TimeUnit.MINUTES)
+            .build()
+        var attempt = 0
+        while (attempt < 3 && !cancelled) {
+            attempt++
+            try {
+                val existing = if (target.exists()) target.length() else 0L
+                if (expected != null && existing >= expected) break
+                val requestBuilder = Request.Builder()
+                    .url(info.apkUrl)
+                    .header("User-Agent", UA)
+                if (existing > 0L && (expected == null || existing < expected)) {
+                    requestBuilder.header("Range", "bytes=$existing-")
+                }
+                var completed = false
+                downloader.newCall(requestBuilder.build()).execute().use { response ->
+                    if (response.code == 416) {
+                        // Range не принят — начинаем файл заново.
+                        target.delete()
+                        return@use
+                    }
+                    if (!response.isSuccessful) {
+                        _error.value = "HTTP ${response.code} при скачивании"
+                        return false
+                    }
+                    val body = response.body ?: return false
+                    val append = response.code == 206 && existing > 0L
+                    if (!append) target.delete()
+                    val start = if (append) target.length() else 0L
+                    val total = expected ?: (body.contentLength().takeIf { it > 0 }?.plus(start) ?: -1L)
+                    var read = start
+                    body.byteStream().use { input ->
+                        java.io.FileOutputStream(target, append).use { output ->
+                            val buffer = ByteArray(64 * 1024)
+                            while (true) {
+                                if (cancelled) break
+                                val count = input.read(buffer)
+                                if (count < 0) break
+                                output.write(buffer, 0, count)
+                                read += count
+                                if (total > 0) {
+                                    _progress.value = (read.toFloat() / total).coerceIn(0f, 1f)
+                                }
+                            }
+                        }
+                    }
+                    completed = !cancelled && (total <= 0 || target.length() >= total)
+                }
+                val length = target.length()
+                if (cancelled) {
+                    target.delete()
+                    return false
+                }
+                if (expected != null) {
+                    if (length >= expected) break
+                } else if (completed) {
+                    break
+                }
+            } catch (error: Exception) {
+                Log.w(TAG, "download attempt $attempt failed: ${error.message}")
+                if (attempt >= 3) {
+                    _error.value = "Не удалось скачать: ${error.message?.take(80)}"
+                    return false
+                }
+                kotlinx.coroutines.delay(800L)
+            }
+        }
+        if (cancelled) {
+            target.delete()
+            return false
+        }
+        if (target.length() < 1_000_000L) {
+            target.delete()
+            _error.value = "Скачанный файл повреждён"
+            return false
+        }
+        return true
     }
 
     fun cancelDownload() {

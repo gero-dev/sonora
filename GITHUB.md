@@ -1,6 +1,6 @@
-# Sonora — данные для публикации на GitHub
+﻿# Sonora — данные для публикации на GitHub
 
-Актуальная версия: **1.9.0** (`versionCode 31`), APK ≈ **223 МБ**.
+Актуальная версия: **1.9.1** (`versionCode 32`), APK ≈ **223 МБ**.
 Предыдущие релизы, заметки и контрольные суммы — в разделе Releases репозитория.
 
 ---
@@ -29,14 +29,14 @@ in-app-update github-releases open-source gpl-3-0 android-app
 
 ---
 
-## 2. Релиз **v1.9.0**
+## 2. Релиз **v1.9.1**
 
-**Тег:** `v1.9.0` · **Заголовок:** `Sonora 1.9.0 — обновления из GitHub прямо в приложении`
+**Тег:** `v1.9.1` · **Заголовок:** `Sonora 1.9.1 — надёжное скачивание обновлений (докачка)`
 
 ### Release notes
 
 ```markdown
-## Sonora 1.9.0
+## Sonora 1.9.1
 
 ### Обновления из GitHub прямо в приложении
 
@@ -55,7 +55,7 @@ in-app-update github-releases open-source gpl-3-0 android-app
 
 ### Технически
 
-- versionCode **31**, versionName **1.9.0**, targetSdk 34, minSdk 26.
+- versionCode **32**, versionName **1.9.1**, targetSdk 34, minSdk 26.
 - `UpdateManager`, `UpdateModels`, FileProvider `app.sonora.updates`,
   `REQUEST_INSTALL_PACKAGES`, `buildConfig` включён.
 - 59 unit-тестов, lint без ошибок.
@@ -65,16 +65,16 @@ in-app-update github-releases open-source gpl-3-0 android-app
 
 | Файл | Размер | SHA-256 |
 |---|---|---|
-| `Sonora-1.9.0-debug.apk` | ≈ 223 МБ | см. `Sonora-1.9.0-SHA256SUMS.txt` |
-| `Sonora-1.9.0-source.zip` | ≈ 19 МБ | см. `Sonora-1.9.0-SHA256SUMS.txt` |
-| `Sonora-1.9.0-SHA256SUMS.txt` | — | контрольные суммы |
+| `Sonora-1.9.1-debug.apk` | ≈ 223 МБ | см. `Sonora-1.9.1-SHA256SUMS.txt` |
+| `Sonora-1.9.1-source.zip` | ≈ 19 МБ | см. `Sonora-1.9.1-SHA256SUMS.txt` |
+| `Sonora-1.9.1-SHA256SUMS.txt` | — | контрольные суммы |
 
 APK подписан debug-ключом — для ручной установки, не для Google Play.
 
 ### Установка
 
 ```bash
-adb install -r Sonora-1.9.0-debug.apk
+adb install -r Sonora-1.9.1-debug.apk
 ```
 
 После установки: «Настройки → Обновления → Проверить обновления». Дальнейшие
