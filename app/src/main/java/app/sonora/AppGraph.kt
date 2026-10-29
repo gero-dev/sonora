@@ -41,6 +41,8 @@ class AppGraph private constructor(context: Context) {
         app.sonora.data.remote.youtube.innertube.InnerTubeXEngine.initialize(appContext)
         // Восстанавливаем cookie/visitorData Google-аккаунта после перезапуска.
         app.sonora.data.remote.youtube.innertube.InnerTubeSession.restore(secure)
+        // yt-dlp — резервный источник потока для ограниченных видео.
+        app.sonora.data.remote.ytdlp.YtDlpBridge.init(appContext)
     }
 
     val scanner = MediaStoreScanner(appContext)

@@ -1,6 +1,7 @@
 package app.sonora.data.remote.youtube.innertube
 
 import app.sonora.core.settings.AudioQuality
+import app.sonora.data.remote.ytdlp.YtDlpBridge
 import com.metrolist.innertubex.extraction.AudioQuality as EngineQuality
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
@@ -24,6 +25,9 @@ internal object InnerTubeStreams {
 
     /** Запас, ниже которого формат считается «попавшим» в целевой битрейт. */
     private const val BITRATE_TOLERANCE = 16_000
+
+    /** Ссылка yt-dlp живёт недолго: кэшируем её на 15 минут. */
+    private const val YTDLP_TTL_MS = 15 * 60_000L
 
     private val api = InnerTubeApi()
     private val cache = ConcurrentHashMap<String, StreamInfo>()
@@ -76,9 +80,23 @@ internal object InnerTubeStreams {
             }
         }
 
-        return engineStream ?: throw (
-            engineFailure ?: IllegalStateException("Не удалось получить поток YouTube")
+        if (engineStream != null) return engineStream
+
+        // Последний рубеж: yt-dlp. Он медленный, зато умеет видео, которые
+        // InnerTube/InnerTubeX не отдают (возраст, регион, SABR-only).
+        YtDlpBridge.resolve(videoId)?.let { handle ->
+            return StreamInfo(
+                videoId = videoId,
+                url = handle.url,
+                mimeType = handle.mimeType,
+                bitrate = 0,
+                itag = 0,
+                expiresAtMs = System.currentTimeMillis() + YTDLP_TTL_MS,
+                headers = handle.headers,
             )
+        }
+
+        throw (engineFailure ?: IllegalStateException("Не удалось получить поток YouTube"))
     }
 
     /** MP4-поток для скачивания: m4a лучше подходит для офлайн-файла. */

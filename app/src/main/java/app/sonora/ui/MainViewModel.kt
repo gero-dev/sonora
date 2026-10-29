@@ -197,6 +197,33 @@ private const val RADIO_BATCH = 20
 /** Порог остатка очереди, после которого радио догружает следующую пачку. */
 private const val RADIO_REFILL_THRESHOLD = 6
 
+/** Сколько локальных треков должно совпасть с настроением, чтобы фильтровать. */
+private const val MIN_MOOD_MATCHES = 6
+
+/** Подсказки настроения для локальной фонотеки (жанр/название/альбом). */
+private val MOOD_KEYWORDS: Map<WaveMood, List<String>> = mapOf(
+    WaveMood.CALM to listOf(
+        "chill", "acoustic", "ambient", "piano", "lofi", "lo-fi", "soft", "calm",
+        "sleep", "relax", "спокой", "акуст", "эмбиент", "пианино",
+    ),
+    WaveMood.FOCUS to listOf(
+        "instrumental", "focus", "study", "ambient", "piano", "beat", "concentration",
+        "инструмент", "фокус", "концентрац",
+    ),
+    WaveMood.ENERGY to listOf(
+        "dance", "workout", "rock", "metal", "drum", "bass", "edm", "party", "energy",
+        "танц", "энергич", "рок", "метал",
+    ),
+    WaveMood.NIGHT to listOf(
+        "night", "drive", "synth", "dark", "midnight", "noir",
+        "ноч", "драйв", "синт",
+    ),
+    WaveMood.HAPPY to listOf(
+        "happy", "pop", "upbeat", "sunny", "funk", "disco", "smile",
+        "весел", "поп", "солнечн",
+    ),
+)
+
 /** Максимум треков за один импорт списка: каждый неизвестный ищется в InnerTube. */
 private const val MAX_PLAYLIST_IMPORT = 150
 
@@ -279,6 +306,12 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
         observePlaybackHistory()
         observeRadio()
         observeWarpKeepAlive()
+        // Прогреваем Python/yt-dlp в фоне: первый реальный вызов будет быстрее,
+        // а старт приложения не ждёт тяжёлый рантайм.
+        viewModelScope.launch(Dispatchers.IO) {
+            delay(1_500)
+            runCatching { app.sonora.data.remote.ytdlp.YtDlpBridge.warmUp() }
+        }
         // Страховка для кнопки «вперёд»: если очередь кончилась, PlaybackController
         // сам попросит новую пачку и переключит трек (только при включённой бесконечной очереди).
         graph.playback.queueExtender = {
@@ -743,6 +776,18 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
         viewModelScope.launch {
             val ordered = playlistTracks(playlist).sortedWith(comparator).map { it.id }
             if (ordered.isNotEmpty()) graph.library.setPlaylistTracks(playlist.id, ordered)
+        }
+    }
+
+    /** Играет плейлист целиком (как кнопка Play в строке Spotify). */
+    fun playPlaylist(playlist: Playlist) {
+        viewModelScope.launch {
+            val tracks = resolvePlaylistTracks(playlist)
+            if (tracks.isEmpty()) {
+                toast("В этом плейлисте нет треков")
+                return@launch
+            }
+            playQueue(tracks)
         }
     }
 
@@ -1609,12 +1654,28 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
 
     fun setWaveSource(mode: WaveSourceMode) {
         _wave.update { it.copy(filters = it.filters.copy(source = mode)) }
+        resetWaveCursor()
         refreshWave()
     }
 
     fun setWaveMood(mood: WaveMood) {
         _wave.update { it.copy(filters = it.filters.copy(mood = mood)) }
+        resetWaveCursor()
         refreshWave()
+    }
+
+    /** Только избранное: локальная часть подборки остаётся в любимых треках. */
+    fun setWaveFavoritesOnly(enabled: Boolean) {
+        _wave.update { it.copy(filters = it.filters.copy(favoritesOnly = enabled)) }
+        resetWaveCursor()
+        refreshWave()
+    }
+
+    /** Смена фильтра начинает подборку с первого запроса, а не с середины. */
+    private fun resetWaveCursor() {
+        waveQueryCursor = 0
+        waveSeenIds.clear()
+        waveSeenKeys.clear()
     }
 
     fun setWaveSort(sort: WaveSort) {
@@ -1939,8 +2000,24 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
         val localPool = if (sourceMode == WaveSourceMode.ONLINE) {
             emptyList()
         } else {
+            // Фильтры должны влиять на локальную часть, а не только на онлайн:
+            // настроение — по жанру/названию, «только избранное» — по id.
+            val scoped = if (state.filters.favoritesOnly) {
+                val onlyFavorites = localCandidates.filter { it.id in favoriteIds }
+                // Пустое избранное не должно давать пустую волну.
+                onlyFavorites.ifEmpty { localCandidates }
+            } else {
+                localCandidates
+            }
+            val moodScoped = if (state.filters.mood == WaveMood.ANY) {
+                scoped
+            } else {
+                val matched = scoped.filter { matchesMood(it, state.filters.mood) }
+                // Если совпадений мало, не обрезаем фонотеку до нуля.
+                if (matched.size >= MIN_MOOD_MATCHES) matched else scoped
+            }
             WaveEngine.rank(
-                candidates = localCandidates,
+                candidates = moodScoped,
                 favoriteIds = favoriteIds,
                 favoriteArtists = favoriteArtists,
                 artistCounts = artistCounts,
@@ -2033,8 +2110,23 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
         return@withContext sorted to label
     }
 
-    private fun sortWave(tracks: List<Track>, sort: WaveSort): List<Track> = when (sort) {
-        WaveSort.FOR_YOU -> tracks
+    /**
+     * Совпадает ли трек с настроением. Жанр берём из `extra["genre"]` (его
+     * заполняют метаданные), плюс подсказки в названии и альбоме. Для треков
+     * без жанра настроение работает мягко: если совпадений мало, волна не
+     * обрезается (см. [MIN_MOOD_MATCHES]).
+     */
+    private fun matchesMood(track: Track, mood: WaveMood): Boolean {
+        val keywords = MOOD_KEYWORDS[mood] ?: return true
+        val haystack = buildString {
+            append(track.title).append(' ')
+            append(track.album.orEmpty()).append(' ')
+            append(track.extra["genre"].orEmpty())
+        }.lowercase().replace('ё', 'е')
+        return keywords.any { haystack.contains(it) }
+    }
+
+    private fun sortWave(tracks: List<Track>, sort: WaveSort): List<Track> = when (sort) {        WaveSort.FOR_YOU -> tracks
         WaveSort.TITLE -> tracks.sortedBy { it.title.lowercase() }
         WaveSort.ARTIST -> tracks.sortedBy { it.artist.lowercase() }
         WaveSort.DURATION -> tracks.sortedBy { it.durationMs }
@@ -2662,6 +2754,26 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
         graph.youtube.invalidateStream(videoId)
         graph.playback.reloadCurrent()
         toast("Качество: ${quality.label}")
+    }
+
+    /** Градация качества для сотовой сети (действует при основном «Авто»). */
+    fun setMobileAudioQuality(quality: AudioQuality) {
+        updateSettings { it.copy(mobileAudioQuality = quality) }
+        if (graph.settings.current.audioQuality != AudioQuality.AUTO) {
+            toast("Мобильная сеть: ${quality.label}")
+            return
+        }
+        if (!graph.downloads.isOnMobileData()) {
+            toast("Мобильная сеть: ${quality.label}")
+            return
+        }
+        val current = graph.playback.state.value.current
+        val videoId = current?.let { youtubeVideoId(it) }
+        if (videoId != null) {
+            graph.youtube.invalidateStream(videoId)
+            graph.playback.reloadCurrent()
+        }
+        toast("Мобильная сеть: ${quality.label}")
     }
     fun setScanOnStart(enabled: Boolean) = updateSettings { it.copy(scanOnStart = enabled) }
 

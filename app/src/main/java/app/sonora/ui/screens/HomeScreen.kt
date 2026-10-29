@@ -30,6 +30,7 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Explore
+import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.MusicNote
@@ -170,6 +171,7 @@ fun HomeScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) -> 
                     onEnqueue = { vm.enqueueWave() },
                     onRefresh = { vm.refreshWave() },
                     onSource = vm::setWaveSource,
+                    onToggleFavorites = { vm.setWaveFavoritesOnly(!wave.filters.favoritesOnly) },
                     onMood = vm::setWaveMood,
                     onSort = vm::setWaveSort,
                     onTrackClick = { vm.playOrOpen(it) },
@@ -633,6 +635,7 @@ private fun WaveCard(
     onEnqueue: () -> Unit,
     onRefresh: () -> Unit,
     onSource: (WaveSourceMode) -> Unit,
+    onToggleFavorites: () -> Unit,
     onMood: (WaveMood) -> Unit,
     onSort: (WaveSort) -> Unit,
     onTrackClick: (Track) -> Unit,
@@ -705,12 +708,26 @@ private fun WaveCard(
         }
 
         Spacer(Modifier.height(12.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            WaveSourceMode.entries.forEach { mode ->
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(WaveSourceMode.entries) { mode ->
                 FilterChip(
                     selected = state.filters.source == mode,
                     onClick = { onSource(mode) },
                     label = { Text(mode.label) },
+                )
+            }
+            item {
+                FilterChip(
+                    selected = state.filters.favoritesOnly,
+                    onClick = onToggleFavorites,
+                    label = { Text("Избранное") },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Rounded.Favorite,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                        )
+                    },
                 )
             }
         }

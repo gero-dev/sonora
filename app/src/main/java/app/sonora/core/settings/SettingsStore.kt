@@ -36,7 +36,7 @@ enum class AudioQuality(
 ) {
     AUTO(
         "Авто",
-        "Лучшее качество с учётом сети и источника",
+        "Wi-Fi — высокое, мобильная сеть — по настройке ниже",
         null,
     ),
     LOW(
@@ -134,6 +134,11 @@ data class AppSettings(
     val playbackSpeed: Float = 1f,
     /** Качество онлайн-воспроизведения: авто, низкое, обычное, высокое, максимум. */
     val audioQuality: AudioQuality = AudioQuality.AUTO,
+    /**
+     * Отдельная градация для мобильной сети. Применяется, когда основное
+     * качество — «Авто»: Wi-Fi получает высокое, сотовая — это значение.
+     */
+    val mobileAudioQuality: AudioQuality = AudioQuality.NORMAL,
 
     // Воспроизведение: онлайн-стриминг можно выключить, как «офлайн-режим» в Spotify.
     val playbackMode: PlaybackMode = PlaybackMode.STREAMING,
@@ -187,6 +192,19 @@ data class AppSettings(
         const val BANDS_COUNT = 5
         val bandFrequencies = intArrayOf(60, 230, 910, 3600, 14000)
     }
+}
+
+/**
+ * Итоговое качество для текущего подключения.
+ *
+ * «Авто» — не одно значение, а градация по сети: на Wi-Fi высокое, на сотовой
+ * используется отдельная настройка [AppSettings.mobileAudioQuality]. Любой
+ * явный выбор пользователя имеет приоритет над сетью.
+ */
+fun AppSettings.effectiveAudioQuality(onMobileNetwork: Boolean): AudioQuality = when {
+    audioQuality != AudioQuality.AUTO -> audioQuality
+    onMobileNetwork -> mobileAudioQuality
+    else -> AudioQuality.HIGH
 }
 
 /**

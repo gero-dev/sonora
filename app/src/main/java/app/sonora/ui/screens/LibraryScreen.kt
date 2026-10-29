@@ -247,6 +247,7 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
                     bottomPadding = bottomPadding,
                     onCreatePlaylist = { showCreateDialog = true },
                     onLongClick = { playlistMenu = it },
+                    onPlay = { vm.playPlaylist(it) },
                 )
                 5 -> YouTubeTab(
                     tracks = importedTracks,
@@ -737,6 +738,7 @@ private fun PlaylistsTab(
     bottomPadding: Dp,
     onCreatePlaylist: () -> Unit,
     onLongClick: (Playlist) -> Unit,
+    onPlay: (Playlist) -> Unit,
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -808,6 +810,13 @@ private fun PlaylistsTab(
                                 )
                             }
                         }
+                    }
+                    IconButton(onClick = { onPlay(playlist) }) {
+                        Icon(
+                            imageVector = Icons.Rounded.PlayCircle,
+                            contentDescription = "Играть плейлист",
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
                     }
                     Icon(
                         imageVector = Icons.Rounded.ChevronRight,

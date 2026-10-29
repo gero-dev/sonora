@@ -14,8 +14,8 @@ android {
         applicationId = "app.sonora"
         minSdk = 26
         targetSdk = 34
-        versionCode = 25
-        versionName = "1.3.0"
+        versionCode = 26
+        versionName = "1.4.0"
         vectorDrawables.useSupportLibrary = true
     }
 
@@ -54,6 +54,9 @@ android {
 
     packaging {
         resources.excludes += setOf("/META-INF/{AL2.0,LGPL2.1}")
+        // Python-рантайм yt-dlp должен распаковываться из APK: .so нельзя
+        // грузить прямо из архива.
+        jniLibs.useLegacyPackaging = true
     }
 }
 
@@ -85,6 +88,9 @@ dependencies {
 
     // InnerTubeX — движок потоков из Metrolist: cipher, SABR, PoToken-контракты.
     implementation("com.github.MetrolistGroup.innertubex:innertubex:v0.11.0")
+    // yt-dlp: резервный путь для видео, где InnerTube не отдал аудио
+    // (возрастные/региональные ограничения, SABR-only).
+    implementation("io.github.junkfood02.youtubedl-android:library:0.18.1")
     implementation("io.ktor:ktor-client-core:3.6.0")
     implementation("io.ktor:ktor-client-okhttp:3.6.0")
     implementation("io.ktor:ktor-client-content-negotiation:3.6.0")

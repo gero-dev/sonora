@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -21,7 +20,6 @@ import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -32,7 +30,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -49,21 +46,14 @@ import app.sonora.ui.components.TrackRow
 import app.sonora.ui.components.sourceColor
 import app.sonora.ui.nav.Routes
 
-/** Подписи фильтров: порядок совпадает с индексами в фильтре. */
-private val SEARCH_FILTERS = listOf("Все", "Устройство", "YouTube Music")
-
-private const val FILTER_ALL = 0
-private const val FILTER_LOCAL = 1
-private const val FILTER_YOUTUBE = 2
-
 private val PagePadding = 16.dp
 
 /**
- * Поиск по локальной фонотеке и YouTube Music.
+ * Поиск по локальной фонотеке и онлайн-источникам.
  *
- * YouTube-часть работает через InnerTube: результаты сразу играбельны,
- * поэтому вместо «откроется в сервисе» показывается обычная кнопка play.
- * Логика и колбэки не менялись — только отступы, поле поиска и типографика.
+ * Результаты показываются одним списком без разделения на категории: у каждой
+ * строки есть маркер источника («Устройство», «YouTube Music», …), поэтому
+ * видно, откуда пришёл трек, но глазами не нужно переключать вкладки.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -75,7 +65,6 @@ fun SearchScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) -
     val player by vm.player.collectAsState()
     val saveStates by vm.saveStates.collectAsState()
 
-    var filterIndex by rememberSaveable { mutableStateOf(FILTER_ALL) }
     var actionTrack by remember { mutableStateOf<Track?>(null) }
     var playlistForNewTrack by remember { mutableStateOf<Track?>(null) }
 
@@ -83,22 +72,13 @@ fun SearchScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) -
     val recentPreview = remember(localTracks) { localTracks.take(8) }
 
     val queryBlank = search.query.isBlank()
-    val showLocal = filterIndex == FILTER_ALL || filterIndex == FILTER_LOCAL
-    val showYouTube = filterIndex == FILTER_ALL || filterIndex == FILTER_YOUTUBE
-    val localResults = if (showLocal) search.local else emptyList()
-    // В общем списке сохранённые треки показываем только как локальные — без дубля
-    // из YouTube. В фильтре «YouTube Music» оставляем строку с галочкой «Сохранено»,
-    // чтобы пользователь видел результат сохранения.
-    val remoteResults = remember(search.remote, showYouTube, tracks, filterIndex) {
-        val musicOnly = search.remote.filterNot { it.isVideoContent }
-        when {
-            !showYouTube -> emptyList()
-            filterIndex == FILTER_YOUTUBE -> musicOnly
-            else -> vm.withoutSavedCopies(musicOnly)
-        }
+    // Один общий список: сначала совпадения на устройстве (они мгновенные),
+    // затем онлайн. Дубли сохранённых треков не показываем дважды.
+    val results = remember(search.local, search.remote, tracks) {
+        val remote = vm.withoutSavedCopies(search.remote.filterNot { it.isVideoContent })
+        (search.local + remote).distinctBy { it.id }
     }
-    val nothingFound = !queryBlank && !search.loading &&
-        localResults.isEmpty() && remoteResults.isEmpty()
+    val nothingFound = !queryBlank && !search.loading && results.isEmpty()
 
     Column(
         Modifier
@@ -132,19 +112,6 @@ fun SearchScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) -
             )
             Spacer(Modifier.height(10.dp))
         }
-        LazyRow(
-            modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(horizontal = PagePadding),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            items(SEARCH_FILTERS.size) { index ->
-                FilterChip(
-                    selected = filterIndex == index,
-                    onClick = { filterIndex = index },
-                    label = { Text(SEARCH_FILTERS[index]) },
-                )
-            }
-        }
         Spacer(Modifier.height(6.dp))
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -173,7 +140,7 @@ fun SearchScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) -
             }
 
             if (queryBlank) {
-                item { SectionHeader(title = "На устройстве") }
+                item { SectionHeader(title = "Недавнее на устройстве") }
                 if (recentPreview.isEmpty()) {
                     item {
                         EmptyState(
@@ -191,6 +158,7 @@ fun SearchScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) -
                             onClick = { vm.playOrOpen(track) },
                             onLongClick = { actionTrack = track },
                             onFavorite = { vm.toggleFavorite(track.id) },
+                            showSource = true,
                         )
                     }
                 }
@@ -200,26 +168,13 @@ fun SearchScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) -
                         EmptyState(
                             icon = Icons.Rounded.Search,
                             title = "Ничего не нашлось",
-                            subtitle = "Попробуйте другой запрос или снимите фильтр.",
+                            subtitle = "Попробуйте другой запрос или проверьте написание.",
                         )
                     }
                 }
-                if (localResults.isNotEmpty()) {
-                    item { SectionHeader(title = "На устройстве · ${localResults.size}") }
-                    items(localResults, key = { "local-${it.id}" }) { track ->
-                        SearchTrackRow(
-                            track = track,
-                            isFavorite = track.id in favorites,
-                            isPlaying = player.current?.id == track.id && player.isPlaying,
-                            onClick = { vm.playOrOpen(track) },
-                            onLongClick = { actionTrack = track },
-                            onFavorite = { vm.toggleFavorite(track.id) },
-                        )
-                    }
-                }
-                if (remoteResults.isNotEmpty()) {
-                    item { SectionHeader(title = "YouTube Music · InnerTube · ${remoteResults.size}") }
-                    items(remoteResults, key = { "remote-${it.id}" }) { track ->
+                if (results.isNotEmpty()) {
+                    item { SectionHeader(title = "Найдено · ${results.size}") }
+                    items(results, key = { "result-${it.id}" }) { track ->
                         SearchTrackRow(
                             track = track,
                             isFavorite = track.id in favorites,
@@ -347,7 +302,7 @@ private fun SearchLoadingRow() {
         CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
         Spacer(Modifier.width(12.dp))
         Text(
-            text = "Ищем на устройстве и в YouTube Music…",
+            text = "Ищем на устройстве и в онлайн-источниках…",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

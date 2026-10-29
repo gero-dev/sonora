@@ -30,7 +30,8 @@ enum class WaveSort(val label: String) {
 data class WaveFilters(
     val source: WaveSourceMode = WaveSourceMode.MIX,
     val mood: WaveMood = WaveMood.ANY,
-    val includeFavorites: Boolean = true,
+    /** Только избранное: локальная часть волны ограничивается любимыми треками. */
+    val favoritesOnly: Boolean = false,
 )
 
 data class WaveUiState(

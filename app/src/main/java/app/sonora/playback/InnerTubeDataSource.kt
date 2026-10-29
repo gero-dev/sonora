@@ -13,6 +13,7 @@ import androidx.media3.datasource.ResolvingDataSource
 import app.sonora.core.settings.AudioQuality
 import app.sonora.data.remote.youtube.innertube.InnerTube
 import app.sonora.data.remote.youtube.innertube.InnerTubeStreams
+import app.sonora.data.remote.ytdlp.YtDlpBridge
 import java.io.IOException
 
 /**
@@ -42,7 +43,23 @@ class InnerTubeDataSourceFactory(
     private val upstreamFactory = DefaultDataSource.Factory(appContext, httpFactory)
 
     private val resolver = ResolvingDataSource.Resolver { dataSpec ->
-        val videoId = InnerTubeStreams.videoIdOf(dataSpec.uri.toString())
+        val raw = dataSpec.uri.toString()
+
+        // yt-dlp: ссылка резолвится в момент открытия потока, поэтому
+        // протухшие URL не живут в очереди.
+        if (raw.startsWith("ytdlp:", ignoreCase = true)) {
+            val videoId = raw.removePrefix("ytdlp:").substringBefore('?').trim()
+            if (videoId.isBlank()) {
+                throw IOException("Пустой yt-dlp id")
+            }
+            val handle = YtDlpBridge.resolveBlocking(videoId)
+                ?: throw IOException("yt-dlp не смог получить поток для $videoId")
+            return@Resolver dataSpec
+                .withUri(Uri.parse(handle.url))
+                .withRequestHeaders(dataSpec.httpRequestHeaders + handle.headers)
+        }
+
+        val videoId = InnerTubeStreams.videoIdOf(raw)
         if (videoId == null) {
             dataSpec
         } else {

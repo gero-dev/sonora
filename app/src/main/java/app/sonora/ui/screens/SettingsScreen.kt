@@ -302,6 +302,28 @@ fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 2.dp),
             )
+            if (settings.audioQuality == AudioQuality.AUTO) {
+                Spacer(Modifier.height(8.dp))
+                SettingsLabel("Качество на мобильной сети")
+                val mobileLevels = AudioQuality.values().filter { it != AudioQuality.AUTO }
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(mobileLevels.size) { index ->
+                        val quality = mobileLevels[index]
+                        FilterChip(
+                            selected = settings.mobileAudioQuality == quality,
+                            onClick = { vm.setMobileAudioQuality(quality) },
+                            label = { Text(quality.label) },
+                        )
+                    }
+                }
+                Text(
+                    text = "Применяется, когда основное качество — «Авто»: Wi-Fi играет " +
+                        "в высоком, сотовая сеть — с этой градацией.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
             Spacer(Modifier.height(6.dp))
             SettingsLabel("Скорость воспроизведения")
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -948,7 +970,7 @@ fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
 
         // ---------- О приложении ----------
         SettingsSection(title = "О приложении", icon = Icons.Rounded.Info) {
-            InfoRow(title = "Версия", value = "1.3.0")
+            InfoRow(title = "Версия", value = "1.4.0")
             InfoRow(title = "Стек", value = "Kotlin · Compose · Media3")
             Spacer(Modifier.height(8.dp))
             Text(
