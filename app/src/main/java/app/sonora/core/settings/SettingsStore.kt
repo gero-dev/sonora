@@ -184,10 +184,25 @@ data class AppSettings(
     val relayInstances: String = "",
     /** Проверять ссылку настоящим Range-запросом перед отдачей в плеер. */
     val probeBeforePlay: Boolean = true,
+    /** Автопилот: проверять все способы стриминга и выбирать рабочий. */
+    val autoTransport: Boolean = true,
+    /** Поднимать WARP автоматически, если без него YouTube не играет. */
+    val autoWarpFallback: Boolean = true,
+    /** При 403/ошибке плеера автоматически переключать источник. */
+    val autoFailover: Boolean = true,
     /** Предпочтительный IP-протокол для YouTube. */
     val youtubeIpMode: YoutubeIpMode = YoutubeIpMode.AUTO,
     /** Автоматически обновлять yt-dlp из GitHub: встроенная версия быстро устаревает. */
     val ytDlpAutoUpdate: Boolean = true,
+    /**
+     * Самостоятельно регистрировать свежий WARP-профиль: встроенные конфиги
+     * со временем перестают поднимать handshake. Работает без VPN-клиента.
+     */
+    val warpAutoRegister: Boolean = true,
+    /** Время последней авторегистрации WARP (мс). */
+    val warpAutoConfigAtMs: Long = 0L,
+    /** id WARP-конфига, который последним реально поднял handshake. */
+    val warpLastGoodConfigId: String = "",
     /** Время последней успешной проверки/обновления yt-dlp (мс). */
     val ytDlpCheckedAtMs: Long = 0L,
     /** Версия установленного yt-dlp (для настроек и диагностики). */

@@ -65,6 +65,10 @@
 |---|---|---|
 | ![Поток и сеть](docs/screenshots/settings-streaming.png) | | |
 
+| Автопилот: проверка всех способов | Стриминг в РФ через собственный WARP |
+|---|---|
+| ![Автопилот](docs/screenshots/autopilot.png) | ![Стриминг через WARP](docs/screenshots/streaming-rf.png) |
+
 Светлая тема и авто-очередь: [settings-light.png](docs/screenshots/settings-light.png), [queue.png](docs/screenshots/queue.png).
 
 ---
@@ -126,6 +130,8 @@
 | **Фильтры волны**: настроение влияет на локальные треки, «Избранное», сброс выдачи | ✅ |
 | **yt-dlp везде**: поток, поиск, загрузки + выбор источника и прокси | ✅ |
 | **Стриминг в РФ без VPN и WARP**: авто-обновление yt-dlp, перебор клиентов и IPv4/IPv6, Range-проверка, медиашлюз Invidious/Piped | ✅ |
+| **Автопилот стриминга**: проверяет прямой путь, yt-dlp, шлюз и собственный WARP, сам выбирает рабочий и переключается при 403 | ✅ |
+| **Свой WARP-туннель с авторегистрацией**: свежий профиль, запоминание рабочего endpoint, подключение за 1–2 с | ✅ |
 | **Медиатека в стиле Spotify**: плейлисты карточками с коллажами и Play на обложке, сетки альбомов и исполнителей | ✅ |
 | **Быстрая фонотека**: инкрементальный скан с кэшем и токен-индекс поиска вместо перебора на каждое нажатие | ✅ |
 | **ReccoBeats**: BPM и энергия в плеере, локальный ffmpeg-фрагмент, кэш | ✅ |
@@ -255,7 +261,8 @@ Gradle wrapper (9.7.1) лежит в репозитории, отдельно с
 - [docs/README.md](docs/README.md) — полный индекс документации
 - [docs/SETUP.md](docs/SETUP.md) — установка, Takeout, виджет, типовые ошибки
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — слои, потоки данных, InnerTube, воспроизведение, OAuth
-- [docs/STREAMING-RF.md](docs/STREAMING-RF.md) — стриминг без VPN/WARP: авто-обновление yt-dlp, probe, медиашлюз, диагностика, ограничения
+- [docs/STREAMING-RF.md](docs/STREAMING-RF.md) — стриминг без VPN/WARP: автопилот, свой WARP, авто-обновление yt-dlp, медиашлюз, ограничения
+- [docs/PC-STREAMING-AUDIT.md](docs/PC-STREAMING-AUDIT.md) — реальные замеры на сети пользователя: что работает без WARP и что даёт WARP
 - [docs/DOWNLOADS.md](docs/DOWNLOADS.md) — сохранение треков: InnerTube, прямые ссылки, каталоги, ошибки
 - [docs/METADATA.md](docs/METADATA.md) — источники метаданных, sidecar-файлы, встроенные обложки, авторы
 - [docs/GOOGLE-ACCOUNT.md](docs/GOOGLE-ACCOUNT.md) — вход в Google, личные плейлисты, приватность
@@ -278,7 +285,7 @@ Gradle wrapper (9.7.1) лежит в репозитории, отдельно с
 
 ## Статус и лицензия
 
-Версия **1.6.0** (`versionCode 28`). Проверено в среде разработки:
+Версия **1.7.0** (`versionCode 29`). Проверено в среде разработки:
 
 - `gradlew :app:assembleDebug` — **BUILD SUCCESSFUL**, APK в `app/build/outputs/apk/debug/`;
 - **WARP на главном экране**: статус и кнопка «Подключить/Выключить» без похода в Настройки;

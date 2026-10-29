@@ -1,4 +1,4 @@
-﻿package app.sonora.data.remote.ytdlp
+package app.sonora.data.remote.ytdlp
 
 import android.content.Context
 import android.util.Log
@@ -49,15 +49,17 @@ class YtDlpResolver(
 
     /**
      * Наборы `--extractor-args youtube:player_client=…`. Порядок проверен
-     * практикой 2026 года: сначала дефолтный набор с tv_simply (не требует
-     * PoToken), затем клиенты с другим способом подписи, затем web/mobile.
+     * замерами 29.10.2026 на реальной сети РФ через WARP: лучше всех отдают
+     * ссылки `default`/`tv_simply`, затем `web_safari`; `tv` и `ios` часто
+     * отвечают «page needs to be reloaded»/«format not available».
      */
     private val clientSets: List<String> = listOf(
         "youtube:player_client=default,tv_simply",
-        "youtube:player_client=tv,android_vr",
         "youtube:player_client=web_safari,web_embedded",
-        "youtube:player_client=ios,mweb",
+        "youtube:player_client=android_vr,mweb",
+        "youtube:player_client=tv",
         "youtube:player_client=android,web",
+        "youtube:player_client=ios",
     )
 
     /** Инициализация Python + yt-dlp. Идемпотентно, можно звать из фона. */

@@ -4,6 +4,7 @@ import app.sonora.core.settings.AudioQuality
 import app.sonora.core.settings.StreamSource
 import app.sonora.data.remote.StreamProbe
 import app.sonora.data.remote.ytdlp.YtDlpBridge
+import app.sonora.data.streaming.StreamingAutoPilot
 import app.sonora.net.relay.RelayGateway
 import com.metrolist.innertubex.extraction.AudioQuality as EngineQuality
 import kotlinx.coroutines.Dispatchers
@@ -76,6 +77,15 @@ internal object InnerTubeStreams {
         }
 
         val failures = ArrayList<String>(4)
+
+        // Автопилот: при необходимости поднимает WARP и задаёт порядок способов.
+        StreamingAutoPilot.prepareForPlayback()
+        if (StreamingAutoPilot.prefersRelayFirst()) {
+            resolveViaRelay(videoId, targetKbps)?.let { return it }
+        }
+        if (StreamingAutoPilot.prefersYtDlpFirst() && source != StreamSource.INNERTUBE) {
+            YtDlpBridge.resolve(videoId)?.let { return it.toStreamInfo(videoId) }
+        }
 
         // 1. InnerTubeX — быстрый путь.
         var engineStream: StreamInfo? = null

@@ -128,6 +128,7 @@ fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
     var showProxyDialog by remember { mutableStateOf(false) }
     var showRelayServersDialog by remember { mutableStateOf(false) }
     var showStreamDetails by remember { mutableStateOf(false) }
+    var showAutoPilotDialog by remember { mutableStateOf(false) }
     var jamendoClientId by rememberSaveable(settings.jamendoClientId) {
         mutableStateOf(settings.jamendoClientId)
     }
@@ -153,6 +154,8 @@ fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
         contract = ActivityResultContracts.StartActivityForResult(),
     ) {
         vm.startWarp()
+        // После выдачи разрешения сразу проверяем, помогает ли WARP стримингу.
+        vm.runStreamingAudit(deep = true)
     }
     LaunchedEffect(Unit) { vm.refreshWarp() }
     // Версия yt-dlp нужна в карточке «Поток и сеть».
@@ -161,6 +164,9 @@ fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
     val relayCheckState by vm.relayCheck.collectAsState()
     val ytDlpStatusState by vm.ytDlpStatus.collectAsState()
     val relayHealthState by vm.relayHealth.collectAsState()
+    val autoPilotAuditState by vm.autoPilotAudit.collectAsState()
+    val autoPilotRunningState by vm.autoPilotRunning.collectAsState()
+    val autoPilotMessageState by vm.autoPilotMessage.collectAsState()
     val takeoutLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(),
     ) { uri ->
@@ -389,6 +395,53 @@ fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
                 subtitle = relayCheckState ?: "Какие зеркала реально отдают звук",
                 onClick = { vm.checkRelayHealth() },
             )
+            SettingsLabel("Автопилот")
+            SwitchRow(
+                title = "Автопилот стриминга",
+                subtitle = "Проверяет все способы и выбирает рабочий автоматически",
+                checked = settings.autoTransport,
+                onCheckedChange = vm::setAutoTransport,
+            )
+            SwitchRow(
+                title = "WARP-автопилот",
+                subtitle = "Поднимать свой WARP, если прямой путь не работает — быстро и без ручного выбора",
+                checked = settings.autoWarpFallback,
+                onCheckedChange = vm::setAutoWarpFallback,
+            )
+            SwitchRow(
+                title = "Авто-регистрация WARP",
+                subtitle = "Свежий WARP-профиль без ручных файлов: старые конфиги со временем перестают подключаться",
+                checked = settings.warpAutoRegister,
+                onCheckedChange = vm::setWarpAutoRegister,
+            )
+            ClickRow(
+                title = "Перерегистрировать WARP",
+                subtitle = "Получить новый профиль WARP и сразу проверить поток",
+                onClick = { vm.autoRegisterWarp() },
+            )
+            SwitchRow(
+                title = "Автопереключение потока",
+                subtitle = "При 403/ошибке плеер сам переходит на другой источник и продолжает трек",
+                checked = settings.autoFailover,
+                onCheckedChange = vm::setAutoFailover,
+            )
+            ClickRow(
+                title = "Проверить все способы",
+                subtitle = autoPilotMessageState ?: "Прямой YouTube · yt-dlp · медиашлюз · WARP",
+                onClick = {
+                    vm.runStreamingAudit(deep = true)
+                    showAutoPilotDialog = true
+                },
+            )
+            if (vm.autoPilotNeedsVpnPermission()) {
+                ClickRow(
+                    title = "Разрешить VPN для WARP",
+                    subtitle = "Android спросит один раз; туннель работает только для трафика Sonora",
+                    onClick = {
+                        vm.autoPilotVpnPermissionIntent()?.let { vpnPermissionLauncher.launch(it) }
+                    },
+                )
+            }
             SettingsLabel("Сеть YouTube")
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(YoutubeIpMode.values().size) { index ->
@@ -1238,6 +1291,47 @@ fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
                             vm.dismissStreamCheckDetails()
                         },
                     ) { Text("Понятно") }
+                },
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            )
+        }
+
+        if (showAutoPilotDialog) {
+            AlertDialog(
+                onDismissRequest = { showAutoPilotDialog = false },
+                title = { Text("Проверка способов стриминга") },
+                text = {
+                    Column(
+                        Modifier
+                            .height(430.dp)
+                            .verticalScroll(rememberScrollState()),
+                    ) {
+                        if (autoPilotRunningState) {
+                            Text(
+                                text = autoPilotMessageState ?: "Проверяем все способы…",
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                        } else {
+                            Text(
+                                text = autoPilotAuditState?.detailsText()
+                                    ?: autoPilotMessageState
+                                    ?: "Пока нет данных — нажмите «Проверить все способы».",
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                            if (vm.autoPilotNeedsVpnPermission()) {
+                                Spacer(Modifier.height(10.dp))
+                                Text(
+                                    text = "Для WARP нужно разрешение VPN — включите пункт " +
+                                        "«Разрешить VPN для WARP» в разделе «Поток и сеть».",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showAutoPilotDialog = false }) { Text("Понятно") }
                 },
                 containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
             )

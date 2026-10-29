@@ -55,6 +55,8 @@ class AppGraph private constructor(context: Context) {
         app.sonora.data.remote.ytdlp.YtDlpBridge.init(ytDlp, settings)
         // Медиашлюз без VPN/WARP: публичные зеркала на случай блокировки IP.
         app.sonora.net.relay.RelayGateway.init(settings)
+        // Автопилот стриминга: проверяет все способы и выбирает рабочий.
+        app.sonora.data.streaming.StreamingAutoPilot.init(appContext, settings, ytDlp, warp)
     }
 
     val scanner = MediaStoreScanner(appContext)

@@ -33,6 +33,9 @@ import app.sonora.data.metadata.MetadataFiles
 import app.sonora.data.library.LibraryRepository
 import app.sonora.data.remote.StreamProbe
 import app.sonora.data.remote.youtube.innertube.StreamInfo
+import app.sonora.data.streaming.StreamingAudit
+import app.sonora.data.streaming.StreamingAutoPilot
+import app.sonora.data.streaming.TransportKind
 import app.sonora.data.wave.WaveEngine
 import app.sonora.data.wave.WaveHistoryEntry
 import app.sonora.net.relay.RelayGateway
@@ -317,6 +320,27 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
         observeRadio()
         observeAudioFeatures()
         observeWarpKeepAlive()
+        // Автопилот: при ошибке источника подбираем другой способ и переоткрываем трек.
+        graph.playback.onStreamError = { error -> onPlaybackStreamError(error) }
+        // Фоновая проверка способов стриминга: не блокирует старт приложения.
+        if (graph.settings.current.autoTransport) {
+            viewModelScope.launch(Dispatchers.IO) {
+                delay(3_000)
+                runCatching { StreamingAutoPilot.ensureAudited() }
+                _autoPilotAudit.value = StreamingAutoPilot.lastAudit()
+                _autoPilotMessage.value = StreamingAutoPilot.lastAudit()?.summaryLine()
+            }
+            // Периодическая перепроверка (сеть могла смениться, WARP — отвалиться).
+            viewModelScope.launch(Dispatchers.IO) {
+                while (isActive) {
+                    delay(10 * 60_000L)
+                    if (!graph.settings.current.autoTransport) continue
+                    runCatching { StreamingAutoPilot.ensureAudited() }
+                    _autoPilotAudit.value = StreamingAutoPilot.lastAudit()
+                    _autoPilotMessage.value = StreamingAutoPilot.lastAudit()?.summaryLine()
+                }
+            }
+        }
         // Прогреваем Python/yt-dlp в фоне: первый реальный вызов будет быстрее,
         // а старт приложения не ждёт тяжёлый рантайм.
         viewModelScope.launch(Dispatchers.IO) {
@@ -2905,6 +2929,122 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
     /** Проверять ссылку Range-запросом перед отдачей в плеер. */
     fun setProbeBeforePlay(enabled: Boolean) {
         updateSettings { it.copy(probeBeforePlay = enabled) }
+    }
+
+    // ---------- Автопилот стриминга ----------
+
+    private val _autoPilotAudit = MutableStateFlow<StreamingAudit?>(null)
+    val autoPilotAudit: StateFlow<StreamingAudit?> = _autoPilotAudit.asStateFlow()
+
+    private val _autoPilotRunning = MutableStateFlow(false)
+    val autoPilotRunning: StateFlow<Boolean> = _autoPilotRunning.asStateFlow()
+
+    private val _autoPilotMessage = MutableStateFlow<String?>(null)
+    val autoPilotMessage: StateFlow<String?> = _autoPilotMessage.asStateFlow()
+
+    private var recovering = false
+    private var recoveryTrackId: String? = null
+    private var recoveryAttempts = 0
+
+    /** Автопилот: сам проверяет способы стриминга и выбирает рабочий. */
+    fun setAutoTransport(enabled: Boolean) {
+        updateSettings { it.copy(autoTransport = enabled) }
+        toast(if (enabled) "Автопилот включён" else "Автопилот выключен")
+        if (enabled) runStreamingAudit(deep = false)
+    }
+
+    /** Поднимать WARP автоматически, если прямой путь не работает. */
+    fun setAutoWarpFallback(enabled: Boolean) {
+        updateSettings { it.copy(autoWarpFallback = enabled) }
+        toast(if (enabled) "WARP-автопилот включён" else "WARP-автопилот выключен")
+    }
+
+    /** Самостоятельная регистрация свежего WARP-профиля. */
+    fun setWarpAutoRegister(enabled: Boolean) {
+        updateSettings { it.copy(warpAutoRegister = enabled) }
+        toast(if (enabled) "Авто-регистрация WARP включена" else "Авто-регистрация WARP выключена")
+    }
+
+    /** Получить свежий WARP-профиль по кнопке (старые конфиги устаревают). */
+    fun autoRegisterWarp() {
+        viewModelScope.launch(Dispatchers.IO) {
+            toast("Регистрируем свежий WARP-профиль…")
+            val ok = runCatching { StreamingAutoPilot.registerFreshWarp() }.getOrDefault(false)
+            withContext(Dispatchers.Main) {
+                toast(
+                    if (ok) {
+                        "WARP-профиль обновлён — подключаемся"
+                    } else {
+                        "Не удалось зарегистрировать WARP-профиль (нет сети?)"
+                    },
+                )
+            }
+            if (ok) {
+                runCatching { StreamingAutoPilot.ensureWarp() }
+                runStreamingAudit(deep = false)
+            }
+        }
+    }
+
+    /** Переключать источник при 403/ошибке воспроизведения. */
+    fun setAutoFailover(enabled: Boolean) {
+        updateSettings { it.copy(autoFailover = enabled) }
+        toast(if (enabled) "Автопереключение потока включено" else "Автопереключение выключено")
+    }
+
+    /**
+     * Проверить все способы стриминга. deep=true — включая WARP-конфиги
+     * (медленно, зато показывает реальный результат через туннель).
+     */
+    fun runStreamingAudit(deep: Boolean = true) {
+        if (_autoPilotRunning.value) return
+        _autoPilotRunning.value = true
+        _autoPilotMessage.value = if (deep) "Проверяем все способы…" else "Проверяем поток…"
+        viewModelScope.launch(Dispatchers.IO) {
+            val result = runCatching { StreamingAutoPilot.runAudit(deep = deep) }.getOrNull()
+            _autoPilotAudit.value = result ?: StreamingAutoPilot.lastAudit()
+            _autoPilotMessage.value = result?.summaryLine() ?: "Проверка не удалась"
+            _autoPilotRunning.value = false
+            withContext(Dispatchers.Main) { toast(_autoPilotMessage.value!!) }
+        }
+    }
+
+    /** Нужно ли разрешение Android на VPN для WARP-автопилота. */
+    fun autoPilotNeedsVpnPermission(): Boolean = StreamingAutoPilot.needsVpnPermission()
+
+    /** Intent системного диалога разрешения VPN; null — уже выдано. */
+    fun autoPilotVpnPermissionIntent(): Intent? = graph.warp.vpnPermissionIntent()
+
+    /**
+     * Плеер не смог открыть поток (403/сеть). Сбрасываем кэши и просим
+     * автопилот подобрать другой способ; затем переоткрываем текущий трек.
+     */
+    private fun onPlaybackStreamError(error: Throwable?) {
+        if (!graph.settings.current.autoFailover) return
+        val current = graph.playback.state.value.current ?: return
+        val videoId = youtubeVideoId(current) ?: return
+        if (recoveryTrackId != current.id) {
+            recoveryTrackId = current.id
+            recoveryAttempts = 0
+        }
+        if (recovering || recoveryAttempts >= 2) return
+        recoveryAttempts++
+        recovering = true
+        Log.i("AutoPilot", "stream error: ${error?.message?.take(120)}; recover $videoId")
+        viewModelScope.launch(Dispatchers.IO) {
+            val label = runCatching { StreamingAutoPilot.recover(videoId) }.getOrNull()
+            _autoPilotAudit.value = StreamingAutoPilot.lastAudit()
+            _autoPilotMessage.value = StreamingAutoPilot.lastAudit()?.summaryLine()
+            withContext(Dispatchers.Main) {
+                recovering = false
+                if (label != null) {
+                    toast("Поток переключён: $label")
+                    graph.playback.reloadCurrent()
+                } else {
+                    toast("Не удалось подобрать обход. Проверьте «Поток и сеть».")
+                }
+            }
+        }
     }
 
     /** Автообновление рантайма yt-dlp из GitHub. */

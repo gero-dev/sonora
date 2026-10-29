@@ -14,8 +14,8 @@ android {
         applicationId = "app.sonora"
         minSdk = 26
         targetSdk = 34
-        versionCode = 28
-        versionName = "1.6.0"
+        versionCode = 29
+        versionName = "1.7.0"
         vectorDrawables.useSupportLibrary = true
     }
 

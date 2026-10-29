@@ -1,0 +1,3285 @@
+{
+  "schema": 1,
+  "generated_at": "2026-10-29T18:56:15+03:00",
+  "runs": [
+    {
+      "id": "phase:A (WARP ON, baseline)",
+      "label": "A (WARP ON, baseline)",
+      "phase": "A (WARP ON, baseline)",
+      "started_at": "2026-10-29T18:53:07+03:00",
+      "finished_at": "2026-10-29T18:53:31+03:00",
+      "warp_requested": "on",
+      "warp_before": "Connected",
+      "warp_state": "Connected",
+      "warp_toggle": null,
+      "restore": {
+        "before": "Connected",
+        "after": "Connected",
+        "ok": true,
+        "attempts": [],
+        "internet": "104.28.198.244"
+      },
+      "quick": true,
+      "with_ytdlp": false,
+      "videos": [
+        {
+          "id": "dQw4w9WgXcQ",
+          "kind": "control"
+        },
+        {
+          "id": "kJQP7kiw5Fk",
+          "kind": "music"
+        }
+      ],
+      "notes": [],
+      "env": {
+        "platform": "nt win32 3.14.7",
+        "python": "3.14.7",
+        "hostname": "DESKTOP-30NVUJ9",
+        "user": "Егор Груздев",
+        "cwd": "C:\\Users\\Егор Груздев\\Documents\\deepseek-harness\\default-workspace\\sonora-1.5.0"
+      },
+      "egress": {
+        "v4": {
+          "ok": true,
+          "ip": "104.28.198.244",
+          "family": "v4",
+          "ms": 322,
+          "error": null
+        },
+        "v6": {
+          "ok": true,
+          "ip": "2a09:bac5:5154:319::4f:153",
+          "family": "v6",
+          "ms": 454,
+          "error": null
+        },
+        "dns_servers": [
+          "127.0.2.2",
+          "127.0.2.3",
+          "::ffff:127.0.2.2",
+          "::ffff:127.0.2.3"
+        ]
+      },
+      "endpoints": [
+        {
+          "host": "youtube.com",
+          "path": "/",
+          "v4": {
+            "dns_ms": 0,
+            "ips": [
+              "64.233.161.93",
+              "64.233.161.190",
+              "64.233.161.136",
+              "64.233.161.91"
+            ],
+            "dns_error": null,
+            "tcp_ms": 43,
+            "tls_ms": 139,
+            "tls_version": "TLSv1.3",
+            "status": 301,
+            "ok": true,
+            "error": null,
+            "total_ms": 305
+          },
+          "v6": {
+            "dns_ms": 0,
+            "ips": [
+              "2a00:1450:4010:c0f::5d",
+              "2a00:1450:4010:c0f::5b",
+              "2a00:1450:4010:c0f::88",
+              "2a00:1450:4010:c0f::be"
+            ],
+            "dns_error": null,
+            "tcp_ms": 56,
+            "tls_ms": 130,
+            "tls_version": "TLSv1.3",
+            "status": 301,
+            "ok": true,
+            "error": null,
+            "total_ms": 311
+          }
+        },
+        {
+          "host": "www.youtube.com",
+          "path": "/",
+          "v4": {
+            "dns_ms": 0,
+            "ips": [
+              "142.251.153.4",
+              "142.251.150.4",
+              "142.251.152.4",
+              "142.251.154.4"
+            ],
+            "dns_error": null,
+            "tcp_ms": 39,
+            "tls_ms": 98,
+            "tls_version": "TLSv1.3",
+            "status": 200,
+            "ok": true,
+            "error": null,
+            "total_ms": 293
+          },
+          "v6": {
+            "dns_ms": 0,
+            "ips": [
+              "2001:4860:4828:400::",
+              "2001:4860:482c:400::",
+              "2001:4860:482d:400::",
+              "2001:4860:4826:400::"
+            ],
+            "dns_error": null,
+            "tcp_ms": 39,
+            "tls_ms": 131,
+            "tls_version": "TLSv1.3",
+            "status": 200,
+            "ok": true,
+            "error": null,
+            "total_ms": 317
+          }
+        },
+        {
+          "host": "music.youtube.com",
+          "path": "/",
+          "v4": {
+            "dns_ms": 2,
+            "ips": [
+              "142.251.153.4",
+              "142.251.156.4",
+              "142.251.152.4",
+              "142.251.150.4"
+            ],
+            "dns_error": null,
+            "tcp_ms": 66,
+            "tls_ms": 134,
+            "tls_version": "TLSv1.3",
+            "status": 200,
+            "ok": true,
+            "error": null,
+            "total_ms": 332
+          },
+          "v6": {
+            "dns_ms": 33,
+            "ips": [
+              "2001:4860:482c:400::",
+              "2001:4860:4828:400::",
+              "2001:4860:4829:400::",
+              "2001:4860:4827:400::"
+            ],
+            "dns_error": null,
+            "tcp_ms": 39,
+            "tls_ms": 129,
+            "tls_version": "TLSv1.3",
+            "status": 200,
+            "ok": true,
+            "error": null,
+            "total_ms": 306
+          }
+        },
+        {
+          "host": "music.youtube.com",
+          "path": "/youtubei/v1/player?prettyPrint=false",
+          "v4": {
+            "dns_ms": 1,
+            "ips": [
+              "142.251.153.4",
+              "142.251.156.4",
+              "142.251.152.4",
+              "142.251.150.4"
+            ],
+            "dns_error": null,
+            "tcp_ms": null,
+            "tls_ms": null,
+            "tls_version": null,
+            "status": null,
+            "ok": false,
+            "error": "timeout after 5.0s",
+            "total_ms": 5014
+          },
+          "v6": {
+            "dns_ms": 1,
+            "ips": [
+              "2001:4860:482c:400::",
+              "2001:4860:4828:400::",
+              "2001:4860:4829:400::",
+              "2001:4860:4827:400::"
+            ],
+            "dns_error": null,
+            "tcp_ms": 63,
+            "tls_ms": 102,
+            "tls_version": "TLSv1.3",
+            "status": 405,
+            "ok": true,
+            "error": null,
+            "total_ms": 370
+          }
+        },
+        {
+          "host": "youtubei.googleapis.com",
+          "path": "/",
+          "v4": {
+            "dns_ms": 27,
+            "ips": [
+              "172.217.117.4",
+              "172.217.115.4",
+              "172.217.114.4",
+              "172.217.112.4"
+            ],
+            "dns_error": null,
+            "tcp_ms": 38,
+            "tls_ms": 136,
+            "tls_version": "TLSv1.3",
+            "status": 405,
+            "ok": true,
+            "error": null,
+            "total_ms": 383
+          },
+          "v6": {
+            "dns_ms": 1,
+            "ips": [
+              "2001:4860:4846:400::",
+              "2001:4860:4844:400::",
+              "2001:4860:4840:400::",
+              "2001:4860:4843:400::"
+            ],
+            "dns_error": null,
+            "tcp_ms": 38,
+            "tls_ms": 101,
+            "tls_version": "TLSv1.3",
+            "status": 405,
+            "ok": true,
+            "error": null,
+            "total_ms": 344
+          }
+        },
+        {
+          "host": "googlevideo.com",
+          "path": "/",
+          "v4": {
+            "dns_ms": 0,
+            "ips": [
+              "64.233.162.104",
+              "64.233.162.103",
+              "64.233.162.106",
+              "64.233.162.147"
+            ],
+            "dns_error": null,
+            "tcp_ms": 39,
+            "tls_ms": 280,
+            "tls_version": "TLSv1.3",
+            "status": 302,
+            "ok": true,
+            "error": null,
+            "total_ms": 428
+          },
+          "v6": {
+            "dns_ms": 1,
+            "ips": [
+              "2a00:1450:4010:c1e::6a",
+              "2a00:1450:4010:c1e::69",
+              "2a00:1450:4010:c1e::67",
+              "2a00:1450:4010:c1e::63"
+            ],
+            "dns_error": null,
+            "tcp_ms": 37,
+            "tls_ms": 279,
+            "tls_version": "TLSv1.3",
+            "status": 302,
+            "ok": true,
+            "error": null,
+            "total_ms": 423
+          }
+        },
+        {
+          "host": "i.ytimg.com",
+          "path": "/vi/dQw4w9WgXcQ/default.jpg",
+          "v4": {
+            "dns_ms": 31,
+            "ips": [
+              "142.251.148.6",
+              "192.178.41.6",
+              "142.251.145.6",
+              "192.178.40.6"
+            ],
+            "dns_error": null,
+            "tcp_ms": 40,
+            "tls_ms": 101,
+            "tls_version": "TLSv1.3",
+            "status": 200,
+            "ok": true,
+            "error": null,
+            "total_ms": 248
+          },
+          "v6": {
+            "dns_ms": 0,
+            "ips": [
+              "2001:4860:4825:600::",
+              "2001:4860:4824:600::",
+              "2001:4860:4821:600::",
+              "2001:4860:4820:600::"
+            ],
+            "dns_error": null,
+            "tcp_ms": 40,
+            "tls_ms": 133,
+            "tls_version": "TLSv1.3",
+            "status": 200,
+            "ok": true,
+            "error": null,
+            "total_ms": 284
+          }
+        },
+        {
+          "host": "yt3.ggpht.com",
+          "path": "/",
+          "v4": {
+            "dns_ms": 28,
+            "ips": [
+              "74.125.205.132",
+              "142.251.1.132",
+              "64.233.162.132",
+              "64.233.164.132"
+            ],
+            "dns_error": null,
+            "tcp_ms": 42,
+            "tls_ms": 135,
+            "tls_version": "TLSv1.3",
+            "status": 400,
+            "ok": true,
+            "error": null,
+            "total_ms": 285
+          },
+          "v6": {
+            "dns_ms": 28,
+            "ips": [
+              "2a00:1450:4010:c05::84",
+              "2a00:1450:4010:c07::84",
+              "2a00:1450:4010:c02::84",
+              "2a00:1450:4010:c1e::84"
+            ],
+            "dns_error": null,
+            "tcp_ms": 38,
+            "tls_ms": 158,
+            "tls_version": "TLSv1.3",
+            "status": 400,
+            "ok": true,
+            "error": null,
+            "total_ms": 312
+          }
+        }
+      ],
+      "innertube": [
+        {
+          "client": "WEB_REMIX",
+          "host": "music.youtube.com",
+          "video": "dQw4w9WgXcQ",
+          "ok": false,
+          "http": 200,
+          "ms": 281,
+          "playability": "UNPLAYABLE",
+          "reason": "Видео недоступно",
+          "audio_formats": 0,
+          "url": null,
+          "itag": null,
+          "mime": null,
+          "bitrate": null,
+          "content_length": null,
+          "url_host": null,
+          "has_n_param": null,
+          "error": "no audio format with resolvable url"
+        },
+        {
+          "client": "ANDROID",
+          "host": "www.youtube.com",
+          "video": "dQw4w9WgXcQ",
+          "ok": false,
+          "http": 400,
+          "ms": 227,
+          "playability": null,
+          "reason": null,
+          "audio_formats": 0,
+          "url": null,
+          "itag": null,
+          "mime": null,
+          "bitrate": null,
+          "content_length": null,
+          "url_host": null,
+          "has_n_param": null,
+          "error": "HTTP 400: {\n  \"error\": {\n    \"code\": 400,\n    \"message\": \"Precondition check failed.\",\n    \"errors\": [\n      {\n        \"message\": \"Precondition check failed.\",\n        \"domain\": \"global\",\n        \"reason\": \"fai"
+        },
+        {
+          "client": "TVHTML5_SIMPLY",
+          "host": "www.youtube.com",
+          "video": "dQw4w9WgXcQ",
+          "ok": false,
+          "http": 200,
+          "ms": 206,
+          "playability": "ERROR",
+          "reason": "YouTube больше не поддерживается в этом приложении или на этом устройстве.",
+          "audio_formats": 0,
+          "url": null,
+          "itag": null,
+          "mime": null,
+          "bitrate": null,
+          "content_length": null,
+          "url_host": null,
+          "has_n_param": null,
+          "error": "no audio format with resolvable url"
+        },
+        {
+          "client": "TVHTML5",
+          "host": "www.youtube.com",
+          "video": "dQw4w9WgXcQ",
+          "ok": false,
+          "http": 200,
+          "ms": 235,
+          "playability": "UNPLAYABLE",
+          "reason": "Необходимо перезагрузить страницу.",
+          "audio_formats": 0,
+          "url": null,
+          "itag": null,
+          "mime": null,
+          "bitrate": null,
+          "content_length": null,
+          "url_host": null,
+          "has_n_param": null,
+          "error": "no audio format with resolvable url"
+        },
+        {
+          "client": "WEB_REMIX",
+          "host": "music.youtube.com",
+          "video": "kJQP7kiw5Fk",
+          "ok": false,
+          "http": 200,
+          "ms": 236,
+          "playability": "LOGIN_REQUIRED",
+          "reason": "Войдите в аккаунт, чтобы подтвердить, что вы не бот",
+          "audio_formats": 0,
+          "url": null,
+          "itag": null,
+          "mime": null,
+          "bitrate": null,
+          "content_length": null,
+          "url_host": null,
+          "has_n_param": null,
+          "error": "no audio format with resolvable url"
+        },
+        {
+          "client": "ANDROID",
+          "host": "www.youtube.com",
+          "video": "kJQP7kiw5Fk",
+          "ok": false,
+          "http": 400,
+          "ms": 192,
+          "playability": null,
+          "reason": null,
+          "audio_formats": 0,
+          "url": null,
+          "itag": null,
+          "mime": null,
+          "bitrate": null,
+          "content_length": null,
+          "url_host": null,
+          "has_n_param": null,
+          "error": "HTTP 400: {\n  \"error\": {\n    \"code\": 400,\n    \"message\": \"Precondition check failed.\",\n    \"errors\": [\n      {\n        \"message\": \"Precondition check failed.\",\n        \"domain\": \"global\",\n        \"reason\": \"fai"
+        },
+        {
+          "client": "TVHTML5_SIMPLY",
+          "host": "www.youtube.com",
+          "video": "kJQP7kiw5Fk",
+          "ok": false,
+          "http": 200,
+          "ms": 157,
+          "playability": "ERROR",
+          "reason": "YouTube больше не поддерживается в этом приложении или на этом устройстве.",
+          "audio_formats": 0,
+          "url": null,
+          "itag": null,
+          "mime": null,
+          "bitrate": null,
+          "content_length": null,
+          "url_host": null,
+          "has_n_param": null,
+          "error": "no audio format with resolvable url"
+        },
+        {
+          "client": "TVHTML5",
+          "host": "www.youtube.com",
+          "video": "kJQP7kiw5Fk",
+          "ok": false,
+          "http": 200,
+          "ms": 284,
+          "playability": "LOGIN_REQUIRED",
+          "reason": "Войдите в аккаунт, чтобы подтвердить, что вы не бот",
+          "audio_formats": 0,
+          "url": null,
+          "itag": null,
+          "mime": null,
+          "bitrate": null,
+          "content_length": null,
+          "url_host": null,
+          "has_n_param": null,
+          "error": "no audio format with resolvable url"
+        }
+      ],
+      "media": [],
+      "googlevideo": []
+    },
+    {
+      "id": "phase:B+C (WARP OFF: реальная сеть РФ + yt-dlp + релеи)",
+      "label": "B+C (WARP OFF: реальная сеть РФ + yt-dlp + релеи)",
+      "phase": "B+C (WARP OFF: реальная сеть РФ + yt-dlp + релеи)",
+      "started_at": "2026-10-29T18:53:36+03:00",
+      "finished_at": "2026-10-29T18:54:10+03:00",
+      "warp_requested": "off",
+      "warp_before": "Connected",
+      "warp_state": "Disconnected",
+      "warp_toggle": {
+        "ok": true,
+        "before": "Connected",
+        "after": "Disconnected",
+        "ms": 125,
+        "cmd_rc": 0,
+        "cmd_err": "Success"
+      },
+      "restore": {
+        "before": "Connected",
+        "after": "Connected",
+        "ok": true,
+        "attempts": [
+          {
+            "ok": true,
+            "before": "Disconnected",
+            "after": "Connected",
+            "ms": 1289,
+            "cmd_rc": 0,
+            "cmd_err": "Success"
+          }
+        ],
+        "internet": "104.28.198.244"
+      },
+      "quick": false,
+      "with_ytdlp": true,
+      "videos": [
+        {
+          "id": "dQw4w9WgXcQ",
+          "kind": "control"
+        },
+        {
+          "id": "kJQP7kiw5Fk",
+          "kind": "music"
+        }
+      ],
+      "notes": [
+        "WARP: Connected -> Disconnected (125 ms)",
+        "yt-dlp 2026.10.26: 0/13 variants resolved",
+        "relays: 0/32 работают с 32 КиБ"
+      ],
+      "env": {
+        "platform": "nt win32 3.14.7",
+        "python": "3.14.7",
+        "hostname": "DESKTOP-30NVUJ9",
+        "user": "Егор Груздев",
+        "cwd": "C:\\Users\\Егор Груздев\\Documents\\deepseek-harness\\default-workspace\\sonora-1.5.0"
+      },
+      "egress": {
+        "v4": {
+          "ok": true,
+          "ip": "46.138.152.63",
+          "family": "v4",
+          "ms": 297,
+          "error": null
+        },
+        "v6": {
+          "ok": false,
+          "ip": null,
+          "family": "v6",
+          "ms": 12,
+          "error": "gaierror: [Errno 11004] getaddrinfo failed"
+        },
+        "dns_servers": [
+          "192.168.1.254"
+        ]
+      },
+      "endpoints": [
+        {
+          "host": "youtube.com",
+          "path": "/",
+          "v4": {
+            "dns_ms": 6,
+            "ips": [
+              "142.250.154.136",
+              "142.250.154.91",
+              "142.250.154.190",
+              "142.250.154.93"
+            ],
+            "dns_error": null,
+            "tcp_ms": 49,
+            "tls_ms": null,
+            "tls_version": null,
+            "status": null,
+            "ok": false,
+            "error": "ConnectionResetError: [WinError 10054] Удаленный хост принудительно разорвал существующее подключение",
+            "total_ms": 115
+          },
+          "v6": {
+            "dns_ms": 3,
+            "ips": [],
+            "dns_error": "gaierror: [Errno 11004] getaddrinfo failed",
+            "tcp_ms": null,
+            "tls_ms": null,
+            "tls_version": null,
+            "status": null,
+            "ok": false,
+            "error": "gaierror: [Errno 11004] getaddrinfo failed"
+          }
+        },
+        {
+          "host": "www.youtube.com",
+          "path": "/",
+          "v4": {
+            "dns_ms": 4,
+            "ips": [
+              "142.251.150.4",
+              "142.251.151.4",
+              "142.251.152.4",
+              "142.251.153.4"
+            ],
+            "dns_error": null,
+            "tcp_ms": 75,
+            "tls_ms": null,
+            "tls_version": null,
+            "status": null,
+            "ok": false,
+            "error": "ConnectionResetError: [WinError 10054] Удаленный хост принудительно разорвал существующее подключение",
+            "total_ms": 145
+          },
+          "v6": {
+            "dns_ms": 5,
+            "ips": [],
+            "dns_error": "gaierror: [Errno 11004] getaddrinfo failed",
+            "tcp_ms": null,
+            "tls_ms": null,
+            "tls_version": null,
+            "status": null,
+            "ok": false,
+            "error": "gaierror: [Errno 11004] getaddrinfo failed"
+          }
+        },
+        {
+          "host": "music.youtube.com",
+          "path": "/",
+          "v4": {
+            "dns_ms": 5,
+            "ips": [
+              "142.251.156.4",
+              "142.251.157.4",
+              "142.251.151.4",
+              "142.251.150.4"
+            ],
+            "dns_error": null,
+            "tcp_ms": 48,
+            "tls_ms": null,
+            "tls_version": null,
+            "status": null,
+            "ok": false,
+            "error": "ConnectionResetError: [WinError 10054] Удаленный хост принудительно разорвал существующее подключение",
+            "total_ms": 122
+          },
+          "v6": {
+            "dns_ms": 4,
+            "ips": [],
+            "dns_error": "gaierror: [Errno 11004] getaddrinfo failed",
+            "tcp_ms": null,
+            "tls_ms": null,
+            "tls_version": null,
+            "status": null,
+            "ok": false,
+            "error": "gaierror: [Errno 11004] getaddrinfo failed"
+          }
+        },
+        {
+          "host": "music.youtube.com",
+          "path": "/youtubei/v1/player?prettyPrint=false",
+          "v4": {
+            "dns_ms": 0,
+            "ips": [
+              "142.251.156.4",
+              "142.251.157.4",
+              "142.251.151.4",
+              "142.251.150.4"
+            ],
+            "dns_error": null,
+            "tcp_ms": 49,
+            "tls_ms": null,
+            "tls_version": null,
+            "status": null,
+            "ok": false,
+            "error": "ConnectionResetError: [WinError 10054] Удаленный хост принудительно разорвал существующее подключение",
+            "total_ms": 111
+          },
+          "v6": {
+            "dns_ms": 0,
+            "ips": [],
+            "dns_error": "gaierror: [Errno 11004] getaddrinfo failed",
+            "tcp_ms": null,
+            "tls_ms": null,
+            "tls_version": null,
+            "status": null,
+            "ok": false,
+            "error": "gaierror: [Errno 11004] getaddrinfo failed"
+          }
+        },
+        {
+          "host": "youtubei.googleapis.com",
+          "path": "/",
+          "v4": {
+            "dns_ms": 5,
+            "ips": [
+              "172.217.116.4",
+              "172.217.119.4",
+              "172.217.114.4",
+              "172.217.115.4"
+            ],
+            "dns_error": null,
+            "tcp_ms": 47,
+            "tls_ms": 137,
+            "tls_version": "TLSv1.3",
+            "status": 405,
+            "ok": true,
+            "error": null,
+            "total_ms": 383
+          },
+          "v6": {
+            "dns_ms": 8,
+            "ips": [],
+            "dns_error": "gaierror: [Errno 11004] getaddrinfo failed",
+            "tcp_ms": null,
+            "tls_ms": null,
+            "tls_version": null,
+            "status": null,
+            "ok": false,
+            "error": "gaierror: [Errno 11004] getaddrinfo failed"
+          }
+        },
+        {
+          "host": "googlevideo.com",
+          "path": "/",
+          "v4": {
+            "dns_ms": 5,
+            "ips": [
+              "142.251.127.103",
+              "142.251.127.104",
+              "142.251.127.105",
+              "142.251.127.106"
+            ],
+            "dns_error": null,
+            "tcp_ms": 48,
+            "tls_ms": 239,
+            "tls_version": "TLSv1.3",
+            "status": 302,
+            "ok": true,
+            "error": null,
+            "total_ms": 400
+          },
+          "v6": {
+            "dns_ms": 6,
+            "ips": [],
+            "dns_error": "gaierror: [Errno 11004] getaddrinfo failed",
+            "tcp_ms": null,
+            "tls_ms": null,
+            "tls_version": null,
+            "status": null,
+            "ok": false,
+            "error": "gaierror: [Errno 11004] getaddrinfo failed"
+          }
+        },
+        {
+          "host": "i.ytimg.com",
+          "path": "/vi/dQw4w9WgXcQ/default.jpg",
+          "v4": {
+            "dns_ms": 4,
+            "ips": [
+              "142.251.144.6",
+              "142.251.149.6",
+              "142.251.147.6",
+              "192.178.40.6"
+            ],
+            "dns_error": null,
+            "tcp_ms": 49,
+            "tls_ms": 120,
+            "tls_version": "TLSv1.3",
+            "status": 200,
+            "ok": true,
+            "error": null,
+            "total_ms": 269
+          },
+          "v6": {
+            "dns_ms": 8,
+            "ips": [],
+            "dns_error": "gaierror: [Errno 11004] getaddrinfo failed",
+            "tcp_ms": null,
+            "tls_ms": null,
+            "tls_version": null,
+            "status": null,
+            "ok": false,
+            "error": "gaierror: [Errno 11004] getaddrinfo failed"
+          }
+        },
+        {
+          "host": "yt3.ggpht.com",
+          "path": "/",
+          "v4": {
+            "dns_ms": 5,
+            "ips": [
+              "142.251.127.198"
+            ],
+            "dns_error": null,
+            "tcp_ms": 48,
+            "tls_ms": null,
+            "tls_version": null,
+            "status": null,
+            "ok": false,
+            "error": "ConnectionResetError: [WinError 10054] Удаленный хост принудительно разорвал существующее подключение",
+            "total_ms": 113
+          },
+          "v6": {
+            "dns_ms": 4,
+            "ips": [],
+            "dns_error": "gaierror: [Errno 11004] getaddrinfo failed",
+            "tcp_ms": null,
+            "tls_ms": null,
+            "tls_version": null,
+            "status": null,
+            "ok": false,
+            "error": "gaierror: [Errno 11004] getaddrinfo failed"
+          }
+        }
+      ],
+      "innertube": [
+        {
+          "client": "WEB_REMIX",
+          "host": "music.youtube.com",
+          "video": "dQw4w9WgXcQ",
+          "ok": false,
+          "http": null,
+          "ms": 70,
+          "playability": null,
+          "reason": null,
+          "audio_formats": 0,
+          "url": null,
+          "itag": null,
+          "mime": null,
+          "bitrate": null,
+          "content_length": null,
+          "url_host": null,
+          "has_n_param": null,
+          "error": "ConnectionResetError: [WinError 10054] Удаленный хост принудительно разорвал существующее подключение"
+        },
+        {
+          "client": "ANDROID",
+          "host": "www.youtube.com",
+          "video": "dQw4w9WgXcQ",
+          "ok": false,
+          "http": null,
+          "ms": 69,
+          "playability": null,
+          "reason": null,
+          "audio_formats": 0,
+          "url": null,
+          "itag": null,
+          "mime": null,
+          "bitrate": null,
+          "content_length": null,
+          "url_host": null,
+          "has_n_param": null,
+          "error": "ConnectionResetError: [WinError 10054] Удаленный хост принудительно разорвал существующее подключение"
+        },
+        {
+          "client": "TVHTML5_SIMPLY",
+          "host": "www.youtube.com",
+          "video": "dQw4w9WgXcQ",
+          "ok": false,
+          "http": null,
+          "ms": 69,
+          "playability": null,
+          "reason": null,
+          "audio_formats": 0,
+          "url": null,
+          "itag": null,
+          "mime": null,
+          "bitrate": null,
+          "content_length": null,
+          "url_host": null,
+          "has_n_param": null,
+          "error": "ConnectionResetError: [WinError 10054] Удаленный хост принудительно разорвал существующее подключение"
+        },
+        {
+          "client": "TVHTML5",
+          "host": "www.youtube.com",
+          "video": "dQw4w9WgXcQ",
+          "ok": false,
+          "http": null,
+          "ms": 70,
+          "playability": null,
+          "reason": null,
+          "audio_formats": 0,
+          "url": null,
+          "itag": null,
+          "mime": null,
+          "bitrate": null,
+          "content_length": null,
+          "url_host": null,
+          "has_n_param": null,
+          "error": "ConnectionResetError: [WinError 10054] Удаленный хост принудительно разорвал существующее подключение"
+        },
+        {
+          "client": "WEB_REMIX",
+          "host": "music.youtube.com",
+          "video": "kJQP7kiw5Fk",
+          "ok": false,
+          "http": null,
+          "ms": 74,
+          "playability": null,
+          "reason": null,
+          "audio_formats": 0,
+          "url": null,
+          "itag": null,
+          "mime": null,
+          "bitrate": null,
+          "content_length": null,
+          "url_host": null,
+          "has_n_param": null,
+          "error": "ConnectionResetError: [WinError 10054] Удаленный хост принудительно разорвал существующее подключение"
+        },
+        {
+          "client": "ANDROID",
+          "host": "www.youtube.com",
+          "video": "kJQP7kiw5Fk",
+          "ok": false,
+          "http": null,
+          "ms": 80,
+          "playability": null,
+          "reason": null,
+          "audio_formats": 0,
+          "url": null,
+          "itag": null,
+          "mime": null,
+          "bitrate": null,
+          "content_length": null,
+          "url_host": null,
+          "has_n_param": null,
+          "error": "ConnectionResetError: [WinError 10054] Удаленный хост принудительно разорвал существующее подключение"
+        },
+        {
+          "client": "TVHTML5_SIMPLY",
+          "host": "www.youtube.com",
+          "video": "kJQP7kiw5Fk",
+          "ok": false,
+          "http": null,
+          "ms": 80,
+          "playability": null,
+          "reason": null,
+          "audio_formats": 0,
+          "url": null,
+          "itag": null,
+          "mime": null,
+          "bitrate": null,
+          "content_length": null,
+          "url_host": null,
+          "has_n_param": null,
+          "error": "ConnectionResetError: [WinError 10054] Удаленный хост принудительно разорвал существующее подключение"
+        },
+        {
+          "client": "TVHTML5",
+          "host": "www.youtube.com",
+          "video": "kJQP7kiw5Fk",
+          "ok": false,
+          "http": null,
+          "ms": 70,
+          "playability": null,
+          "reason": null,
+          "audio_formats": 0,
+          "url": null,
+          "itag": null,
+          "mime": null,
+          "bitrate": null,
+          "content_length": null,
+          "url_host": null,
+          "has_n_param": null,
+          "error": "ConnectionResetError: [WinError 10054] Удаленный хост принудительно разорвал существующее подключение"
+        }
+      ],
+      "media": [],
+      "googlevideo": [],
+      "ytdlp": {
+        "available": true,
+        "path": "C:\\Users\\2CA4~1\\AppData\\Local\\Temp\\yt-dlp-latest.pyz",
+        "version": "2026.10.26",
+        "js_runtimes": {
+          "deno": "C:\\Users\\Егор Груздев\\.deno\\bin\\deno.exe",
+          "node": "C:\\Program Files\\nodejs\\node.exe"
+        },
+        "runs": [
+          {
+            "variant": "default",
+            "ok": false,
+            "ms": 2071,
+            "url": null,
+            "url_host": null,
+            "rc": 1,
+            "error": "ERROR: [youtube] dQw4w9WgXcQ: Unable to download API page: [WinError 10054] ��������� ���� ������������� �������� ������������ ����������� (caused by TransportError('[WinError 10054] ��������� ���� ������������� �������� ������������ �����������'))",
+            "stderr_tail": "ERROR: [youtube] dQw4w9WgXcQ: Unable to download API page: [WinError 10054] ��������� ���� ������������� �������� ������������ ����������� (caused by TransportError('[WinError 10054] ��������� ���� ������������� �������� ������������ �����������'))",
+            "video": "dQw4w9WgXcQ"
+          },
+          {
+            "variant": "tv_simply",
+            "ok": false,
+            "ms": 2105,
+            "url": null,
+            "url_host": null,
+            "rc": 1,
+            "error": "ERROR: [youtube] dQw4w9WgXcQ: Unable to download API page: [WinError 10054] ��������� ���� ������������� �������� ������������ ����������� (caused by TransportError('[WinError 10054] ��������� ���� ������������� �������� ������������ �����������'))",
+            "stderr_tail": "ERROR: [youtube] dQw4w9WgXcQ: Unable to download API page: [WinError 10054] ��������� ���� ������������� �������� ������������ ����������� (caused by TransportError('[WinError 10054] ��������� ���� ������������� �������� ������������ �����������'))",
+            "video": "dQw4w9WgXcQ"
+          },
+          {
+            "variant": "tv",
+            "ok": false,
+            "ms": 2075,
+            "url": null,
+            "url_host": null,
+            "rc": 1,
+            "error": "ERROR: [youtube] dQw4w9WgXcQ: Unable to download API page: [WinError 10054] ��������� ���� ������������� �������� ������������ ����������� (caused by TransportError('[WinError 10054] ��������� ���� ������������� �������� ������������ �����������'))",
+            "stderr_tail": "ERROR: [youtube] dQw4w9WgXcQ: Unable to download API page: [WinError 10054] ��������� ���� ������������� �������� ������������ ����������� (caused by TransportError('[WinError 10054] ��������� ���� ������������� �������� ������������ �����������'))",
+            "video": "dQw4w9WgXcQ"
+          },
+          {
+            "variant": "android_vr",
+            "ok": false,
+            "ms": 1989,
+            "url": null,
+            "url_host": null,
+            "rc": 1,
+            "error": "ERROR: [youtube] dQw4w9WgXcQ: Unable to download API page: [WinError 10054] ��������� ���� ������������� �������� ������������ ����������� (caused by TransportError('[WinError 10054] ��������� ���� ������������� �������� ������������ �����������'))",
+            "stderr_tail": "ERROR: [youtube] dQw4w9WgXcQ: Unable to download API page: [WinError 10054] ��������� ���� ������������� �������� ������������ ����������� (caused by TransportError('[WinError 10054] ��������� ���� ������������� �������� ������������ �����������'))",
+            "video": "dQw4w9WgXcQ"
+          },
+          {
+            "variant": "web_safari",
+            "ok": false,
+            "ms": 1910,
+            "url": null,
+            "url_host": null,
+            "rc": 1,
+            "error": "ERROR: [youtube] dQw4w9WgXcQ: Unable to download API page: [WinError 10054] ��������� ���� ������������� �������� ������������ ����������� (caused by TransportError('[WinError 10054] ��������� ���� ������������� �������� ������������ �����������'))",
+            "stderr_tail": "ERROR: [youtube] dQw4w9WgXcQ: Unable to download API page: [WinError 10054] ��������� ���� ������������� �������� ������������ ����������� (caused by TransportError('[WinError 10054] ��������� ���� ������������� �������� ������������ �����������'))",
+            "video": "dQw4w9WgXcQ"
+          },
+          {
+            "variant": "ios",
+            "ok": false,
+            "ms": 1954,
+            "url": null,
+            "url_host": null,
+            "rc": 1,
+            "error": "ERROR: [youtube] dQw4w9WgXcQ: Unable to download API page: [WinError 10054] ��������� ���� ������������� �������� ������������ ����������� (caused by TransportError('[WinError 10054] ��������� ���� ������������� �������� ������������ �����������'))",
+            "stderr_tail": "ERROR: [youtube] dQw4w9WgXcQ: Unable to download API page: [WinError 10054] ��������� ���� ������������� �������� ������������ ����������� (caused by TransportError('[WinError 10054] ��������� ���� ������������� �������� ������������ �����������'))",
+            "video": "dQw4w9WgXcQ"
+          },
+          {
+            "variant": "mweb",
+            "ok": false,
+            "ms": 2034,
+            "url": null,
+            "url_host": null,
+            "rc": 1,
+            "error": "ERROR: [youtube] dQw4w9WgXcQ: Unable to download API page: [WinError 10054] ��������� ���� ������������� �������� ������������ ����������� (caused by TransportError('[WinError 10054] ��������� ���� ������������� �������� ������������ �����������'))",
+            "stderr_tail": "ERROR: [youtube] dQw4w9WgXcQ: Unable to download API page: [WinError 10054] ��������� ���� ������������� �������� ������������ ����������� (caused by TransportError('[WinError 10054] ��������� ���� ������������� �������� ������������ �����������'))",
+            "video": "dQw4w9WgXcQ"
+          },
+          {
+            "variant": "default@ipv4",
+            "ok": false,
+            "ms": 1985,
+            "url": null,
+            "url_host": null,
+            "rc": 1,
+            "error": "ERROR: [youtube] dQw4w9WgXcQ: Unable to download API page: [WinError 10054] ��������� ���� ������������� �������� ������������ ����������� (caused by TransportError('[WinError 10054] ��������� ���� ������������� �������� ������������ �����������'))",
+            "stderr_tail": "ERROR: [youtube] dQw4w9WgXcQ: Unable to download API page: [WinError 10054] ��������� ���� ������������� �������� ������������ ����������� (caused by TransportError('[WinError 10054] ��������� ���� ������������� �������� ������������ �����������'))",
+            "video": "dQw4w9WgXcQ"
+          },
+          {
+            "variant": "tv_simply@ipv4",
+            "ok": false,
+            "ms": 1973,
+            "url": null,
+            "url_host": null,
+            "rc": 1,
+            "error": "ERROR: [youtube] dQw4w9WgXcQ: Unable to download API page: [WinError 10054] ��������� ���� ������������� �������� ������������ ����������� (caused by TransportError('[WinError 10054] ��������� ���� ������������� �������� ������������ �����������'))",
+            "stderr_tail": "ERROR: [youtube] dQw4w9WgXcQ: Unable to download API page: [WinError 10054] ��������� ���� ������������� �������� ������������ ����������� (caused by TransportError('[WinError 10054] ��������� ���� ������������� �������� ������������ �����������'))",
+            "video": "dQw4w9WgXcQ"
+          },
+          {
+            "variant": "default@ipv6",
+            "ok": false,
+            "ms": 1682,
+            "url": null,
+            "url_host": null,
+            "rc": 1,
+            "error": "ERROR: [youtube] dQw4w9WgXcQ: Unable to download API page: No remote IPv6 addresses available for connect. Can't use \"::\" as source address (caused by TransportError('No remote IPv6 addresses available for connect. Can\\'t use \"::\" as source address'))",
+            "stderr_tail": "ERROR: [youtube] dQw4w9WgXcQ: Unable to download API page: No remote IPv6 addresses available for connect. Can't use \"::\" as source address (caused by TransportError('No remote IPv6 addresses available for connect. Can\\'t use \"::\" as source address'))",
+            "video": "dQw4w9WgXcQ"
+          },
+          {
+            "variant": "default",
+            "ok": false,
+            "ms": 16939,
+            "url": null,
+            "url_host": null,
+            "rc": 1,
+            "error": "ERROR: [youtube] kJQP7kiw5Fk: Unable to download API page: [WinError 10054] ��������� ���� ������������� �������� ������������ ����������� (caused by TransportError('[WinError 10054] ��������� ���� ������������� �������� ������������ �����������'))",
+            "stderr_tail": "ERROR: [youtube] kJQP7kiw5Fk: Unable to download API page: [WinError 10054] ��������� ���� ������������� �������� ������������ ����������� (caused by TransportError('[WinError 10054] ��������� ���� ������������� �������� ������������ �����������'))",
+            "video": "kJQP7kiw5Fk"
+          },
+          {
+            "variant": "tv_simply",
+            "ok": false,
+            "ms": 1998,
+            "url": null,
+            "url_host": null,
+            "rc": 1,
+            "error": "ERROR: [youtube] kJQP7kiw5Fk: Unable to download API page: [WinError 10054] ��������� ���� ������������� �������� ������������ ����������� (caused by TransportError('[WinError 10054] ��������� ���� ������������� �������� ������������ �����������'))",
+            "stderr_tail": "ERROR: [youtube] kJQP7kiw5Fk: Unable to download API page: [WinError 10054] ��������� ���� ������������� �������� ������������ ����������� (caused by TransportError('[WinError 10054] ��������� ���� ������������� �������� ������������ �����������'))",
+            "video": "kJQP7kiw5Fk"
+          },
+          {
+            "variant": "tv",
+            "ok": false,
+            "ms": 1788,
+            "url": null,
+            "url_host": null,
+            "rc": 1,
+            "error": "ERROR: [youtube] kJQP7kiw5Fk: Unable to download API page: [WinError 10054] ��������� ���� ������������� �������� ������������ ����������� (caused by TransportError('[WinError 10054] ��������� ���� ������������� �������� ������������ �����������'))",
+            "stderr_tail": "ERROR: [youtube] kJQP7kiw5Fk: Unable to download API page: [WinError 10054] ��������� ���� ������������� �������� ������������ ����������� (caused by TransportError('[WinError 10054] ��������� ���� ������������� �������� ������������ �����������'))",
+            "video": "kJQP7kiw5Fk"
+          }
+        ]
+      },
+      "relays": {
+        "discovery_ok": true,
+        "discovered": [
+          "yt.chocolatemoo53.com",
+          "inv-ygg.nadeko.net",
+          "inv.nadeko.ygg"
+        ],
+        "invidious_hosts": [
+          "inv.nadeko.net",
+          "inv.tux.pizza",
+          "inv.zzls.xyz",
+          "invidious.adminforge.de",
+          "invidious.dhusch.de",
+          "invidious.einfachzocken.eu",
+          "invidious.f5.si",
+          "invidious.jing.rocks",
+          "invidious.lunivers.trade",
+          "invidious.materialio.us",
+          "invidious.nerdvpn.de",
+          "invidious.nikkosphere.com",
+          "invidious.privacyredirect.com",
+          "invidious.protokolla.fi",
+          "invidious.reallyaweso.me",
+          "invidious.tiekoetter.com",
+          "iv.datura.network",
+          "iv.ggtyler.dev",
+          "iv.melmac.space",
+          "yt.chocolatemoo53.com",
+          "inv-ygg.nadeko.net",
+          "inv.nadeko.ygg"
+        ],
+        "piped_hosts": [
+          "pipedapi.adminforge.de",
+          "pipedapi.kavin.rocks",
+          "pipedapi.r4fo.com",
+          "pipedapi.drgns.space",
+          "pipedapi.astartes.nl",
+          "pipedapi.ducks.party",
+          "pipedapi.leptons.xyz",
+          "pipedapi.nosebs.ru",
+          "pipedapi.orangenet.cc",
+          "pipedapi.reallyaweso.me"
+        ],
+        "results": [
+          {
+            "kind": "invidious",
+            "host": "iv.datura.network",
+            "video": "dQw4w9WgXcQ",
+            "api_http": null,
+            "api_ms": 52,
+            "error": "URLError: <urlopen error [Errno 11001] getaddrinfo failed>"
+          },
+          {
+            "kind": "invidious",
+            "host": "inv-ygg.nadeko.net",
+            "video": "dQw4w9WgXcQ",
+            "api_http": null,
+            "api_ms": 24,
+            "error": "URLError: <urlopen error [Errno 11001] getaddrinfo failed>"
+          },
+          {
+            "kind": "invidious",
+            "host": "invidious.einfachzocken.eu",
+            "video": "dQw4w9WgXcQ",
+            "api_http": null,
+            "api_ms": 82,
+            "error": "URLError: <urlopen error [WinError 10054] Удаленный хост принудительно разорвал существующее подключение>"
+          },
+          {
+            "kind": "invidious",
+            "host": "inv.nadeko.ygg",
+            "video": "dQw4w9WgXcQ",
+            "api_http": null,
+            "api_ms": 6,
+            "error": "URLError: <urlopen error [Errno 11001] getaddrinfo failed>"
+          },
+          {
+            "kind": "invidious",
+            "host": "invidious.jing.rocks",
+            "video": "dQw4w9WgXcQ",
+            "api_http": null,
+            "api_ms": 87,
+            "error": "URLError: <urlopen error [Errno 11001] getaddrinfo failed>"
+          },
+          {
+            "kind": "invidious",
+            "host": "invidious.privacyredirect.com",
+            "video": "dQw4w9WgXcQ",
+            "api_http": null,
+            "api_ms": 90,
+            "error": "URLError: <urlopen error [WinError 10054] Удаленный хост принудительно разорвал существующее подключение>"
+          },
+          {
+            "kind": "invidious",
+            "host": "invidious.tiekoetter.com",
+            "video": "dQw4w9WgXcQ",
+            "api_http": null,
+            "api_ms": 92,
+            "error": "URLError: <urlopen error [WinError 10054] Удаленный хост принудительно разорвал существующее подключение>"
+          },
+          {
+            "kind": "piped",
+            "host": "pipedapi.r4fo.com",
+            "video": "dQw4w9WgXcQ",
+            "api_http": null,
+            "api_ms": 12,
+            "error": "URLError: <urlopen error [Errno 11001] getaddrinfo failed>"
+          },
+          {
+            "kind": "invidious",
+            "host": "iv.melmac.space",
+            "video": "dQw4w9WgXcQ",
+            "api_http": null,
+            "api_ms": 97,
+            "error": "URLError: <urlopen error [Errno 11001] getaddrinfo failed>"
+          },
+          {
+            "kind": "invidious",
+            "host": "invidious.adminforge.de",
+            "video": "dQw4w9WgXcQ",
+            "api_http": null,
+            "api_ms": 119,
+            "error": "URLError: <urlopen error [WinError 10054] Удаленный хост принудительно разорвал существующее подключение>"
+          },
+          {
+            "kind": "invidious",
+            "host": "invidious.reallyaweso.me",
+            "video": "dQw4w9WgXcQ",
+            "api_http": null,
+            "api_ms": 129,
+            "error": "URLError: <urlopen error [WinError 10054] Удаленный хост принудительно разорвал существующее подключение>"
+          },
+          {
+            "kind": "piped",
+            "host": "pipedapi.nosebs.ru",
+            "video": "dQw4w9WgXcQ",
+            "api_http": null,
+            "api_ms": 26,
+            "error": "URLError: <urlopen error [Errno 11001] getaddrinfo failed>"
+          },
+          {
+            "kind": "piped",
+            "host": "pipedapi.drgns.space",
+            "video": "dQw4w9WgXcQ",
+            "api_http": null,
+            "api_ms": 58,
+            "error": "URLError: <urlopen error [Errno 11001] getaddrinfo failed>"
+          },
+          {
+            "kind": "invidious",
+            "host": "yt.chocolatemoo53.com",
+            "video": "dQw4w9WgXcQ",
+            "api_http": null,
+            "api_ms": 164,
+            "error": "URLError: <urlopen error [WinError 10054] Удаленный хост принудительно разорвал существующее подключение>"
+          },
+          {
+            "kind": "invidious",
+            "host": "invidious.f5.si",
+            "video": "dQw4w9WgXcQ",
+            "api_http": null,
+            "api_ms": 233,
+            "error": "URLError: <urlopen error [WinError 10054] Удаленный хост принудительно разорвал существующее подключение>"
+          },
+          {
+            "kind": "invidious",
+            "host": "invidious.dhusch.de",
+            "video": "dQw4w9WgXcQ",
+            "api_http": null,
+            "api_ms": 262,
+            "error": "URLError: <urlopen error [SSL: TLSV1_ALERT_INTERNAL_ERROR] tlsv1 alert internal error (_ssl.c:1082)>"
+          },
+          {
+            "kind": "invidious",
+            "host": "invidious.nikkosphere.com",
+            "video": "dQw4w9WgXcQ",
+            "api_http": 451,
+            "api_ms": 282,
+            "error": "HTTP 451: "
+          },
+          {
+            "kind": "invidious",
+            "host": "invidious.lunivers.trade",
+            "video": "dQw4w9WgXcQ",
+            "api_http": 503,
+            "api_ms": 295,
+            "error": "HTTP 503: <html><body><h1>503 Service Unavailable</h1>\nNo server is available to handle this request.\n</body></html>\n"
+          },
+          {
+            "kind": "invidious",
+            "host": "inv.nadeko.net",
+            "video": "dQw4w9WgXcQ",
+            "api_http": null,
+            "api_ms": 302,
+            "error": "URLError: <urlopen error [WinError 10054] Удаленный хост принудительно разорвал существующее подключение>"
+          },
+          {
+            "kind": "invidious",
+            "host": "invidious.materialio.us",
+            "video": "dQw4w9WgXcQ",
+            "api_http": null,
+            "api_ms": 433,
+            "error": "URLError: <urlopen error [WinError 10054] Удаленный хост принудительно разорвал существующее подключение>"
+          },
+          {
+            "kind": "piped",
+            "host": "pipedapi.reallyaweso.me",
+            "video": "dQw4w9WgXcQ",
+            "api_http": null,
+            "api_ms": 302,
+            "error": "JSONDecodeError: Expecting value: line 1 column 1 (char 0)"
+          },
+          {
+            "kind": "piped",
+            "host": "pipedapi.adminforge.de",
+            "video": "dQw4w9WgXcQ",
+            "api_http": 403,
+            "api_ms": 452,
+            "error": "HTTP 403: <!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01//EN\" \"http://www.w3.org/TR/html4/strict.dtd\">\n<html><head>\n<title>403 Forbidden</title>\n</head><body>\n<h1>Forbidden</h1>\n<p>You don't have permission to access this resource.</p>\n</body></html>\n"
+          },
+          {
+            "kind": "invidious",
+            "host": "invidious.nerdvpn.de",
+            "video": "dQw4w9WgXcQ",
+            "api_http": 401,
+            "api_ms": 586,
+            "error": "HTTP 401: <html>\r\n<head><title>401 Authorization Required</title></head>\r\n<body>\r\n<center><h1>401 Authorization Required</h1></center>\r\n<hr><center>nginx</center>\r\n</body>\r\n</html>\r\n<!-- a padding to disable MSIE and Chrome friendly error page -->\r\n<!-- a padding to disable MSIE and Chrome friendly error page"
+          },
+          {
+            "kind": "piped",
+            "host": "pipedapi.kavin.rocks",
+            "video": "dQw4w9WgXcQ",
+            "api_http": 403,
+            "api_ms": 672,
+            "error": "HTTP 403: <!DOCTYPE html>\n<!--[if lt IE 7]> <html class=\"no-js ie6 oldie\" lang=\"en-US\"> <![endif]-->\n<!--[if IE 7]>    <html class=\"no-js ie7 oldie\" lang=\"en-US\"> <![endif]-->\n<!--[if IE 8]>    <html class=\"no-js ie8 oldie\" lang=\"en-US\"> <![endif]-->\n<!--[if gt IE 8]><!--> <html class=\"no-js\" lang=\"en-US\"> <!"
+          },
+          {
+            "kind": "invidious",
+            "host": "inv.zzls.xyz",
+            "video": "dQw4w9WgXcQ",
+            "api_http": null,
+            "api_ms": 833,
+            "error": "URLError: <urlopen error [WinError 10054] Удаленный хост принудительно разорвал существующее подключение>"
+          },
+          {
+            "kind": "piped",
+            "host": "pipedapi.leptons.xyz",
+            "video": "dQw4w9WgXcQ",
+            "api_http": 502,
+            "api_ms": 1396,
+            "error": "HTTP 502: {\"type\":\"https://developers.cloudflare.com/support/troubleshooting/http-status-codes/cloudflare-5xx-errors/error-502/\",\"title\":\"Error 502: Bad gateway\",\"status\":502,\"detail\":\"The origin web server returned an invalid or incomplete response to Cloudflare. This typically indicates the origin is overlo"
+          },
+          {
+            "kind": "invidious",
+            "host": "invidious.protokolla.fi",
+            "video": "dQw4w9WgXcQ",
+            "api_http": null,
+            "api_ms": 2258,
+            "error": "URLError: <urlopen error [WinError 10054] Удаленный хост принудительно разорвал существующее подключение>"
+          },
+          {
+            "kind": "invidious",
+            "host": "inv.tux.pizza",
+            "video": "dQw4w9WgXcQ",
+            "api_http": null,
+            "api_ms": 5023,
+            "error": "URLError: <urlopen error timed out>"
+          },
+          {
+            "kind": "invidious",
+            "host": "iv.ggtyler.dev",
+            "video": "dQw4w9WgXcQ",
+            "api_http": null,
+            "api_ms": 5018,
+            "error": "URLError: <urlopen error timed out>"
+          },
+          {
+            "kind": "piped",
+            "host": "pipedapi.orangenet.cc",
+            "video": "dQw4w9WgXcQ",
+            "api_http": null,
+            "api_ms": 5060,
+            "error": "URLError: <urlopen error timed out>"
+          },
+          {
+            "kind": "piped",
+            "host": "pipedapi.astartes.nl",
+            "video": "dQw4w9WgXcQ",
+            "api_http": null,
+            "api_ms": 5113,
+            "error": "URLError: <urlopen error timed out>"
+          },
+          {
+            "kind": "piped",
+            "host": "pipedapi.ducks.party",
+            "video": "dQw4w9WgXcQ",
+            "api_http": null,
+            "api_ms": 5235,
+            "error": "TimeoutError: The read operation timed out"
+          }
+        ]
+      }
+    },
+    {
+      "id": "phase:D (WARP ON: полный пайплайн + yt-dlp)",
+      "label": "D (WARP ON: полный пайплайн + yt-dlp)",
+      "phase": "D (WARP ON: полный пайплайн + yt-dlp)",
+      "started_at": "2026-10-29T18:55:26+03:00",
+      "finished_at": "2026-10-29T18:56:09+03:00",
+      "warp_requested": "on",
+      "warp_before": "Connected",
+      "warp_state": "Connected",
+      "warp_toggle": null,
+      "restore": {
+        "before": "Connected",
+        "after": "Connected",
+        "ok": true,
+        "attempts": [],
+        "internet": "104.28.198.244"
+      },
+      "quick": false,
+      "with_ytdlp": true,
+      "videos": [
+        {
+          "id": "dQw4w9WgXcQ",
+          "kind": "control"
+        },
+        {
+          "id": "kJQP7kiw5Fk",
+          "kind": "music"
+        }
+      ],
+      "notes": [
+        "yt-dlp 2026.10.26: 10/13 variants resolved",
+        "relays: 0/32 работают с 32 КиБ"
+      ],
+      "env": {
+        "platform": "nt win32 3.14.7",
+        "python": "3.14.7",
+        "hostname": "DESKTOP-30NVUJ9",
+        "user": "Егор Груздев",
+        "cwd": "C:\\Users\\Егор Груздев\\Documents\\deepseek-harness\\default-workspace\\sonora-1.5.0"
+      },
+      "egress": {
+        "v4": {
+          "ok": true,
+          "ip": "104.28.198.244",
+          "family": "v4",
+          "ms": 541,
+          "error": null
+        },
+        "v6": {
+          "ok": true,
+          "ip": "2a09:bac5:5157:2db9::48e:3d",
+          "family": "v6",
+          "ms": 2093,
+          "error": null
+        },
+        "dns_servers": [
+          "127.0.2.2",
+          "127.0.2.3",
+          "::ffff:127.0.2.2",
+          "::ffff:127.0.2.3"
+        ]
+      },
+      "endpoints": [
+        {
+          "host": "youtube.com",
+          "path": "/",
+          "v4": {
+            "dns_ms": 30,
+            "ips": [
+              "64.233.162.136",
+              "64.233.162.91",
+              "64.233.162.190",
+              "64.233.162.93"
+            ],
+            "dns_error": null,
+            "tcp_ms": 39,
+            "tls_ms": 144,
+            "tls_version": "TLSv1.3",
+            "status": 301,
+            "ok": true,
+            "error": null,
+            "total_ms": 303
+          },
+          "v6": {
+            "dns_ms": 29,
+            "ips": [
+              "2a00:1450:4010:c22::88",
+              "2a00:1450:4010:c22::5d",
+              "2a00:1450:4010:c22::be",
+              "2a00:1450:4010:c22::5b"
+            ],
+            "dns_error": null,
+            "tcp_ms": 41,
+            "tls_ms": 104,
+            "tls_version": "TLSv1.3",
+            "status": 301,
+            "ok": true,
+            "error": null,
+            "total_ms": 258
+          }
+        },
+        {
+          "host": "www.youtube.com",
+          "path": "/",
+          "v4": {
+            "dns_ms": 28,
+            "ips": [
+              "142.251.150.4",
+              "142.251.154.4",
+              "142.251.151.4",
+              "142.251.156.4"
+            ],
+            "dns_error": null,
+            "tcp_ms": 40,
+            "tls_ms": 134,
+            "tls_version": "TLSv1.3",
+            "status": 200,
+            "ok": true,
+            "error": null,
+            "total_ms": 339
+          },
+          "v6": {
+            "dns_ms": 28,
+            "ips": [
+              "2001:4860:482c:400::",
+              "2001:4860:482b:400::",
+              "2001:4860:4826:400::",
+              "2001:4860:482a:400::"
+            ],
+            "dns_error": null,
+            "tcp_ms": 42,
+            "tls_ms": 133,
+            "tls_version": "TLSv1.3",
+            "status": 200,
+            "ok": true,
+            "error": null,
+            "total_ms": 343
+          }
+        },
+        {
+          "host": "music.youtube.com",
+          "path": "/",
+          "v4": {
+            "dns_ms": 28,
+            "ips": [
+              "142.251.150.4",
+              "142.251.153.4",
+              "142.251.157.4",
+              "142.251.156.4"
+            ],
+            "dns_error": null,
+            "tcp_ms": 37,
+            "tls_ms": 140,
+            "tls_version": "TLSv1.3",
+            "status": 200,
+            "ok": true,
+            "error": null,
+            "total_ms": 314
+          },
+          "v6": {
+            "dns_ms": 34,
+            "ips": [
+              "2001:4860:4829:400::",
+              "2001:4860:482a:400::",
+              "2001:4860:482b:400::",
+              "2001:4860:482c:400::"
+            ],
+            "dns_error": null,
+            "tcp_ms": 39,
+            "tls_ms": 129,
+            "tls_version": "TLSv1.3",
+            "status": 200,
+            "ok": true,
+            "error": null,
+            "total_ms": 297
+          }
+        },
+        {
+          "host": "music.youtube.com",
+          "path": "/youtubei/v1/player?prettyPrint=false",
+          "v4": {
+            "dns_ms": 0,
+            "ips": [
+              "142.251.150.4",
+              "142.251.153.4",
+              "142.251.157.4",
+              "142.251.156.4"
+            ],
+            "dns_error": null,
+            "tcp_ms": 38,
+            "tls_ms": 101,
+            "tls_version": "TLSv1.3",
+            "status": 405,
+            "ok": true,
+            "error": null,
+            "total_ms": 344
+          },
+          "v6": {
+            "dns_ms": 1,
+            "ips": [
+              "2001:4860:4829:400::",
+              "2001:4860:482a:400::",
+              "2001:4860:482b:400::",
+              "2001:4860:482c:400::"
+            ],
+            "dns_error": null,
+            "tcp_ms": 37,
+            "tls_ms": 109,
+            "tls_version": "TLSv1.3",
+            "status": 405,
+            "ok": true,
+            "error": null,
+            "total_ms": 352
+          }
+        },
+        {
+          "host": "youtubei.googleapis.com",
+          "path": "/",
+          "v4": {
+            "dns_ms": 28,
+            "ips": [
+              "172.217.112.4",
+              "172.217.116.4",
+              "172.217.119.4",
+              "172.217.113.4"
+            ],
+            "dns_error": null,
+            "tcp_ms": 39,
+            "tls_ms": 106,
+            "tls_version": "TLSv1.3",
+            "status": 405,
+            "ok": true,
+            "error": null,
+            "total_ms": 349
+          },
+          "v6": {
+            "dns_ms": 40,
+            "ips": [
+              "2001:4860:4847:400::",
+              "2001:4860:4843:400::",
+              "2001:4860:4841:400::",
+              "2001:4860:4842:400::"
+            ],
+            "dns_error": null,
+            "tcp_ms": 42,
+            "tls_ms": 97,
+            "tls_version": "TLSv1.3",
+            "status": 405,
+            "ok": true,
+            "error": null,
+            "total_ms": 344
+          }
+        },
+        {
+          "host": "googlevideo.com",
+          "path": "/",
+          "v4": {
+            "dns_ms": 30,
+            "ips": [
+              "142.251.38.68"
+            ],
+            "dns_error": null,
+            "tcp_ms": 36,
+            "tls_ms": 283,
+            "tls_version": "TLSv1.3",
+            "status": 302,
+            "ok": true,
+            "error": null,
+            "total_ms": 426
+          },
+          "v6": {
+            "dns_ms": 30,
+            "ips": [
+              "2a00:1450:4010:c02::67",
+              "2a00:1450:4010:c02::93",
+              "2a00:1450:4010:c02::68",
+              "2a00:1450:4010:c02::6a"
+            ],
+            "dns_error": null,
+            "tcp_ms": 41,
+            "tls_ms": 254,
+            "tls_version": "TLSv1.3",
+            "status": 302,
+            "ok": true,
+            "error": null,
+            "total_ms": 408
+          }
+        },
+        {
+          "host": "i.ytimg.com",
+          "path": "/vi/dQw4w9WgXcQ/default.jpg",
+          "v4": {
+            "dns_ms": 31,
+            "ips": [
+              "142.251.148.6",
+              "142.251.149.6",
+              "142.251.144.6",
+              "142.251.146.6"
+            ],
+            "dns_error": null,
+            "tcp_ms": 40,
+            "tls_ms": 110,
+            "tls_version": "TLSv1.3",
+            "status": 200,
+            "ok": true,
+            "error": null,
+            "total_ms": 259
+          },
+          "v6": {
+            "dns_ms": 27,
+            "ips": [
+              "2001:4860:4831:600::",
+              "2001:4860:4825:600::",
+              "2001:4860:4821:600::",
+              "2001:4860:4823:600::"
+            ],
+            "dns_error": null,
+            "tcp_ms": 43,
+            "tls_ms": 110,
+            "tls_version": "TLSv1.3",
+            "status": 200,
+            "ok": true,
+            "error": null,
+            "total_ms": 261
+          }
+        },
+        {
+          "host": "yt3.ggpht.com",
+          "path": "/",
+          "v4": {
+            "dns_ms": 29,
+            "ips": [
+              "74.125.205.132",
+              "142.251.1.132",
+              "64.233.162.132",
+              "64.233.164.132"
+            ],
+            "dns_error": null,
+            "tcp_ms": 39,
+            "tls_ms": 131,
+            "tls_version": "TLSv1.3",
+            "status": 400,
+            "ok": true,
+            "error": null,
+            "total_ms": 306
+          },
+          "v6": {
+            "dns_ms": 30,
+            "ips": [
+              "2a00:1450:4010:c05::84",
+              "2a00:1450:4010:c07::84",
+              "2a00:1450:4010:c08::84",
+              "2a00:1450:4010:c1e::84"
+            ],
+            "dns_error": null,
+            "tcp_ms": 39,
+            "tls_ms": 133,
+            "tls_version": "TLSv1.3",
+            "status": 400,
+            "ok": true,
+            "error": null,
+            "total_ms": 280
+          }
+        }
+      ],
+      "innertube": [
+        {
+          "client": "WEB_REMIX",
+          "host": "music.youtube.com",
+          "video": "dQw4w9WgXcQ",
+          "ok": false,
+          "http": 200,
+          "ms": 243,
+          "playability": "UNPLAYABLE",
+          "reason": "Видео недоступно",
+          "audio_formats": 0,
+          "url": null,
+          "itag": null,
+          "mime": null,
+          "bitrate": null,
+          "content_length": null,
+          "url_host": null,
+          "has_n_param": null,
+          "error": "no audio format with resolvable url"
+        },
+        {
+          "client": "ANDROID",
+          "host": "www.youtube.com",
+          "video": "dQw4w9WgXcQ",
+          "ok": false,
+          "http": 400,
+          "ms": 214,
+          "playability": null,
+          "reason": null,
+          "audio_formats": 0,
+          "url": null,
+          "itag": null,
+          "mime": null,
+          "bitrate": null,
+          "content_length": null,
+          "url_host": null,
+          "has_n_param": null,
+          "error": "HTTP 400: {\n  \"error\": {\n    \"code\": 400,\n    \"message\": \"Precondition check failed.\",\n    \"errors\": [\n      {\n        \"message\": \"Precondition check failed.\",\n        \"domain\": \"global\",\n        \"reason\": \"fai"
+        },
+        {
+          "client": "TVHTML5_SIMPLY",
+          "host": "www.youtube.com",
+          "video": "dQw4w9WgXcQ",
+          "ok": false,
+          "http": 200,
+          "ms": 225,
+          "playability": "ERROR",
+          "reason": "YouTube больше не поддерживается в этом приложении или на этом устройстве.",
+          "audio_formats": 0,
+          "url": null,
+          "itag": null,
+          "mime": null,
+          "bitrate": null,
+          "content_length": null,
+          "url_host": null,
+          "has_n_param": null,
+          "error": "no audio format with resolvable url"
+        },
+        {
+          "client": "TVHTML5",
+          "host": "www.youtube.com",
+          "video": "dQw4w9WgXcQ",
+          "ok": false,
+          "http": 200,
+          "ms": 237,
+          "playability": "UNPLAYABLE",
+          "reason": "Необходимо перезагрузить страницу.",
+          "audio_formats": 0,
+          "url": null,
+          "itag": null,
+          "mime": null,
+          "bitrate": null,
+          "content_length": null,
+          "url_host": null,
+          "has_n_param": null,
+          "error": "no audio format with resolvable url"
+        },
+        {
+          "client": "WEB_REMIX",
+          "host": "music.youtube.com",
+          "video": "kJQP7kiw5Fk",
+          "ok": false,
+          "http": 200,
+          "ms": 294,
+          "playability": "UNPLAYABLE",
+          "reason": "Видео недоступно",
+          "audio_formats": 0,
+          "url": null,
+          "itag": null,
+          "mime": null,
+          "bitrate": null,
+          "content_length": null,
+          "url_host": null,
+          "has_n_param": null,
+          "error": "no audio format with resolvable url"
+        },
+        {
+          "client": "ANDROID",
+          "host": "www.youtube.com",
+          "video": "kJQP7kiw5Fk",
+          "ok": false,
+          "http": 400,
+          "ms": 181,
+          "playability": null,
+          "reason": null,
+          "audio_formats": 0,
+          "url": null,
+          "itag": null,
+          "mime": null,
+          "bitrate": null,
+          "content_length": null,
+          "url_host": null,
+          "has_n_param": null,
+          "error": "HTTP 400: {\n  \"error\": {\n    \"code\": 400,\n    \"message\": \"Precondition check failed.\",\n    \"errors\": [\n      {\n        \"message\": \"Precondition check failed.\",\n        \"domain\": \"global\",\n        \"reason\": \"fai"
+        },
+        {
+          "client": "TVHTML5_SIMPLY",
+          "host": "www.youtube.com",
+          "video": "kJQP7kiw5Fk",
+          "ok": false,
+          "http": 200,
+          "ms": 196,
+          "playability": "ERROR",
+          "reason": "YouTube больше не поддерживается в этом приложении или на этом устройстве.",
+          "audio_formats": 0,
+          "url": null,
+          "itag": null,
+          "mime": null,
+          "bitrate": null,
+          "content_length": null,
+          "url_host": null,
+          "has_n_param": null,
+          "error": "no audio format with resolvable url"
+        },
+        {
+          "client": "TVHTML5",
+          "host": "www.youtube.com",
+          "video": "kJQP7kiw5Fk",
+          "ok": false,
+          "http": 200,
+          "ms": 295,
+          "playability": "LOGIN_REQUIRED",
+          "reason": "Войдите в аккаунт, чтобы подтвердить, что вы не бот",
+          "audio_formats": 0,
+          "url": null,
+          "itag": null,
+          "mime": null,
+          "bitrate": null,
+          "content_length": null,
+          "url_host": null,
+          "has_n_param": null,
+          "error": "no audio format with resolvable url"
+        }
+      ],
+      "media": [],
+      "googlevideo": [
+        {
+          "host": "rr3---sn-u125g5-5p.googlevideo.com",
+          "layers": {
+            "dns_v4": {
+              "ok": true,
+              "ms": 0,
+              "ips": [
+                "74.125.4.67"
+              ],
+              "error": null
+            },
+            "dns_v6": {
+              "ok": true,
+              "ms": 31,
+              "ips": [
+                "2a00:1450:4007:4::3"
+              ],
+              "error": null
+            },
+            "tcp_v4": {
+              "ok": true,
+              "ms": 65,
+              "error": null
+            },
+            "tls_v4": {
+              "ok": true,
+              "sni": "rr3---sn-u125g5-5p.googlevideo.com",
+              "version": "TLSv1.3",
+              "ms": 183,
+              "error": null
+            },
+            "http_plain_v4": {
+              "ok": true,
+              "status": 404,
+              "tcp_ms": 64,
+              "tls_ms": 202,
+              "error": null
+            },
+            "media_v4": {
+              "ok": false,
+              "error": "нет подписанного URL — байты не проверить"
+            },
+            "media_v6": {
+              "ok": false,
+              "error": "нет подписанного URL — байты не проверить"
+            }
+          }
+        }
+      ],
+      "ytdlp": {
+        "available": true,
+        "path": "C:\\Users\\2CA4~1\\AppData\\Local\\Temp\\yt-dlp-latest.pyz",
+        "version": "2026.10.26",
+        "js_runtimes": {
+          "deno": "C:\\Users\\Егор Груздев\\.deno\\bin\\deno.exe",
+          "node": "C:\\Program Files\\nodejs\\node.exe"
+        },
+        "runs": [
+          {
+            "variant": "default",
+            "ok": true,
+            "ms": 6915,
+            "url": "https://rr3---sn-u125g5-5p.googlevideo.com/videoplayback?expire=1793310947&ei=gmzjarfnOLWP0u8Po6jg-Ao&ip=2a09%3Abac5%3A5157%3A2db9%3A%3A48e%3A3d&id=o-AOScXhP0uYAPgb8cSPxeXWpSADW6f06U5IJv5hJ01Ltt&itag=251&source=youtube&requiressl=yes&xpc=EgVo2aDSNQ%3D%3D&cps=1198&met=1793289346%2C&mh=7c&mm=18%2C29&mn=sn-u125g5-5p%2Csn-aj5goc-5x&ms=aub%2Crdu&mv=m&mvi=3&pl=46&rms=aub%2Caub&initcwndbps=1473000&bui=AZFAFb9HeDmAskZ-D9quZFB-SCM1Xab5MoVOHXOsO0DTYRSXWABvs953ic0ekyLtIjlmghUUXDqgbQmf&spc=mpRQ_w1sK_sI9g&vprv=1&svpuc=1&mime=audio%2Fwebm&ns=O8J3egc8XUEKRIFm4vAfYiYZ&rqh=1&gir=yes&clen=3433755&dur=213.061&lmt=1766955883819090&mt=1793288989&fvip=4&epbp=1&keepalive=yes&lmw=1&fexp=51565115%2C52184236%2C52271469&c=TVHTML5&sefc=1&txp=5532534&n=ZrVZat72UlialQ&sparams=expire%2Cei%2Cip%2Cid%2Citag%2Csource%2Crequiressl%2Cxpc%2Cbui%2Cspc%2Cvprv%2Csvpuc%2Cmime%2Cns%2Crqh%2Cgir%2Cclen%2Cdur%2Clmt&lsparams=cps%2Cmet%2Cmh%2Cmm%2Cmn%2Cms%2Cmv%2Cmvi%2Cpl%2Crms%2Cinitcwndbps&lsig=APaTxxMwRgIhAPGOdlDHaxFilrYopUYlvsqZ3M874twgnX5oFe8pHs5ZAiEA-611hKWNEaqOIED5mSgPtBjaTyqyYxWfE4iAMMp2vqQ%3D&sig=AE0s2JYwRgIhAMEU-HX5t2rNWJ5Uz5_XuQolO-EbtN-UNhg05481KQVfAiEA6vbkoo4Q57JLFy8B1FmJTRVOnC4Qe08knpv0ivW5R9U%3D",
+            "url_host": "rr3---sn-u125g5-5p.googlevideo.com",
+            "rc": 0,
+            "error": null,
+            "stderr_tail": "",
+            "video": "dQw4w9WgXcQ",
+            "probe": {
+              "url_host": "rr3---sn-u125g5-5p.googlevideo.com",
+              "family": "v4",
+              "ok": true,
+              "status": 302,
+              "bytes": 0,
+              "kbps": null,
+              "tcp_ms": 65,
+              "tls_ms": 207,
+              "first_byte_ms": null,
+              "total_ms": 448,
+              "error": null,
+              "content_range": null,
+              "content_type": "text/html"
+            }
+          },
+          {
+            "variant": "tv_simply",
+            "ok": true,
+            "ms": 6808,
+            "url": "https://rr3---sn-u125g5-5p.googlevideo.com/videoplayback?expire=1793310947&ei=g2zjasLQEurV0u8PlP-6sAg&ip=2a09%3Abac5%3A5157%3A2db9%3A%3A48e%3A3d&id=o-AKji9eP8UkyNKwboOgPzGexlb_3s8f3fg_cDNrTJWt-c&itag=18&source=youtube&requiressl=yes&xpc=EgVo2aDSNQ%3D%3D&cps=1185&met=1793289347%2C&mh=7c&mm=18%2C29&mn=sn-u125g5-5p%2Csn-aj5goc-5x&ms=aub%2Crdu&mv=m&mvi=3&pl=46&rms=aub%2Caub&initcwndbps=1390375&bui=AZFAFb-uItVm2N48poAxVtMhoD4Rnz6wF9t28CfempbbCsop2KccwadrZ5RdqKe5T2xCiUmVd8yI_eCO&spc=mpRQ_xF5gvkQTW50Q4dvi4QHzDEddM8Tbf6fU0QDpAIBxDNL_iL-OnsIItgkvdLWSsigyjwSwQkzPg&vprv=1&svpuc=1&mime=video%2Fmp4&ns=UBPaMTTLZL8px7pXCDvHnvQZ&rqh=1&cnr=14&ratebypass=yes&dur=213.089&lmt=1766960953317159&mt=1793289227&fvip=4&epbp=1&fexp=51565116%2C52184237%2C52271470&c=TVHTML5_SIMPLY&sefc=1&txp=5538534&n=rflMCkcrsav6iw&sparams=expire%2Cei%2Cip%2Cid%2Citag%2Csource%2Crequiressl%2Cxpc%2Cbui%2Cspc%2Cvprv%2Csvpuc%2Cmime%2Cns%2Crqh%2Ccnr%2Cratebypass%2Cdur%2Clmt&lsparams=cps%2Cmet%2Cmh%2Cmm%2Cmn%2Cms%2Cmv%2Cmvi%2Cpl%2Crms%2Cinitcwndbps&lsig=APaTxxMwRgIhAMkneRhnuot41o6_xGLtVUeUC_hHU8yKxjWFxzV6aVBOAiEAvmqwIGPVDjANGigPukQ_ffvRgsuctkbJjHq4RXbwy10%3D&sig=AE0s2JYwRgIhAPlzakRr30XwvIb3t6NCzB8HvcAR15Y6uBsbIQ-6nrCUAiEAo5iSdJ5S42blOqZX144QT-jtUd7HgINZHpQn_fQ6nbY%3D",
+            "url_host": "rr3---sn-u125g5-5p.googlevideo.com",
+            "rc": 0,
+            "error": null,
+            "stderr_tail": "",
+            "video": "dQw4w9WgXcQ",
+            "probe": {
+              "url_host": "rr3---sn-u125g5-5p.googlevideo.com",
+              "family": "v4",
+              "ok": true,
+              "status": 302,
+              "bytes": 0,
+              "kbps": null,
+              "tcp_ms": 62,
+              "tls_ms": 172,
+              "first_byte_ms": null,
+              "total_ms": 437,
+              "error": null,
+              "content_range": null,
+              "content_type": "text/html"
+            }
+          },
+          {
+            "variant": "tv",
+            "ok": false,
+            "ms": 5019,
+            "url": null,
+            "url_host": null,
+            "rc": 1,
+            "error": "ERROR: [youtube] dQw4w9WgXcQ: The page needs to be reloaded.",
+            "stderr_tail": "ERROR: [youtube] dQw4w9WgXcQ: The page needs to be reloaded.",
+            "video": "dQw4w9WgXcQ"
+          },
+          {
+            "variant": "android_vr",
+            "ok": true,
+            "ms": 3626,
+            "url": "https://rr5---sn-25ge7nsd.googlevideo.com/videoplayback?expire=1793310951&ei=h2zjapuEBPueq7YPm-fdOQ&ip=2a09%3Abac5%3A5157%3A2db9%3A%3A48e%3A3d&id=o-ALuJ73viAtP8MFxzeKEnBQi6a75FXyoDPAu1etvwr7Ed&itag=18&source=youtube&requiressl=yes&xpc=EgVo2aDSNQ%3D%3D&cps=1189&met=1793289351%2C&mh=7c&mm=18%2C29&mn=sn-25ge7nsd%2Csn-aj5go5-53&ms=aub%2Crdu&mv=m&mvi=5&pl=46&rms=aub%2Caub&initcwndbps=1478750&bui=AZFAFb9iDrJaeIR5KpBJEl9sczm6b0l363ykkSsN5UpPfQa_AKy9cL53fN-LUfgtcYENxk4KAKBft4Sw&spc=mpRQ__Ne6ZY81ad3MHDSwMKL1dD77zGgLIXZM9n-5qWjJ9T1EptY4DG4zw&vprv=1&svpuc=1&mime=video%2Fmp4&rqh=1&cnr=14&ratebypass=yes&dur=213.089&lmt=1766960953317159&mt=1793288989&fvip=3&epbp=1&fexp=51565116%2C52184237%2C52271470&c=ANDROID_VR&txp=5538534&sparams=expire%2Cei%2Cip%2Cid%2Citag%2Csource%2Crequiressl%2Cxpc%2Cbui%2Cspc%2Cvprv%2Csvpuc%2Cmime%2Crqh%2Ccnr%2Cratebypass%2Cdur%2Clmt&sig=AE0s2JYwRAIgGOFaezgD35W7JWgzeXEJsqJcS1mQIIXc_m7udEPip0oCIByE-bdEWAb5L84ewX0HrLRr3QYa79HnQ8BHtHuc9rY1&lsparams=cps%2Cmet%2Cmh%2Cmm%2Cmn%2Cms%2Cmv%2Cmvi%2Cpl%2Crms%2Cinitcwndbps&lsig=APaTxxMwRAIgdczUupxfnZ_fVK6iy6TdRgtIFTurDnUy2s4trNB0g3oCIGB5U0ByA4J1ZohwhQreBHpXQR_nxqHx7bAR8gx9ojpj",
+            "url_host": "rr5---sn-25ge7nsd.googlevideo.com",
+            "rc": 0,
+            "error": null,
+            "stderr_tail": "",
+            "video": "dQw4w9WgXcQ",
+            "probe": {
+              "url_host": "rr5---sn-25ge7nsd.googlevideo.com",
+              "family": "v4",
+              "ok": true,
+              "status": 302,
+              "bytes": 0,
+              "kbps": null,
+              "tcp_ms": 65,
+              "tls_ms": 195,
+              "first_byte_ms": null,
+              "total_ms": 465,
+              "error": null,
+              "content_range": null,
+              "content_type": "text/html"
+            }
+          },
+          {
+            "variant": "web_safari",
+            "ok": true,
+            "ms": 5464,
+            "url": "https://manifest.googlevideo.com/api/manifest/hls_playlist/expire/1793310953/ei/iWzjaprkGbaG0u8P28CboAQ/ip/2a09:bac5:5157:2db9::48e:3d/id/750c38c3d5a05dc4/itag/96/source/youtube/requiressl/yes/ratebypass/yes/pfa/1/sgoap/clen%3D3449447%3Bdur%3D213.089%3Bgir%3Dyes%3Bitag%3D140%3Blmt%3D1766955925572207/sgovp/clen%3D80911999%3Bdur%3D213.040%3Bgir%3Dyes%3Bitag%3D137%3Blmt%3D1766957926174250/rqh/1/hls_chunk_host/rr5---sn-25ge7nsd.googlevideo.com/xpc/EgVo2aDSNQ%3D%3D/cps/1170/met/1793289353,/mh/7c/mm/18,29/mn/sn-25ge7nsd,sn-aj5go5-53/ms/aub,rdu/mv/m/mvi/5/pl/46/rms/aub,aub/initcwndbps/1478750/bui/AZFAFb_lCIUZO2o9h2CplcDhhgeCDg0inp0pnX1dsSygrGdZQN_lBGciEto2U_81_9Xbl0uIXnRzGcVu/spc/mpRQ_20HN-gQnT3jTeV6QhuGjI7v3uxSBv7TB8lyOXbsuCvHrHYWHCFZksrHvNSDo21vBCui7jtpHx3TUAo/vprv/1/ns/3dhemgEokNJT1s4mamVtmZUZ/playlist_type/CLEAN/dover/11/txp/5532534/epbp/1/mt/1793288989/fvip/3/keepalive/yes/fexp/51565116,52184237,52271470,52323638/n/xLHxw1fpi1vJ3A/sparams/expire,ei,ip,id,itag,source,requiressl,ratebypass,pfa,sgoap,sgovp,rqh,xpc,bui,spc,vprv,ns,playlist_type/sig/AE0s2JYwRgIhAKrUXEDwS59bMdtIZT3N7GXmRKJQzaP1hv6Fx14yhzIcAiEAt5DXWfc0QaFxXISVGezf4-vDgKxp7Zyd4ynVmatbSWc%3D/lsparams/hls_chunk_host,cps,met,mh,mm,mn,ms,mv,mvi,pl,rms,initcwndbps/lsig/APaTxxMwRgIhAMNTkRmlWScJaOGVARM9Slqtw55YT5mbtPI4XgZ4KEoSAiEA0DY68__klLNVU-GwsbcjRTdKQSIRBKMvpawi3y0yefU%3D/playlist/index.m3u8",
+            "url_host": "manifest.googlevideo.com",
+            "rc": 0,
+            "error": null,
+            "stderr_tail": "",
+            "video": "dQw4w9WgXcQ",
+            "probe": {
+              "url_host": "manifest.googlevideo.com",
+              "family": "v4",
+              "ok": true,
+              "status": 206,
+              "bytes": 32768,
+              "kbps": 643.6,
+              "tcp_ms": 62,
+              "tls_ms": 104,
+              "first_byte_ms": 418,
+              "total_ms": 467,
+              "error": null,
+              "content_range": "bytes 0-32767/57872",
+              "content_type": "application/vnd.apple.mpegurl"
+            }
+          },
+          {
+            "variant": "ios",
+            "ok": false,
+            "ms": 3285,
+            "url": null,
+            "url_host": null,
+            "rc": 1,
+            "error": "ERROR: [youtube] dQw4w9WgXcQ: Requested format is not available. Use --list-formats for a list of available formats",
+            "stderr_tail": "ERROR: [youtube] dQw4w9WgXcQ: Requested format is not available. Use --list-formats for a list of available formats",
+            "video": "dQw4w9WgXcQ"
+          },
+          {
+            "variant": "mweb",
+            "ok": true,
+            "ms": 5269,
+            "url": "https://rr5---sn-25ge7nsd.googlevideo.com/videoplayback?expire=1793310955&ei=i2zjaqzeGsyG0u8P3eyf2AQ&ip=2a09%3Abac5%3A5157%3A2db9%3A%3A48e%3A3d&id=o-ADyNjg5wr-vDv3wKFx60UHRNEBmerRMA4xFOf11rj9wt&itag=18&source=youtube&requiressl=yes&xpc=EgVo2aDSNQ%3D%3D&cps=1161&met=1793289355%2C&mh=7c&mm=18%2C29&mn=sn-25ge7nsd%2Csn-aj5go5-53&ms=aub%2Crdu&mv=m&mvi=5&pl=46&rms=aub%2Caub&initcwndbps=1478750&bui=AZFAFb_3ZDAOmy6NfxhbYulkrRfZjTwqPJRsg6e-9cGtaPqGS8Xr14BFkjvP28_udnm1MPxlfdJlE6HV&spc=mpRQ_3AAl_f6sE8bLIqrWyARthNqqqdcp0vKBSHL0JSBKwYw5dlI6S9Z1AVdu0zRplHMGN_ieiUlk5CGBbU&vprv=1&svpuc=1&mime=video%2Fmp4&ns=YPNTAHVqv5dg8ReENfwDQigZ&rqh=1&cnr=14&ratebypass=yes&dur=213.089&lmt=1766960953317159&mt=1793288989&fvip=3&epbp=1&fexp=51565116%2C52184237%2C52271470&c=MWEB&sefc=1&txp=5538534&n=-NmkatF6D8MrWQ&sparams=expire%2Cei%2Cip%2Cid%2Citag%2Csource%2Crequiressl%2Cxpc%2Cbui%2Cspc%2Cvprv%2Csvpuc%2Cmime%2Cns%2Crqh%2Ccnr%2Cratebypass%2Cdur%2Clmt&lsparams=cps%2Cmet%2Cmh%2Cmm%2Cmn%2Cms%2Cmv%2Cmvi%2Cpl%2Crms%2Cinitcwndbps&lsig=APaTxxMwRQIhAIrKegD-WUKx3Jr_RVWEMBJoESw0PbwkCehS-nhQCSoRAiBSEWEg-f1cd7i2pleaPVT1X-XkVQwcPYEeKqwYKEjxcg%3D%3D&sig=AE0s2JYwRAIgGswUjZ479qMek6Q1Rm7IsZVk7NfQQtuXVeXyCME-t7gCICNkkxdgUlV50bfjt9WcuQUIX6psuY3EWQ3LRU0Yy_Co",
+            "url_host": "rr5---sn-25ge7nsd.googlevideo.com",
+            "rc": 0,
+            "error": null,
+            "stderr_tail": "",
+            "video": "dQw4w9WgXcQ",
+            "probe": {
+              "url_host": "rr5---sn-25ge7nsd.googlevideo.com",
+              "family": "v4",
+              "ok": true,
+              "status": 302,
+              "bytes": 0,
+              "kbps": null,
+              "tcp_ms": 69,
+              "tls_ms": 175,
+              "first_byte_ms": null,
+              "total_ms": 430,
+              "error": null,
+              "content_range": null,
+              "content_type": "text/html"
+            }
+          },
+          {
+            "variant": "default@ipv4",
+            "ok": true,
+            "ms": 4935,
+            "url": "https://rr4---sn-vgqsrnld.googlevideo.com/videoplayback?expire=1793310956&ei=jGzjaqyuEJzW0u8P3MubqQ0&ip=104.28.198.244&id=o-APQ2W6VnPo1k7EgXYG2ch3G16msj_tXeKCLQnr-wn3E9&itag=251&source=youtube&requiressl=yes&xpc=EgVo2aDSNQ%3D%3D&cps=1160&met=1793289356%2C&mh=7c&mm=18%2C26&mn=sn-vgqsrnld%2Csn-bg0s7n7r&ms=aub%2Conr&mv=m&mvi=4&pl=24&rms=aub%2Caub&initcwndbps=1761875&bui=AZFAFb9n6JGjCNLPbu9VpTDhez6YzgdxrOmPvoiSVTViHYxyJlgj3529bQzfhHzccxvpxQotqPNrhv86&spc=mpRQ_9Hn0JCUeA&vprv=1&svpuc=1&mime=audio%2Fwebm&ns=eXxdHU4nv52V-i4QN3Of7-8Z&rqh=1&gir=yes&clen=3433755&dur=213.061&lmt=1766955883819090&mt=1793288989&fvip=5&epbp=1&keepalive=yes&lmw=1&fexp=51565115%2C52184237%2C52271470&c=TVHTML5&sefc=1&txp=5532534&n=mZxvSlZMDerNnw&sparams=expire%2Cei%2Cip%2Cid%2Citag%2Csource%2Crequiressl%2Cxpc%2Cbui%2Cspc%2Cvprv%2Csvpuc%2Cmime%2Cns%2Crqh%2Cgir%2Cclen%2Cdur%2Clmt&lsparams=cps%2Cmet%2Cmh%2Cmm%2Cmn%2Cms%2Cmv%2Cmvi%2Cpl%2Crms%2Cinitcwndbps&lsig=APaTxxMwRAIgaN3ldeWA0yXmAYG2oDkw5VyE4qY5r95NTeluGF4n6igCIC2ibmnO782O89emU7laLfZN6_c2M3yMz34K9Ze61WQP&sig=AE0s2JYwRQIhAMsLMXK9Wvu3kvS_8L13b575JZjSoiex4AIsZIRAZ7sFAiBrBAYPOBdaAyKgSiXtSpDtFPe_xR17Tr16QGYvv89uxA%3D%3D",
+            "url_host": "rr4---sn-vgqsrnld.googlevideo.com",
+            "rc": 0,
+            "error": null,
+            "stderr_tail": "",
+            "video": "dQw4w9WgXcQ",
+            "probe": {
+              "url_host": "rr4---sn-vgqsrnld.googlevideo.com",
+              "family": "v4",
+              "ok": true,
+              "status": 206,
+              "bytes": 32768,
+              "kbps": 2983.4,
+              "tcp_ms": 173,
+              "tls_ms": 443,
+              "first_byte_ms": 949,
+              "total_ms": 960,
+              "error": null,
+              "content_range": "bytes 0-32767/3433755",
+              "content_type": "audio/webm"
+            }
+          },
+          {
+            "variant": "tv_simply@ipv4",
+            "ok": true,
+            "ms": 4442,
+            "url": "https://rr4---sn-vgqsrnld.googlevideo.com/videoplayback?expire=1793310958&ei=jmzjapC9LemI0u8PrubhyQc&ip=104.28.198.244&id=o-AMdF7jWqqf7vtR2ntrsYF5-PaKhlj2u0rsW9I69IatE6&itag=18&source=youtube&requiressl=yes&xpc=EgVo2aDSNQ%3D%3D&cps=1118&met=1793289358%2C&mh=7c&mm=18%2C26&mn=sn-vgqsrnld%2Csn-bg0s7n7r&ms=aub%2Conr&mv=m&mvi=4&pl=24&rms=aub%2Caub&initcwndbps=1761875&bui=AZFAFb9Mb_IcxcGjgyybiYvE6Sq4gmTLQpFDivgzleE058yPngRh9VbhqaYgqnsJms_CNayMMQHg50nQ&spc=mpRQ_1I7lV3eBB9CT8E_letzvXUjDpVnkkc8mcbIJwDU5WJSGr0a5xQSvEKglZzbRfX2W6esTg&vprv=1&svpuc=1&mime=video%2Fmp4&ns=Bi3f0iSfS6iMbUChVCQmG2sZ&rqh=1&cnr=14&ratebypass=yes&dur=213.089&lmt=1766960953317159&mt=1793288989&fvip=5&epbp=1&fexp=51565116%2C52184236%2C52271469&c=TVHTML5_SIMPLY&sefc=1&txp=5538534&n=51KF3u_NO0XZEA&sparams=expire%2Cei%2Cip%2Cid%2Citag%2Csource%2Crequiressl%2Cxpc%2Cbui%2Cspc%2Cvprv%2Csvpuc%2Cmime%2Cns%2Crqh%2Ccnr%2Cratebypass%2Cdur%2Clmt&lsparams=cps%2Cmet%2Cmh%2Cmm%2Cmn%2Cms%2Cmv%2Cmvi%2Cpl%2Crms%2Cinitcwndbps&lsig=APaTxxMwRgIhAKpds_PJV-ml3uKw6M09fNb6U46qBxqAyAGJ_eoA62PHAiEA-uoWkYaf4R99T7lGd0CUuA8K6AWSi1K--Zpdai6GJC4%3D&sig=AE0s2JYwRQIgAdHuxp3YkT08kdKkTzJ_eBTLiKv1l_FPHWK3TYu6DowCIQDHjDo0p8Q-2tpjWLZR6FNjSh0KMxjVuYqrmM1-9CSsRA%3D%3D",
+            "url_host": "rr4---sn-vgqsrnld.googlevideo.com",
+            "rc": 0,
+            "error": null,
+            "stderr_tail": "",
+            "video": "dQw4w9WgXcQ",
+            "probe": {
+              "url_host": "rr4---sn-vgqsrnld.googlevideo.com",
+              "family": "v4",
+              "ok": true,
+              "status": 206,
+              "bytes": 32768,
+              "kbps": 862.2,
+              "tcp_ms": 150,
+              "tls_ms": 443,
+              "first_byte_ms": 865,
+              "total_ms": 902,
+              "error": null,
+              "content_range": "bytes 0-32767/11829048",
+              "content_type": "video/mp4"
+            }
+          },
+          {
+            "variant": "default@ipv6",
+            "ok": true,
+            "ms": 4663,
+            "url": "https://rr5---sn-25ge7nsd.googlevideo.com/videoplayback?expire=1793310960&ei=kGzjatT1CYuyq7YPsbXZ8Ag&ip=2a09%3Abac5%3A5157%3A2db9%3A%3A48e%3A3d&id=o-AIB9dQCj2RutcwWHmP4OdNLuElN6JuE703m_vrNwIttq&itag=251&source=youtube&requiressl=yes&xpc=EgVo2aDSNQ%3D%3D&cps=1183&met=1793289360%2C&mh=7c&mm=18%2C29&mn=sn-25ge7nsd%2Csn-aj5goc-5x&ms=aub%2Crdu&mv=m&mvi=5&pl=46&rms=aub%2Caub&initcwndbps=1478750&bui=AZFAFb8Xo8gxTFqgWXIRBC_GYPFiReVVDGjSHuHfKjO9EsYm13RUwhUMRgIEU-Em3gcgvusd3LNzwuu_&spc=mpRQ_5WC_jdVGw&vprv=1&svpuc=1&mime=audio%2Fwebm&ns=IBKSkVOjhe5gsR_-zlKuy5UZ&rqh=1&gir=yes&clen=3433755&dur=213.061&lmt=1766955883819090&mt=1793288989&fvip=4&epbp=1&keepalive=yes&lmw=1&fexp=51565115%2C52184236%2C52271470&c=TVHTML5&sefc=1&txp=5532534&n=3g9GcPDiSVNS4A&sparams=expire%2Cei%2Cip%2Cid%2Citag%2Csource%2Crequiressl%2Cxpc%2Cbui%2Cspc%2Cvprv%2Csvpuc%2Cmime%2Cns%2Crqh%2Cgir%2Cclen%2Cdur%2Clmt&lsparams=cps%2Cmet%2Cmh%2Cmm%2Cmn%2Cms%2Cmv%2Cmvi%2Cpl%2Crms%2Cinitcwndbps&lsig=APaTxxMwRQIgbcxHmYvY8cPx24YZQY-4jxXGNt7XkLTD1n7SaVciC7sCIQDpb46bjL8P9ZbpQJZENBpNdXN4i4JBlz80z2T9kruXXA%3D%3D&sig=AE0s2JYwRQIhAKep2kHRe36ihuLWxFAHK3UrKzQ5YbSpZlha1voNsdphAiA8PidfRHYY4bMqPJ8Vi1aYyf1cB6CUMY5rRdM0_GBJ0g%3D%3D",
+            "url_host": "rr5---sn-25ge7nsd.googlevideo.com",
+            "rc": 0,
+            "error": null,
+            "stderr_tail": "",
+            "video": "dQw4w9WgXcQ",
+            "probe": {
+              "url_host": "rr5---sn-25ge7nsd.googlevideo.com",
+              "family": "v6",
+              "ok": true,
+              "status": 206,
+              "bytes": 32768,
+              "kbps": 964.3,
+              "tcp_ms": 64,
+              "tls_ms": 175,
+              "first_byte_ms": 377,
+              "total_ms": 411,
+              "error": null,
+              "content_range": "bytes 0-32767/3433755",
+              "content_type": "audio/webm"
+            }
+          },
+          {
+            "variant": "default",
+            "ok": true,
+            "ms": 5018,
+            "url": "https://rr2---sn-25glenez.googlevideo.com/videoplayback?expire=1793310962&ei=kmzjau7MD8aEq7YP7_jWoAg&ip=2a09%3Abac5%3A5157%3A2db9%3A%3A48e%3A3d&id=o-AK8kJ2H7DadRGUObGX2D48p_feY7mHn-szKompMRdUlh&itag=251&source=youtube&requiressl=yes&xpc=EgVo2aDSNQ%3D%3D&cps=1276&met=1793289362%2C&mh=Sn&mm=18%2C29&mn=sn-25glenez%2Csn-aj5go5-5i&ms=aub%2Crdu&mv=m&mvi=2&pl=46&rms=aub%2Caub&pcm2=yes&gcr=ru&initcwndbps=1473000&bui=AZFAFb-4kgdIrV0b6ufBu3XkrIFj8X81kFi7dkQ76U6xKqCQW64z3pTGL-nxhoBfdx3UxCcQTHebojVj&vprv=1&svpuc=1&mime=audio%2Fwebm&ns=ZfibsFJmJ7DVpiqX9xqoG1QZ&rqh=1&gir=yes&clen=4605080&dur=281.521&lmt=1739616982493507&mt=1793288989&fvip=2&epbp=1&keepalive=yes&lmw=1&fexp=51565116%2C52184236%2C52240175%2C52271470&c=TVHTML5&sefc=1&txp=4532534&n=-_nuQj8tbP7uig&sparams=expire%2Cei%2Cip%2Cid%2Citag%2Csource%2Crequiressl%2Cxpc%2Cpcm2%2Cgcr%2Cbui%2Cvprv%2Csvpuc%2Cmime%2Cns%2Crqh%2Cgir%2Cclen%2Cdur%2Clmt&lsparams=cps%2Cmet%2Cmh%2Cmm%2Cmn%2Cms%2Cmv%2Cmvi%2Cpl%2Crms%2Cinitcwndbps&lsig=APaTxxMwRQIhALXDNm11pHdMtU9RvoD2F_EVukn3m1VXqMEvYqqfT3pHAiBbzYcjPFd7PvYT-CH2QO3gm03y8AUNJHQR5VTNNNA7JQ%3D%3D&sig=AE0s2JYwRQIgLjBSLlnIZ3zIp3V5h0vAuW8VLN2M7jWEasz3VY9V_6gCIQD_2oIDW6YAvhfl9OdvL0xM5yBDzjSY2CQA5TJUtYMgJg%3D%3D",
+            "url_host": "rr2---sn-25glenez.googlevideo.com",
+            "rc": 0,
+            "error": null,
+            "stderr_tail": "",
+            "video": "kJQP7kiw5Fk",
+            "probe": {
+              "url_host": "rr2---sn-25glenez.googlevideo.com",
+              "family": "v4",
+              "ok": true,
+              "status": 302,
+              "bytes": 0,
+              "kbps": null,
+              "tcp_ms": 64,
+              "tls_ms": 181,
+              "first_byte_ms": null,
+              "total_ms": 461,
+              "error": null,
+              "content_range": null,
+              "content_type": "text/html"
+            }
+          },
+          {
+            "variant": "tv_simply",
+            "ok": true,
+            "ms": 4249,
+            "url": "https://rr2---sn-25glenez.googlevideo.com/videoplayback?expire=1793310964&ei=lGzjavsQhrWrtg_ru4apBA&ip=2a09%3Abac5%3A5157%3A2db9%3A%3A48e%3A3d&id=o-AFYO_Grwo-fpUch3KQSkBkXH9-_0zZstCUSHjGgpiyiI&itag=18&source=youtube&requiressl=yes&xpc=EgVo2aDSNQ%3D%3D&cps=1321&met=1793289364%2C&mh=Sn&mm=18%2C29&mn=sn-25glenez%2Csn-aj5go5-5i&ms=aub%2Crdu&mv=m&mvi=2&pl=46&rms=aub%2Caub&gcr=ru&initcwndbps=1473000&bui=AZFAFb_FYM1jcM6spMWRFO67VecudLCD2ZOw54yp2lt7xBfi6EeYHOWF3MaAcCs-TIIo-iRbAoLkz-Fa&spc=mpRQ_1-dBQIuY3YSnNrU1emSQ9BY8W3raLmqGiAKq7_R2W7J-ryh-Fc9kgfAo1RFhbeQAlvq&vprv=1&svpuc=1&xtags=heaudio%3Dtrue&mime=video%2Fmp4&ns=u4RCN77vEgBL_dzPXqJ7U3sZ&rqh=1&gir=yes&clen=23445227&ratebypass=yes&dur=281.611&lmt=1739617530053504&mt=1793288989&fvip=2&epbp=1&fexp=51565116%2C52184236%2C52271470&c=TVHTML5_SIMPLY&sefc=1&txp=4530534&n=EChc_h_ztrXtmA&sparams=expire%2Cei%2Cip%2Cid%2Citag%2Csource%2Crequiressl%2Cxpc%2Cgcr%2Cbui%2Cspc%2Cvprv%2Csvpuc%2Cxtags%2Cmime%2Cns%2Crqh%2Cgir%2Cclen%2Cratebypass%2Cdur%2Clmt&lsparams=cps%2Cmet%2Cmh%2Cmm%2Cmn%2Cms%2Cmv%2Cmvi%2Cpl%2Crms%2Cinitcwndbps&lsig=APaTxxMwRAIgSt5bda7I-8L5akzcmDIE1AQgc09V0n9VjcM5ao4KnhACIH6pvFtn08EKp572j_wVuirdRCxjYQxYtURsRO4CR9hF&sig=AE0s2JYwRAIgckketjN17n6VqDeJJqzzVUvcSzFVDx-6Bh3TDIyOCH0CIG6q5kgrQ-kNTDB6cpA5-5dS3vzhzfZ08Jhi1KoyPr-q",
+            "url_host": "rr2---sn-25glenez.googlevideo.com",
+            "rc": 0,
+            "error": null,
+            "stderr_tail": "",
+            "video": "kJQP7kiw5Fk",
+            "probe": {
+              "url_host": "rr2---sn-25glenez.googlevideo.com",
+              "family": "v4",
+              "ok": true,
+              "status": 302,
+              "bytes": 0,
+              "kbps": null,
+              "tcp_ms": 70,
+              "tls_ms": 227,
+              "first_byte_ms": null,
+              "total_ms": 476,
+              "error": null,
+              "content_range": null,
+              "content_type": "text/html"
+            }
+          },
+          {
+            "variant": "tv",
+            "ok": false,
+            "ms": 3489,
+            "url": null,
+            "url_host": null,
+            "rc": 1,
+            "error": "ERROR: [youtube] kJQP7kiw5Fk: The page needs to be reloaded.",
+            "stderr_tail": "ERROR: [youtube] kJQP7kiw5Fk: The page needs to be reloaded.",
+            "video": "kJQP7kiw5Fk"
+          }
+        ]
+      },
+      "relays": {
+        "discovery_ok": true,
+        "discovered": [
+          "yt.chocolatemoo53.com",
+          "inv-ygg.nadeko.net",
+          "inv.nadeko.ygg"
+        ],
+        "invidious_hosts": [
+          "inv.nadeko.net",
+          "inv.tux.pizza",
+          "inv.zzls.xyz",
+          "invidious.adminforge.de",
+          "invidious.dhusch.de",
+          "invidious.einfachzocken.eu",
+          "invidious.f5.si",
+          "invidious.jing.rocks",
+          "invidious.lunivers.trade",
+          "invidious.materialio.us",
+          "invidious.nerdvpn.de",
+          "invidious.nikkosphere.com",
+          "invidious.privacyredirect.com",
+          "invidious.protokolla.fi",
+          "invidious.reallyaweso.me",
+          "invidious.tiekoetter.com",
+          "iv.datura.network",
+          "iv.ggtyler.dev",
+          "iv.melmac.space",
+          "yt.chocolatemoo53.com",
+          "inv-ygg.nadeko.net",
+          "inv.nadeko.ygg"
+        ],
+        "piped_hosts": [
+          "pipedapi.adminforge.de",
+          "pipedapi.kavin.rocks",
+          "pipedapi.r4fo.com",
+          "pipedapi.drgns.space",
+          "pipedapi.astartes.nl",
+          "pipedapi.ducks.party",
+          "pipedapi.leptons.xyz",
+          "pipedapi.nosebs.ru",
+          "pipedapi.orangenet.cc",
+          "pipedapi.reallyaweso.me"
+        ],
+        "results": [
+          {
+            "kind": "invidious",
+            "host": "iv.datura.network",
+            "video": "dQw4w9WgXcQ",
+            "api_http": null,
+            "api_ms": 119,
+            "error": "URLError: <urlopen error [Errno 11001] getaddrinfo failed>"
+          },
+          {
+            "kind": "invidious",
+            "host": "invidious.f5.si",
+            "video": "dQw4w9WgXcQ",
+            "api_http": 530,
+            "api_ms": 156,
+            "error": "HTTP 530: {\"type\":\"https://developers.cloudflare.com/support/troubleshooting/http-status-codes/cloudflare-1xxx-errors/error-1033/\",\"title\":\"Error 1033: Cloudflare Tunnel error\",\"status\":530,\"detail\":\"The host is configured as a Cloudflare Tunnel, but Cloudflare is currently unable to reach it.\",\"instance\":\"a5"
+          },
+          {
+            "kind": "invidious",
+            "host": "invidious.einfachzocken.eu",
+            "video": "dQw4w9WgXcQ",
+            "api_http": null,
+            "api_ms": 174,
+            "error": "URLError: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate (_ssl.c:1082)>"
+          },
+          {
+            "kind": "invidious",
+            "host": "iv.melmac.space",
+            "video": "dQw4w9WgXcQ",
+            "api_http": null,
+            "api_ms": 333,
+            "error": "URLError: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: Hostname mismatch, certificate is not valid for 'iv.melmac.space'. (_ssl.c:1082)>"
+          },
+          {
+            "kind": "invidious",
+            "host": "invidious.dhusch.de",
+            "video": "dQw4w9WgXcQ",
+            "api_http": null,
+            "api_ms": 340,
+            "error": "URLError: <urlopen error [SSL: TLSV1_ALERT_INTERNAL_ERROR] tlsv1 alert internal error (_ssl.c:1082)>"
+          },
+          {
+            "kind": "invidious",
+            "host": "invidious.tiekoetter.com",
+            "video": "dQw4w9WgXcQ",
+            "api_http": 403,
+            "api_ms": 337,
+            "error": "HTTP 403: <html>\r\n<head><title>403 Forbidden</title></head>\r\n<body>\r\n<center><h1>403 Forbidden</h1></center>\r\n<hr><center>Luna-HTTP/S</center>\r\n</body>\r\n</html>\r\n<!-- a padding to disable MSIE and Chrome friendly error page -->\r\n<!-- a padding to disable MSIE and Chrome friendly error page -->\r\n<!-- a padding"
+          },
+          {
+            "kind": "piped",
+            "host": "pipedapi.r4fo.com",
+            "video": "dQw4w9WgXcQ",
+            "api_http": null,
+            "api_ms": 31,
+            "error": "URLError: <urlopen error [Errno 11001] getaddrinfo failed>"
+          },
+          {
+            "kind": "piped",
+            "host": "pipedapi.drgns.space",
+            "video": "dQw4w9WgXcQ",
+            "api_http": null,
+            "api_ms": 44,
+            "error": "URLError: <urlopen error [Errno 11001] getaddrinfo failed>"
+          },
+          {
+            "kind": "invidious",
+            "host": "invidious.reallyaweso.me",
+            "video": "dQw4w9WgXcQ",
+            "api_http": 502,
+            "api_ms": 420,
+            "error": "HTTP 502: "
+          },
+          {
+            "kind": "invidious",
+            "host": "invidious.lunivers.trade",
+            "video": "dQw4w9WgXcQ",
+            "api_http": 503,
+            "api_ms": 428,
+            "error": "HTTP 503: <html><body><h1>503 Service Unavailable</h1>\nNo server is available to handle this request.\n</body></html>\n"
+          },
+          {
+            "kind": "piped",
+            "host": "pipedapi.nosebs.ru",
+            "video": "dQw4w9WgXcQ",
+            "api_http": null,
+            "api_ms": 25,
+            "error": "URLError: <urlopen error [Errno 11001] getaddrinfo failed>"
+          },
+          {
+            "kind": "piped",
+            "host": "pipedapi.kavin.rocks",
+            "video": "dQw4w9WgXcQ",
+            "api_http": 403,
+            "api_ms": 142,
+            "error": "HTTP 403: <!DOCTYPE html>\n<!--[if lt IE 7]> <html class=\"no-js ie6 oldie\" lang=\"en-US\"> <![endif]-->\n<!--[if IE 7]>    <html class=\"no-js ie7 oldie\" lang=\"en-US\"> <![endif]-->\n<!--[if IE 8]>    <html class=\"no-js ie8 oldie\" lang=\"en-US\"> <![endif]-->\n<!--[if gt IE 8]><!--> <html class=\"no-js\" lang=\"en-US\"> <!"
+          },
+          {
+            "kind": "invidious",
+            "host": "invidious.jing.rocks",
+            "video": "dQw4w9WgXcQ",
+            "api_http": null,
+            "api_ms": 482,
+            "error": "URLError: <urlopen error [Errno 11001] getaddrinfo failed>"
+          },
+          {
+            "kind": "invidious",
+            "host": "invidious.protokolla.fi",
+            "video": "dQw4w9WgXcQ",
+            "api_http": null,
+            "api_ms": 552,
+            "error": "JSONDecodeError: Expecting value: line 2 column 1 (char 1)"
+          },
+          {
+            "kind": "invidious",
+            "host": "inv.nadeko.ygg",
+            "video": "dQw4w9WgXcQ",
+            "api_http": null,
+            "api_ms": 461,
+            "error": "URLError: <urlopen error [Errno 11001] getaddrinfo failed>"
+          },
+          {
+            "kind": "piped",
+            "host": "pipedapi.ducks.party",
+            "video": "dQw4w9WgXcQ",
+            "api_http": 200,
+            "api_ms": 294,
+            "title": "Rick Astley - Never Gonna Give You Up (Official Video) (4K Remaster)",
+            "error": "no audioStreams"
+          },
+          {
+            "kind": "invidious",
+            "host": "invidious.adminforge.de",
+            "video": "dQw4w9WgXcQ",
+            "api_http": 404,
+            "api_ms": 715,
+            "error": "HTTP 404: <!DOCTYPE html>\n<html lang=\"de\" id=\"html-root\">\n\n<head>\n  <base href=\"/\">\n  <meta charset=\"UTF-8\" />\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1, viewport-fit=cover\" />\n\n  <title>adminForge – Self-hosted Open Source Services &amp; Linux Admin Tutorials</title>\n  <meta name"
+          },
+          {
+            "kind": "invidious",
+            "host": "invidious.privacyredirect.com",
+            "video": "dQw4w9WgXcQ",
+            "api_http": 404,
+            "api_ms": 717,
+            "error": "HTTP 404: <!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <link rel=\"stylesheet\" href=\"error.css\">\n    <title>Error</title>\n</head>\n<body>\n    <div class=\"message\">\n        <h1>Oops! Something went wrong.</h1>\n  "
+          },
+          {
+            "kind": "piped",
+            "host": "pipedapi.reallyaweso.me",
+            "video": "dQw4w9WgXcQ",
+            "api_http": null,
+            "api_ms": 270,
+            "error": "JSONDecodeError: Expecting value: line 1 column 1 (char 0)"
+          },
+          {
+            "kind": "piped",
+            "host": "pipedapi.leptons.xyz",
+            "video": "dQw4w9WgXcQ",
+            "api_http": 502,
+            "api_ms": 375,
+            "error": "HTTP 502: {\"type\":\"https://developers.cloudflare.com/support/troubleshooting/http-status-codes/cloudflare-5xx-errors/error-502/\",\"title\":\"Error 502: Bad gateway\",\"status\":502,\"detail\":\"The origin web server returned an invalid or incomplete response to Cloudflare. This typically indicates the origin is overlo"
+          },
+          {
+            "kind": "invidious",
+            "host": "invidious.nikkosphere.com",
+            "video": "dQw4w9WgXcQ",
+            "api_http": 451,
+            "api_ms": 801,
+            "error": "HTTP 451: "
+          },
+          {
+            "kind": "piped",
+            "host": "pipedapi.adminforge.de",
+            "video": "dQw4w9WgXcQ",
+            "api_http": 403,
+            "api_ms": 651,
+            "error": "HTTP 403: <!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01//EN\" \"http://www.w3.org/TR/html4/strict.dtd\">\n<html><head>\n<title>403 Forbidden</title>\n</head><body>\n<h1>Forbidden</h1>\n<p>You don't have permission to access this resource.</p>\n</body></html>\n"
+          },
+          {
+            "kind": "invidious",
+            "host": "inv.nadeko.net",
+            "video": "dQw4w9WgXcQ",
+            "api_http": 403,
+            "api_ms": 1096,
+            "error": "HTTP 403: Endpoint disabled"
+          },
+          {
+            "kind": "invidious",
+            "host": "invidious.nerdvpn.de",
+            "video": "dQw4w9WgXcQ",
+            "api_http": 401,
+            "api_ms": 1572,
+            "error": "HTTP 401: <html>\r\n<head><title>401 Authorization Required</title></head>\r\n<body>\r\n<center><h1>401 Authorization Required</h1></center>\r\n<hr><center>nginx</center>\r\n</body>\r\n</html>\r\n<!-- a padding to disable MSIE and Chrome friendly error page -->\r\n<!-- a padding to disable MSIE and Chrome friendly error page"
+          },
+          {
+            "kind": "invidious",
+            "host": "inv.zzls.xyz",
+            "video": "dQw4w9WgXcQ",
+            "api_http": 403,
+            "api_ms": 2062,
+            "error": "HTTP 403: Endpoint disabled"
+          },
+          {
+            "kind": "invidious",
+            "host": "yt.chocolatemoo53.com",
+            "video": "dQw4w9WgXcQ",
+            "api_http": 200,
+            "api_ms": 1135,
+            "title": "Rick Astley - Never Gonna Give You Up (Official Video) (4K Remaster)",
+            "itag": "251",
+            "url_host": "yt.chocolatemoo53.com",
+            "probe": {
+              "url_host": "yt.chocolatemoo53.com",
+              "family": "v4",
+              "ok": true,
+              "status": 307,
+              "bytes": 164,
+              "kbps": 40.5,
+              "tcp_ms": 173,
+              "tls_ms": 518,
+              "first_byte_ms": 1004,
+              "total_ms": 1008,
+              "error": null,
+              "content_range": null,
+              "content_type": "text/html"
+            },
+            "ok": false,
+            "error": "HTTP 307"
+          },
+          {
+            "kind": "invidious",
+            "host": "iv.ggtyler.dev",
+            "video": "dQw4w9WgXcQ",
+            "api_http": null,
+            "api_ms": 5048,
+            "error": "URLError: <urlopen error timed out>"
+          },
+          {
+            "kind": "invidious",
+            "host": "inv-ygg.nadeko.net",
+            "video": "dQw4w9WgXcQ",
+            "api_http": null,
+            "api_ms": 5038,
+            "error": "URLError: <urlopen error timed out>"
+          },
+          {
+            "kind": "invidious",
+            "host": "invidious.materialio.us",
+            "video": "dQw4w9WgXcQ",
+            "api_http": null,
+            "api_ms": 5441,
+            "error": "URLError: <urlopen error _ssl.c:1064: The handshake operation timed out>"
+          },
+          {
+            "kind": "piped",
+            "host": "pipedapi.astartes.nl",
+            "video": "dQw4w9WgXcQ",
+            "api_http": null,
+            "api_ms": 5104,
+            "error": "URLError: <urlopen error timed out>"
+          },
+          {
+            "kind": "piped",
+            "host": "pipedapi.orangenet.cc",
+            "video": "dQw4w9WgXcQ",
+            "api_http": null,
+            "api_ms": 5035,
+            "error": "URLError: <urlopen error timed out>"
+          },
+          {
+            "kind": "invidious",
+            "host": "inv.tux.pizza",
+            "video": "dQw4w9WgXcQ",
+            "api_http": null,
+            "api_ms": 5554,
+            "error": "URLError: <urlopen error timed out>"
+          }
+        ]
+      }
+    },
+    {
+      "id": "phase:B2 (WARP OFF: SNI + медиа-CDN)",
+      "label": "B2 (WARP OFF: SNI + медиа-CDN)",
+      "phase": "B2 (WARP OFF: SNI + медиа-CDN)",
+      "started_at": "2026-10-29T18:56:09+03:00",
+      "finished_at": "2026-10-29T18:56:15+03:00",
+      "warp_requested": "off",
+      "warp_before": "Connected",
+      "warp_state": "Disconnected",
+      "warp_toggle": {
+        "ok": true,
+        "before": "Connected",
+        "after": "Disconnected",
+        "ms": 122,
+        "cmd_rc": 0,
+        "cmd_err": "Success"
+      },
+      "restore": {
+        "before": "Connected",
+        "after": "Connected",
+        "ok": true,
+        "attempts": [
+          {
+            "ok": true,
+            "before": "Disconnected",
+            "after": "Connected",
+            "ms": 1283,
+            "cmd_rc": 0,
+            "cmd_err": "Success"
+          }
+        ],
+        "internet": "104.28.198.244"
+      },
+      "quick": true,
+      "with_ytdlp": false,
+      "videos": [
+        {
+          "id": "dQw4w9WgXcQ",
+          "kind": "control"
+        },
+        {
+          "id": "kJQP7kiw5Fk",
+          "kind": "music"
+        }
+      ],
+      "notes": [
+        "WARP: Connected -> Disconnected (122 ms)"
+      ],
+      "env": {
+        "platform": "nt win32 3.14.7",
+        "python": "3.14.7",
+        "hostname": "DESKTOP-30NVUJ9",
+        "user": "Егор Груздев",
+        "cwd": "C:\\Users\\Егор Груздев\\Documents\\deepseek-harness\\default-workspace\\sonora-1.5.0"
+      },
+      "egress": {
+        "v4": {
+          "ok": true,
+          "ip": "46.138.152.63",
+          "family": "v4",
+          "ms": 312,
+          "error": null
+        },
+        "v6": {
+          "ok": false,
+          "ip": null,
+          "family": "v6",
+          "ms": 3,
+          "error": "gaierror: [Errno 11004] getaddrinfo failed"
+        },
+        "dns_servers": [
+          "192.168.1.254"
+        ]
+      },
+      "endpoints": [
+        {
+          "host": "youtube.com",
+          "path": "/",
+          "v4": {
+            "dns_ms": 6,
+            "ips": [
+              "142.251.20.136",
+              "142.251.20.91",
+              "142.251.20.93",
+              "142.251.20.190"
+            ],
+            "dns_error": null,
+            "tcp_ms": 47,
+            "tls_ms": null,
+            "tls_version": null,
+            "status": null,
+            "ok": false,
+            "error": "ConnectionResetError: [WinError 10054] Удаленный хост принудительно разорвал существующее подключение",
+            "total_ms": 113
+          },
+          "v6": {
+            "dns_ms": 3,
+            "ips": [],
+            "dns_error": "gaierror: [Errno 11004] getaddrinfo failed",
+            "tcp_ms": null,
+            "tls_ms": null,
+            "tls_version": null,
+            "status": null,
+            "ok": false,
+            "error": "gaierror: [Errno 11004] getaddrinfo failed"
+          }
+        },
+        {
+          "host": "www.youtube.com",
+          "path": "/",
+          "v4": {
+            "dns_ms": 2,
+            "ips": [
+              "142.251.150.4",
+              "142.251.151.4",
+              "142.251.152.4",
+              "142.251.153.4"
+            ],
+            "dns_error": null,
+            "tcp_ms": 46,
+            "tls_ms": null,
+            "tls_version": null,
+            "status": null,
+            "ok": false,
+            "error": "ConnectionResetError: [WinError 10054] Удаленный хост принудительно разорвал существующее подключение",
+            "total_ms": 110
+          },
+          "v6": {
+            "dns_ms": 4,
+            "ips": [],
+            "dns_error": "gaierror: [Errno 11004] getaddrinfo failed",
+            "tcp_ms": null,
+            "tls_ms": null,
+            "tls_version": null,
+            "status": null,
+            "ok": false,
+            "error": "gaierror: [Errno 11004] getaddrinfo failed"
+          }
+        },
+        {
+          "host": "music.youtube.com",
+          "path": "/",
+          "v4": {
+            "dns_ms": 1,
+            "ips": [
+              "142.251.156.4",
+              "142.251.157.4",
+              "142.251.151.4",
+              "142.251.150.4"
+            ],
+            "dns_error": null,
+            "tcp_ms": 86,
+            "tls_ms": null,
+            "tls_version": null,
+            "status": null,
+            "ok": false,
+            "error": "ConnectionResetError: [WinError 10054] Удаленный хост принудительно разорвал существующее подключение",
+            "total_ms": 155
+          },
+          "v6": {
+            "dns_ms": 5,
+            "ips": [],
+            "dns_error": "gaierror: [Errno 11004] getaddrinfo failed",
+            "tcp_ms": null,
+            "tls_ms": null,
+            "tls_version": null,
+            "status": null,
+            "ok": false,
+            "error": "gaierror: [Errno 11004] getaddrinfo failed"
+          }
+        },
+        {
+          "host": "music.youtube.com",
+          "path": "/youtubei/v1/player?prettyPrint=false",
+          "v4": {
+            "dns_ms": 0,
+            "ips": [
+              "142.251.156.4",
+              "142.251.157.4",
+              "142.251.151.4",
+              "142.251.150.4"
+            ],
+            "dns_error": null,
+            "tcp_ms": 47,
+            "tls_ms": null,
+            "tls_version": null,
+            "status": null,
+            "ok": false,
+            "error": "ConnectionResetError: [WinError 10054] Удаленный хост принудительно разорвал существующее подключение",
+            "total_ms": 117
+          },
+          "v6": {
+            "dns_ms": 0,
+            "ips": [],
+            "dns_error": "gaierror: [Errno 11004] getaddrinfo failed",
+            "tcp_ms": null,
+            "tls_ms": null,
+            "tls_version": null,
+            "status": null,
+            "ok": false,
+            "error": "gaierror: [Errno 11004] getaddrinfo failed"
+          }
+        },
+        {
+          "host": "youtubei.googleapis.com",
+          "path": "/",
+          "v4": {
+            "dns_ms": 1,
+            "ips": [
+              "172.217.116.4",
+              "172.217.119.4",
+              "172.217.114.4",
+              "172.217.115.4"
+            ],
+            "dns_error": null,
+            "tcp_ms": 47,
+            "tls_ms": 117,
+            "tls_version": "TLSv1.3",
+            "status": 405,
+            "ok": true,
+            "error": null,
+            "total_ms": 363
+          },
+          "v6": {
+            "dns_ms": 5,
+            "ips": [],
+            "dns_error": "gaierror: [Errno 11004] getaddrinfo failed",
+            "tcp_ms": null,
+            "tls_ms": null,
+            "tls_version": null,
+            "status": null,
+            "ok": false,
+            "error": "gaierror: [Errno 11004] getaddrinfo failed"
+          }
+        },
+        {
+          "host": "googlevideo.com",
+          "path": "/",
+          "v4": {
+            "dns_ms": 2,
+            "ips": [
+              "142.251.127.103",
+              "142.251.127.104",
+              "142.251.127.105",
+              "142.251.127.106"
+            ],
+            "dns_error": null,
+            "tcp_ms": 50,
+            "tls_ms": 224,
+            "tls_version": "TLSv1.3",
+            "status": 302,
+            "ok": true,
+            "error": null,
+            "total_ms": 382
+          },
+          "v6": {
+            "dns_ms": 6,
+            "ips": [],
+            "dns_error": "gaierror: [Errno 11004] getaddrinfo failed",
+            "tcp_ms": null,
+            "tls_ms": null,
+            "tls_version": null,
+            "status": null,
+            "ok": false,
+            "error": "gaierror: [Errno 11004] getaddrinfo failed"
+          }
+        },
+        {
+          "host": "i.ytimg.com",
+          "path": "/vi/dQw4w9WgXcQ/default.jpg",
+          "v4": {
+            "dns_ms": 2,
+            "ips": [
+              "142.251.144.6",
+              "142.251.149.6",
+              "142.251.147.6",
+              "192.178.40.6"
+            ],
+            "dns_error": null,
+            "tcp_ms": 48,
+            "tls_ms": 114,
+            "tls_version": "TLSv1.3",
+            "status": 200,
+            "ok": true,
+            "error": null,
+            "total_ms": 263
+          },
+          "v6": {
+            "dns_ms": 5,
+            "ips": [],
+            "dns_error": "gaierror: [Errno 11004] getaddrinfo failed",
+            "tcp_ms": null,
+            "tls_ms": null,
+            "tls_version": null,
+            "status": null,
+            "ok": false,
+            "error": "gaierror: [Errno 11004] getaddrinfo failed"
+          }
+        },
+        {
+          "host": "yt3.ggpht.com",
+          "path": "/",
+          "v4": {
+            "dns_ms": 4,
+            "ips": [
+              "142.251.127.198"
+            ],
+            "dns_error": null,
+            "tcp_ms": 46,
+            "tls_ms": null,
+            "tls_version": null,
+            "status": null,
+            "ok": false,
+            "error": "ConnectionResetError: [WinError 10054] Удаленный хост принудительно разорвал существующее подключение",
+            "total_ms": 115
+          },
+          "v6": {
+            "dns_ms": 7,
+            "ips": [],
+            "dns_error": "gaierror: [Errno 11004] getaddrinfo failed",
+            "tcp_ms": null,
+            "tls_ms": null,
+            "tls_version": null,
+            "status": null,
+            "ok": false,
+            "error": "gaierror: [Errno 11004] getaddrinfo failed"
+          }
+        }
+      ],
+      "sni_test": {
+        "youtube_com": [
+          {
+            "host": "youtube.com",
+            "ip": "142.251.20.136",
+            "sni": "youtube.com",
+            "ok": false,
+            "ms": 61,
+            "tls_version": null,
+            "error": "ConnectionResetError: [WinError 10054] Удаленный хост принудительно разорвал существующее подключение"
+          },
+          {
+            "host": "youtube.com",
+            "ip": "142.251.20.136",
+            "sni": "example.com",
+            "ok": false,
+            "ms": 115,
+            "tls_version": null,
+            "error": "SSLCertVerificationError: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: Hostname mismatch, certificate is not valid for 'example.com'. (_ssl.c:1082)"
+          },
+          {
+            "host": "youtube.com",
+            "ip": "142.251.20.136",
+            "sni": "google.com",
+            "ok": true,
+            "ms": 128,
+            "tls_version": "TLSv1.3",
+            "error": null
+          }
+        ],
+        "googlevideo_edges": [
+          {
+            "host": "rr3---sn-u125g5-5p.googlevideo.com",
+            "dns_ok": true,
+            "ip": "74.125.4.67",
+            "probes": [
+              {
+                "host": "rr3---sn-u125g5-5p.googlevideo.com",
+                "ip": "74.125.4.67",
+                "sni": "rr3---sn-u125g5-5p.googlevideo.com",
+                "ok": true,
+                "ms": 139,
+                "tls_version": "TLSv1.3",
+                "error": null
+              },
+              {
+                "host": "rr3---sn-u125g5-5p.googlevideo.com",
+                "ip": "74.125.4.67",
+                "sni": "example.com",
+                "ok": false,
+                "ms": 130,
+                "tls_version": null,
+                "error": "SSLCertVerificationError: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: Hostname mismatch, certificate is not valid for 'example.com'. (_ssl.c:1082)"
+              }
+            ]
+          },
+          {
+            "host": "rr5---sn-25ge7nsd.googlevideo.com",
+            "dns_ok": true,
+            "ip": "173.194.183.234",
+            "probes": [
+              {
+                "host": "rr5---sn-25ge7nsd.googlevideo.com",
+                "ip": "173.194.183.234",
+                "sni": "rr5---sn-25ge7nsd.googlevideo.com",
+                "ok": true,
+                "ms": 149,
+                "tls_version": "TLSv1.3",
+                "error": null
+              },
+              {
+                "host": "rr5---sn-25ge7nsd.googlevideo.com",
+                "ip": "173.194.183.234",
+                "sni": "example.com",
+                "ok": false,
+                "ms": 125,
+                "tls_version": null,
+                "error": "SSLCertVerificationError: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: Hostname mismatch, certificate is not valid for 'example.com'. (_ssl.c:1082)"
+              }
+            ]
+          }
+        ]
+      },
+      "innertube": [
+        {
+          "client": "WEB_REMIX",
+          "host": "music.youtube.com",
+          "video": "dQw4w9WgXcQ",
+          "ok": false,
+          "http": null,
+          "ms": 78,
+          "playability": null,
+          "reason": null,
+          "audio_formats": 0,
+          "url": null,
+          "itag": null,
+          "mime": null,
+          "bitrate": null,
+          "content_length": null,
+          "url_host": null,
+          "has_n_param": null,
+          "error": "ConnectionResetError: [WinError 10054] Удаленный хост принудительно разорвал существующее подключение"
+        },
+        {
+          "client": "ANDROID",
+          "host": "www.youtube.com",
+          "video": "dQw4w9WgXcQ",
+          "ok": false,
+          "http": null,
+          "ms": 94,
+          "playability": null,
+          "reason": null,
+          "audio_formats": 0,
+          "url": null,
+          "itag": null,
+          "mime": null,
+          "bitrate": null,
+          "content_length": null,
+          "url_host": null,
+          "has_n_param": null,
+          "error": "ConnectionResetError: [WinError 10054] Удаленный хост принудительно разорвал существующее подключение"
+        },
+        {
+          "client": "TVHTML5_SIMPLY",
+          "host": "www.youtube.com",
+          "video": "dQw4w9WgXcQ",
+          "ok": false,
+          "http": null,
+          "ms": 92,
+          "playability": null,
+          "reason": null,
+          "audio_formats": 0,
+          "url": null,
+          "itag": null,
+          "mime": null,
+          "bitrate": null,
+          "content_length": null,
+          "url_host": null,
+          "has_n_param": null,
+          "error": "ConnectionResetError: [WinError 10054] Удаленный хост принудительно разорвал существующее подключение"
+        },
+        {
+          "client": "TVHTML5",
+          "host": "www.youtube.com",
+          "video": "dQw4w9WgXcQ",
+          "ok": false,
+          "http": null,
+          "ms": 83,
+          "playability": null,
+          "reason": null,
+          "audio_formats": 0,
+          "url": null,
+          "itag": null,
+          "mime": null,
+          "bitrate": null,
+          "content_length": null,
+          "url_host": null,
+          "has_n_param": null,
+          "error": "ConnectionResetError: [WinError 10054] Удаленный хост принудительно разорвал существующее подключение"
+        },
+        {
+          "client": "WEB_REMIX",
+          "host": "music.youtube.com",
+          "video": "kJQP7kiw5Fk",
+          "ok": false,
+          "http": null,
+          "ms": 92,
+          "playability": null,
+          "reason": null,
+          "audio_formats": 0,
+          "url": null,
+          "itag": null,
+          "mime": null,
+          "bitrate": null,
+          "content_length": null,
+          "url_host": null,
+          "has_n_param": null,
+          "error": "ConnectionResetError: [WinError 10054] Удаленный хост принудительно разорвал существующее подключение"
+        },
+        {
+          "client": "ANDROID",
+          "host": "www.youtube.com",
+          "video": "kJQP7kiw5Fk",
+          "ok": false,
+          "http": null,
+          "ms": 91,
+          "playability": null,
+          "reason": null,
+          "audio_formats": 0,
+          "url": null,
+          "itag": null,
+          "mime": null,
+          "bitrate": null,
+          "content_length": null,
+          "url_host": null,
+          "has_n_param": null,
+          "error": "ConnectionResetError: [WinError 10054] Удаленный хост принудительно разорвал существующее подключение"
+        },
+        {
+          "client": "TVHTML5_SIMPLY",
+          "host": "www.youtube.com",
+          "video": "kJQP7kiw5Fk",
+          "ok": false,
+          "http": null,
+          "ms": 70,
+          "playability": null,
+          "reason": null,
+          "audio_formats": 0,
+          "url": null,
+          "itag": null,
+          "mime": null,
+          "bitrate": null,
+          "content_length": null,
+          "url_host": null,
+          "has_n_param": null,
+          "error": "ConnectionResetError: [WinError 10054] Удаленный хост принудительно разорвал существующее подключение"
+        },
+        {
+          "client": "TVHTML5",
+          "host": "www.youtube.com",
+          "video": "kJQP7kiw5Fk",
+          "ok": false,
+          "http": null,
+          "ms": 72,
+          "playability": null,
+          "reason": null,
+          "audio_formats": 0,
+          "url": null,
+          "itag": null,
+          "mime": null,
+          "bitrate": null,
+          "content_length": null,
+          "url_host": null,
+          "has_n_param": null,
+          "error": "ConnectionResetError: [WinError 10054] Удаленный хост принудительно разорвал существующее подключение"
+        }
+      ],
+      "media": [],
+      "googlevideo": [
+        {
+          "host": "rr3---sn-u125g5-5p.googlevideo.com",
+          "layers": {
+            "dns_v4": {
+              "ok": true,
+              "ms": 0,
+              "ips": [
+                "74.125.4.67"
+              ],
+              "error": null
+            },
+            "dns_v6": {
+              "ok": false,
+              "ms": 3,
+              "ips": [],
+              "error": "gaierror: [Errno 11004] getaddrinfo failed"
+            },
+            "tcp_v4": {
+              "ok": true,
+              "ms": 58,
+              "error": null
+            },
+            "tls_v4": {
+              "ok": true,
+              "sni": "rr3---sn-u125g5-5p.googlevideo.com",
+              "version": "TLSv1.3",
+              "ms": 127,
+              "error": null
+            },
+            "http_plain_v4": {
+              "ok": true,
+              "status": 404,
+              "tcp_ms": 59,
+              "tls_ms": 151,
+              "error": null
+            },
+            "media_v4": {
+              "ok": false,
+              "error": "нет подписанного URL — байты не проверить"
+            },
+            "media_v6": {
+              "ok": false,
+              "error": "нет подписанного URL — байты не проверить"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

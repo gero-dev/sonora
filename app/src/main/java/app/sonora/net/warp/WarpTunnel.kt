@@ -242,6 +242,44 @@ class WarpTunnel(
         importConfigInternal(uri)
 
     /**
+     * Импорт конфига из текста: так Sonora ставит свежий WARP-профиль,
+     * полученный автоматической регистрацией (без ручного файла).
+     */
+    suspend fun importConfigText(
+        text: String,
+        name: String,
+    ): Result<WarpConfigSummary> = withContext(Dispatchers.IO) {
+        runCatching {
+            val config = WarpConfig.parse(text)
+            val entry = store.add(config, name)
+            invalidateSummary()
+            val current = WarpTunnelState.status.value
+            if (current.state == WarpState.CONNECTED ||
+                current.state == WarpState.CONNECTING ||
+                current.state == WarpState.DISCONNECTING
+            ) {
+                WarpTunnelState.update { it.copy(autoRotate = preferences.autoRotate) }
+            } else {
+                WarpTunnelState.set(
+                    WarpStatus(
+                        state = WarpState.DISCONNECTED,
+                        endpoint = entry.endpoint,
+                        autoRotate = preferences.autoRotate,
+                    ),
+                )
+            }
+            store.summary() ?: config.toSummary(entry.importedAtMs)
+        }
+    }
+
+    /** Удалить конфиги с именем, начинающимся с [prefix] (авторегистрация). */
+    fun removeConfigsByNamePrefix(prefix: String) {
+        store.entries()
+            .filter { it.name.startsWith(prefix) }
+            .forEach { removeConfig(it.id) }
+    }
+
+    /**
      * Пакетный импорт (SAF `OpenMultipleDocuments`). Возвращает по одному
      * `Result` на каждый URI в исходном порядке; последний успешный становится
      * выбранным.

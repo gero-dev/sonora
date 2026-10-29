@@ -36,6 +36,19 @@ data class ProbeResult(
 }
 
 /**
+ * Похож ли Content-Type на медиа-поток. Нужен, чтобы зеркало, отдавшее
+ * 206/200 с HTML-ошибкой, не считалось рабочим.
+ */
+fun String?.isAudioContentType(): Boolean {
+    val value = this?.lowercase() ?: return true
+    return value.startsWith("audio/") ||
+        value.startsWith("video/") ||
+        value.contains("octet-stream") ||
+        value.contains("mpegurl") ||
+        value.contains("dash")
+}
+
+/**
  * Проверка прямых медиа-ссылок маленьким Range-запросом.
  *
  * Проверяем именно тело, а не HEAD: часть CDN отвечает на HEAD 200, а на GET

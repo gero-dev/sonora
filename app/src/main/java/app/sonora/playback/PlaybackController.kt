@@ -67,12 +67,23 @@ class PlaybackController(context: Context) {
     private val _state = MutableStateFlow(PlayerUiState())
     val state: StateFlow<PlayerUiState> = _state.asStateFlow()
 
+    /**
+     * Ошибка источника (403/сеть/протухшая ссылка). MainViewModel по этому
+     * сигналу запускает автопилот и переоткрывает трек через другой способ.
+     */
+    var onStreamError: ((Throwable?) -> Unit)? = null
+
     private val playerListener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) {
             refresh()
         }
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            refresh()
+        }
+
+        override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+            onStreamError?.invoke(error)
             refresh()
         }
     }

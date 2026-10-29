@@ -3,6 +3,65 @@
 Все заметные изменения проекта. Формат — [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/),
 версии — [Semantic Versioning](https://semver.org/lang/ru/).
 
+## [1.7.0] - 2026-10-29
+
+### Автопилот стриминга: сам находит рабочий способ
+
+- **Проверка всех способов** (`data/streaming/StreamingAutoPilot`): прямой
+  InnerTube, yt-dlp, медиашлюз и собственный WARP. Автопилот сам определяет,
+  что работает на текущей сети, и выбирает порядок транспортов.
+- **Быстрый признак DPI-блокировки**: если TLS до `music.youtube.com` рвётся
+  (на реальной сети пользователя — RST по SNI), прямой путь и публичные зеркала
+  заведомо мертвы (замеры: yt-dlp 0/13, зеркала 0/32) — автопилот сразу идёт в
+  WARP, не тратя минуту на обречённые попытки.
+- **Автопереключение при ошибке**: `PlaybackController` сообщает об ошибке
+  источника, автопилот сбрасывает кэши ссылок, поднимает другой транспорт и
+  переоткрывает текущий трек с той же позиции (до 2 попыток на трек).
+- **Периодическая перепроверка**: при старте, при смене сети (NetworkCallback),
+  при ошибке и раз в 10 минут (с кэшем результата на 30 минут).
+- **Настройки**: «Поток и сеть → Автопилот» — автопилот, WARP-автопилот,
+  авто-регистрация WARP, автопереключение потока, «Проверить все способы»
+  (покомпонентный отчёт), «Перерегистрировать WARP», разрешение VPN.
+
+### Собственный быстрый WARP-способ
+
+- **Автоматическая регистрация свежего WARP-профиля** (`WarpAutoRegistrar`):
+  Curve25519-ключ генерируется на устройстве, профиль через API Cloudflare
+  импортируется как обычный `.conf`. Если API недоступен — используется
+  встроенный профиль.
+- **Запоминание рабочего конфига**: после первого handshake автопилот
+  сохраняет `warpLastGoodConfigId` и выбирает его первым, а также предпочитает
+  зеркальный endpoint вместо `engage.cloudflareclient.com:2408` (в РФ не
+  отвечает). На замерах подключение сократилось с 24–28 с до **1–2 с**.
+- **Проверка именно звука через WARP**: после handshake выполняется
+  Range-запрос к медиа; если «голый» InnerTube упирается в бот-гейт, идёт
+  yt-dlp с рабочими клиентами (`default,tv_simply` → `web_safari` → …).
+- **Подтверждено на реальной сети РФ без VPN/WARP на ПК**: приложение само
+  поднимает WARP-туннель (только для своего трафика) и воспроизводит трек —
+  `PlaybackState.PLAYING`, звук через yt-dlp.
+
+### Автоматизация проверки стриминга на ПК
+
+- `scripts/dev/streaming-audit.py` — матрица проверок: DNS/TCP/TLS/HTTP по
+  хостам YouTube (IPv4/IPv6), SNI-DPI-эксперимент, InnerTube (4 клиента),
+  Range-запросы медиа, yt-dlp (10 вариантов с `--force-ipv4/6`), Invidious/Piped,
+  переключение WARP через `warp-cli` с восстановлением в `finally`.
+- `scripts/dev/run-streaming-audit.ps1` — обёртка по фазам (WARP on/off).
+- Результаты и разбор: `docs/PC-STREAMING-AUDIT.md`, JSON в `docs/ci/`.
+- Вывод аудита: без WARP YouTube полностью блокируется DPI; с WARP yt-dlp
+  отдаёт 10/13 вариантов со скоростью 643–2983 КиБ/с.
+
+### Технически
+
+- **Версия 1.7.0**, versionCode **29**.
+- `data/streaming/TransportModels.kt`, `data/streaming/StreamingAutoPilot.kt`,
+  `net/warp/WarpAutoRegistrar.kt`, `WarpTunnel.importConfigText()` /
+  `removeConfigsByNamePrefix()`, `PlaybackController.onStreamError`.
+- Настройки: `autoTransport`, `autoWarpFallback`, `autoWarpRegister`,
+  `autoFailover`, `warpAutoConfigAtMs`, `warpLastGoodConfigId`.
+- Документация: обновлён [docs/STREAMING-RF.md](docs/STREAMING-RF.md) (раздел
+  «Автопилот»), добавлен [docs/PC-STREAMING-AUDIT.md](docs/PC-STREAMING-AUDIT.md).
+
 ## [1.6.0] - 2026-10-29
 
 ### Стриминг в РФ без VPN и WARP
