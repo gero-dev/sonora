@@ -61,6 +61,20 @@ enum class AudioQuality(
     ),
 }
 
+/**
+ * Откуда брать прямой аудио-поток YouTube.
+ *
+ * AUTO — сначала InnerTube/InnerTubeX, при ошибке yt-dlp.
+ * YTDLP — всегда yt-dlp: медленнее, но умеет видео, которые встроенный
+ * резолвер не открывает (возраст, регион, SABR-only).
+ */
+@Serializable
+enum class StreamSource(val label: String, val hint: String) {
+    AUTO("Авто", "InnerTube, при ошибке — yt-dlp"),
+    YTDLP("yt-dlp", "Всегда yt-dlp: медленнее, но обходит ограничения InnerTube"),
+    INNERTUBE("InnerTube", "Быстрый встроенный резолвер, без Python"),
+}
+
 /** Тонкая настройка «Моей волны»: что и как подбирается в рекомендации. */
 @Serializable
 data class WaveSettings(
@@ -139,6 +153,12 @@ data class AppSettings(
      * качество — «Авто»: Wi-Fi получает высокое, сотовая — это значение.
      */
     val mobileAudioQuality: AudioQuality = AudioQuality.NORMAL,
+    /** Основной источник потока YouTube. */
+    val streamSource: StreamSource = StreamSource.AUTO,
+    /** HTTP/SOCKS-прокси только для yt-dlp; пусто — напрямую. */
+    val ytDlpProxy: String = "",
+    /** Считать аудио-фичи (BPM, energy) для играющего трека через ReccoBeats. */
+    val audioTelemetry: Boolean = true,
 
     // Воспроизведение: онлайн-стриминг можно выключить, как «офлайн-режим» в Spotify.
     val playbackMode: PlaybackMode = PlaybackMode.STREAMING,

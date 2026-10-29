@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -29,6 +30,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
@@ -46,7 +48,9 @@ import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.PlayCircle
+import androidx.compose.material.icons.rounded.PlaylistAdd
 import androidx.compose.material.icons.rounded.PlaylistPlay
+import androidx.compose.material.icons.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.Sort
@@ -144,6 +148,9 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
     var actionTrack by remember { mutableStateOf<Track?>(null) }
     var playlistForNewTrack by remember { mutableStateOf<Track?>(null) }
     var playlistMenu by remember { mutableStateOf<Playlist?>(null) }
+    var albumMenu by remember { mutableStateOf<app.sonora.core.model.Album?>(null) }
+    var artistMenu by remember { mutableStateOf<app.sonora.core.model.Artist?>(null) }
+    var playlistPickerIds by remember { mutableStateOf<List<String>?>(null) }
     var renameTarget by remember { mutableStateOf<Playlist?>(null) }
     var deleteTarget by remember { mutableStateOf<Playlist?>(null) }
 
@@ -239,8 +246,20 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
                     onFavorite = { vm.toggleFavorite(it.id) },
                     bottomPadding = bottomPadding,
                 )
-                1 -> AlbumsTab(albums = albums, navigate = navigate, bottomPadding = bottomPadding)
-                2 -> ArtistsTab(artists = artists, navigate = navigate, bottomPadding = bottomPadding)
+                1 -> AlbumsTab(
+                    albums = albums,
+                    navigate = navigate,
+                    bottomPadding = bottomPadding,
+                    onPlay = { vm.playQueue(vm.tracksByIds(it.trackIds)) },
+                    onLongClick = { albumMenu = it },
+                )
+                2 -> ArtistsTab(
+                    artists = artists,
+                    navigate = navigate,
+                    bottomPadding = bottomPadding,
+                    onPlay = { vm.playQueue(vm.tracksByIds(it.trackIds)) },
+                    onLongClick = { artistMenu = it },
+                )
                 3 -> PlaylistsTab(
                     playlists = playlists,
                     navigate = navigate,
@@ -372,6 +391,63 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
                     }
                 } else {
                     null
+                },
+            )
+        }
+
+        albumMenu?.let { album ->
+            LibraryItemSheet(
+                title = album.name,
+                subtitle = listOfNotNull(album.artist, album.year?.toString())
+                    .joinToString(" · "),
+                onDismiss = { albumMenu = null },
+                onPlay = {
+                    albumMenu = null
+                    vm.playQueue(vm.tracksByIds(album.trackIds))
+                },
+                onPlayNext = {
+                    albumMenu = null
+                    vm.playTracksNext(vm.tracksByIds(album.trackIds))
+                },
+                onAddToPlaylist = {
+                    albumMenu = null
+                    playlistPickerIds = album.trackIds
+                },
+                onDownload = {
+                    albumMenu = null
+                    vm.downloadTracks(vm.tracksByIds(album.trackIds))
+                },
+            )
+        }
+
+        artistMenu?.let { artist ->
+            LibraryItemSheet(
+                title = artist.name,
+                subtitle = "Исполнитель · ${artist.trackIds.size} трек(ов)",
+                onDismiss = { artistMenu = null },
+                onPlay = {
+                    artistMenu = null
+                    vm.playQueue(vm.tracksByIds(artist.trackIds))
+                },
+                onPlayNext = {
+                    artistMenu = null
+                    vm.playTracksNext(vm.tracksByIds(artist.trackIds))
+                },
+                onAddToPlaylist = {
+                    artistMenu = null
+                    playlistPickerIds = artist.trackIds
+                },
+                onDownload = null,
+            )
+        }
+
+        playlistPickerIds?.let { ids ->
+            PlaylistPickerDialog(
+                playlists = playlists.filter { it.editable },
+                onDismiss = { playlistPickerIds = null },
+                onPick = { target ->
+                    playlistPickerIds = null
+                    vm.addToPlaylist(target.id, ids)
                 },
             )
         }
@@ -609,8 +685,15 @@ private fun TracksTab(
 }
 
 /** Вкладка «Альбомы»: сетка обложек. */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun AlbumsTab(albums: List<Album>, navigate: (String) -> Unit, bottomPadding: Dp) {
+private fun AlbumsTab(
+    albums: List<Album>,
+    navigate: (String) -> Unit,
+    bottomPadding: Dp,
+    onPlay: (Album) -> Unit,
+    onLongClick: (Album) -> Unit,
+) {
     if (albums.isEmpty()) {
         EmptyState(
             icon = Icons.Rounded.Album,
@@ -636,16 +719,39 @@ private fun AlbumsTab(albums: List<Album>, navigate: (String) -> Unit, bottomPad
             Column(
                 Modifier
                     .clip(RoundedCornerShape(18.dp))
-                    .clickable { navigate(Routes.album(album.name, album.artist)) }
+                    .combinedClickable(
+                        onClick = { navigate(Routes.album(album.name, album.artist)) },
+                        onLongClick = { onLongClick(album) },
+                    )
                     .padding(4.dp),
             ) {
-                CoverArtBox(
-                    url = album.artworkUrl ?: album.artworkUri,
-                    cornerRadius = 14.dp,
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .aspectRatio(1f),
-                )
+                ) {
+                    CoverArtBox(
+                        url = album.artworkUrl ?: album.artworkUri,
+                        cornerRadius = 14.dp,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                    // Play поверх обложки — как в Spotify.
+                    IconButton(
+                        onClick = { onPlay(album) },
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(6.dp)
+                            .size(38.dp)
+                            .background(MaterialTheme.colorScheme.primary, CircleShape),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.PlayArrow,
+                            contentDescription = "Играть альбом",
+                            tint = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier.size(22.dp),
+                        )
+                    }
+                }
                 Spacer(Modifier.height(8.dp))
                 Text(
                     text = album.name,
@@ -655,7 +761,8 @@ private fun AlbumsTab(albums: List<Album>, navigate: (String) -> Unit, bottomPad
                     modifier = Modifier.padding(horizontal = 2.dp),
                 )
                 Text(
-                    text = album.artist,
+                    text = listOfNotNull(album.artist, album.year?.toString())
+                        .joinToString(" · "),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
@@ -668,9 +775,16 @@ private fun AlbumsTab(albums: List<Album>, navigate: (String) -> Unit, bottomPad
     }
 }
 
-/** Вкладка «Исполнители»: круглые аватары. */
+/** Вкладка «Исполнители»: круглые аватары, play и меню действий. */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ArtistsTab(artists: List<Artist>, navigate: (String) -> Unit, bottomPadding: Dp) {
+private fun ArtistsTab(
+    artists: List<Artist>,
+    navigate: (String) -> Unit,
+    bottomPadding: Dp,
+    onPlay: (Artist) -> Unit,
+    onLongClick: (Artist) -> Unit,
+) {
     if (artists.isEmpty()) {
         EmptyState(
             icon = Icons.Rounded.Person,
@@ -695,7 +809,10 @@ private fun ArtistsTab(artists: List<Artist>, navigate: (String) -> Unit, bottom
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(16.dp))
-                    .clickable { navigate(Routes.artist(artist.name)) }
+                    .combinedClickable(
+                        onClick = { navigate(Routes.artist(artist.name)) },
+                        onLongClick = { onLongClick(artist) },
+                    )
                     .padding(horizontal = 6.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -716,6 +833,13 @@ private fun ArtistsTab(artists: List<Artist>, navigate: (String) -> Unit, bottom
                         text = "${artist.trackIds.size} трек(ов)",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                IconButton(onClick = { onPlay(artist) }) {
+                    Icon(
+                        imageVector = Icons.Rounded.PlayCircle,
+                        contentDescription = "Играть исполнителя",
+                        tint = MaterialTheme.colorScheme.primary,
                     )
                 }
                 Icon(
@@ -1233,6 +1357,105 @@ private fun RenamePlaylistDialog(
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("Отмена") }
+        },
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+    )
+}
+
+/** Действия над альбомом или исполнителем: играть, следующими, в плейлист. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun LibraryItemSheet(
+    title: String,
+    subtitle: String?,
+    onDismiss: () -> Unit,
+    onPlay: () -> Unit,
+    onPlayNext: () -> Unit,
+    onAddToPlaylist: () -> Unit,
+    onDownload: (() -> Unit)?,
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(bottom = 24.dp),
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleLarge,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+            )
+            if (!subtitle.isNullOrBlank()) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp),
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            PlaylistSheetAction(Icons.Rounded.PlayArrow, "Играть", onPlay)
+            PlaylistSheetAction(Icons.Rounded.QueueMusic, "Играть следующими", onPlayNext)
+            PlaylistSheetAction(Icons.Rounded.PlaylistAdd, "Добавить в плейлист", onAddToPlaylist)
+            if (onDownload != null) {
+                PlaylistSheetAction(Icons.Rounded.Download, "Скачать", onDownload)
+            }
+        }
+    }
+}
+
+/** Выбор плейлиста для добавления набора треков. */
+@Composable
+private fun PlaylistPickerDialog(
+    playlists: List<Playlist>,
+    onDismiss: () -> Unit,
+    onPick: (Playlist) -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Добавить в плейлист") },
+        text = {
+            if (playlists.isEmpty()) {
+                Text(
+                    text = "Своих плейлистов пока нет — создайте его в разделе «Плейлисты».",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            } else {
+                LazyColumn(modifier = Modifier.heightIn(max = 320.dp)) {
+                    items(playlists, key = { it.id }) { playlist ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onPick(playlist) }
+                                .padding(vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.PlaylistAdd,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Column {
+                                Text(playlist.name, style = MaterialTheme.typography.titleMedium)
+                                Text(
+                                    text = " трек(ов)",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Закрыть") }
         },
         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
     )

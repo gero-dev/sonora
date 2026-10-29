@@ -2,6 +2,7 @@ package app.sonora.data.remote.ytdlp
 
 import android.content.Context
 import android.util.Log
+import com.yausername.ffmpeg.FFmpeg
 import com.yausername.youtubedl_android.YoutubeDL
 import com.yausername.youtubedl_android.YoutubeDLRequest
 import kotlinx.coroutines.Dispatchers
@@ -20,7 +21,10 @@ import kotlinx.serialization.json.Json
  *
  * Все вызовы — в IO-диспетчере: Python-рантайм тяжёлый и блокирующий.
  */
-class YtDlpResolver(private val context: Context) {
+class YtDlpResolver(
+    private val context: Context,
+    private val settings: app.sonora.core.settings.SettingsStore,
+) {
 
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
     private val initMutex = Mutex()
@@ -39,6 +43,9 @@ class YtDlpResolver(private val context: Context) {
                 val version = runCatching { YoutubeDL.getInstance().version(context) }.getOrNull()
                 Log.i("YtDlp", "ready, version=${version ?: "unknown"}")
             }
+            // ffmpeg нужен только для нарезки фрагмента под ReccoBeats.
+            runCatching { FFmpeg.getInstance().init(context) }
+                .onFailure { Log.w("YtDlp", "ffmpeg init failed: ${it.message}") }
         }
         initialized = true
     }
@@ -53,6 +60,9 @@ class YtDlpResolver(private val context: Context) {
                 addOption("--no-warnings")
                 addOption("--no-playlist")
                 addOption("--socket-timeout", "10")
+                settings.current.ytDlpProxy.trim().takeIf { it.isNotBlank() }?.let {
+                    addOption("--proxy", it)
+                }
             }
             val response = withTimeoutOrNull(SEARCH_TIMEOUT_MS) {
                 runCatching { YoutubeDL.getInstance().execute(request) }.getOrNull()
@@ -90,6 +100,9 @@ class YtDlpResolver(private val context: Context) {
             addOption("--no-warnings")
             addOption("--no-progress")
             addOption("--socket-timeout", "10")
+            settings.current.ytDlpProxy.trim().takeIf { it.isNotBlank() }?.let {
+                addOption("--proxy", it)
+            }
         }
         val response = withTimeoutOrNull(STREAM_TIMEOUT_MS) {
             runCatching { YoutubeDL.getInstance().execute(request) }
@@ -121,6 +134,48 @@ class YtDlpResolver(private val context: Context) {
         }
     }
 
+    /**
+     * 30-секундный фрагмент в MP3 для ReccoBeats. Требует ffmpeg:
+     * `--download-sections` режет по ключевым кадрам, `-x` конвертирует.
+     */
+    suspend fun downloadSnippet(idOrUrl: String, seconds: Int = 30): java.io.File? =
+        withContext(Dispatchers.IO) {
+            ensureInit()
+            val dir = java.io.File(context.cacheDir, "recco").apply { mkdirs() }
+            dir.listFiles()?.forEach { it.delete() }
+            val template = java.io.File(dir, "snip-%(id)s.%(ext)s").absolutePath
+            val request = YoutubeDLRequest(watchUrl(idOrUrl)).apply {
+                addOption("-f", "bestaudio")
+                // Нарезка идёт постпроцессором ffmpeg: --download-sections
+                // заставляет ffmpeg качать URL напрямую, а googlevideo отдаёт
+                // ему 403. Здесь скачивает сам yt-dlp (со всеми заголовками),
+                // а ffmpeg только режет локальный файл.
+                addOption("-x")
+                addOption("--audio-format", "mp3")
+                addOption("--audio-quality", "96K")
+                addOption("--postprocessor-args", "ExtractAudio+ffmpeg:-t $seconds -ac 1 -ar 44100")
+                addOption("-o", template)
+                addOption("--no-playlist")
+                addOption("--no-warnings")
+                addOption("--no-progress")
+                addOption("--max-filesize", "20M")
+            }
+            val response = withTimeoutOrNull(SNIPPET_TIMEOUT_MS) {
+                runCatching { YoutubeDL.getInstance().execute(request) }
+                    .onFailure { Log.w("YtDlp", "snippet failed: ${it.message}") }
+                    .getOrNull()
+            } ?: run {
+                Log.w("YtDlp", "snippet timeout")
+                return@withContext null
+            }
+            if (response.exitCode != 0) {
+                Log.w("YtDlp", "snippet exit=${response.exitCode} ${response.err.takeLast(200)}")
+            }
+            dir.listFiles()
+                ?.filter { it.name.endsWith(".mp3") && it.length() in 1..MAX_SNIPPET_BYTES }
+                ?.maxByOrNull { it.lastModified() }
+        }
+
     private fun mimeOf(ext: String?): String = when (ext?.lowercase()) {
         "webm", "opus" -> "audio/webm"
         "mp3" -> "audio/mpeg"
@@ -136,5 +191,8 @@ class YtDlpResolver(private val context: Context) {
         /** yt-dlp может «залипнуть» на извлечении — ограничиваем ожидание. */
         const val SEARCH_TIMEOUT_MS = 20_000L
         const val STREAM_TIMEOUT_MS = 30_000L
+        const val SNIPPET_TIMEOUT_MS = 90_000L
+        /** Лимит ReccoBeats — 5 МБ; держим запас. */
+        const val MAX_SNIPPET_BYTES = 5L * 1024 * 1024
     }
 }

@@ -36,13 +36,23 @@ class AppGraph private constructor(context: Context) {
     /** Необязательный per-app WireGuard-туннель (Cloudflare WARP) для трафика приложения. */
     val warp = app.sonora.net.warp.WarpTunnel(appContext, secure)
 
+    /** yt-dlp: поиск/поток/фрагменты; настройки читает на каждый вызов. */
+    val ytDlp = app.sonora.data.remote.ytdlp.YtDlpResolver(appContext, settings)
+
+    /** ReccoBeats: аудио-фичи по 30-секундному фрагменту. */
+    val audioFeatures = app.sonora.data.telemetry.AudioFeatureRepository(
+        appContext,
+        ytDlp,
+        settings,
+    )
+
     init {
         // Движок потоков InnerTubeX требует Context для кэша player-config.
         app.sonora.data.remote.youtube.innertube.InnerTubeXEngine.initialize(appContext)
         // Восстанавливаем cookie/visitorData Google-аккаунта после перезапуска.
         app.sonora.data.remote.youtube.innertube.InnerTubeSession.restore(secure)
-        // yt-dlp — резервный источник потока для ограниченных видео.
-        app.sonora.data.remote.ytdlp.YtDlpBridge.init(appContext)
+        // yt-dlp — источник потока и резерв для ограниченных видео.
+        app.sonora.data.remote.ytdlp.YtDlpBridge.init(ytDlp, settings)
     }
 
     val scanner = MediaStoreScanner(appContext)

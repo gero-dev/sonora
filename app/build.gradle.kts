@@ -14,8 +14,8 @@ android {
         applicationId = "app.sonora"
         minSdk = 26
         targetSdk = 34
-        versionCode = 26
-        versionName = "1.4.0"
+        versionCode = 27
+        versionName = "1.5.0"
         vectorDrawables.useSupportLibrary = true
     }
 
@@ -88,9 +88,13 @@ dependencies {
 
     // InnerTubeX — движок потоков из Metrolist: cipher, SABR, PoToken-контракты.
     implementation("com.github.MetrolistGroup.innertubex:innertubex:v0.11.0")
-    // yt-dlp: резервный путь для видео, где InnerTube не отдал аудио
-    // (возрастные/региональные ограничения, SABR-only).
+    // yt-dlp: источник потока и поиск в обход ограничений InnerTube
+    // (возрастные/региональные видео, SABR-only).
     implementation("io.github.junkfood02.youtubedl-android:library:0.18.1")
+    // ffmpeg нужен для нарезки 30-секундного фрагмента под ReccoBeats.
+    implementation("io.github.junkfood02.youtubedl-android:ffmpeg:0.18.1")
+    // ffmpeg: нарезка 30-секундного фрагмента и конвертация в MP3 для ReccoBeats.
+    implementation("io.github.junkfood02.youtubedl-android:ffmpeg:0.18.1")
     implementation("io.ktor:ktor-client-core:3.6.0")
     implementation("io.ktor:ktor-client-okhttp:3.6.0")
     implementation("io.ktor:ktor-client-content-negotiation:3.6.0")

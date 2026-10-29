@@ -133,6 +133,7 @@ fun PlayerScreen(vm: MainViewModel, onBack: () -> Unit, navigate: (String) -> Un
     val favorites by vm.favorites.collectAsState()
     val saveStates by vm.saveStates.collectAsState()
     val settings by vm.settings.collectAsState()
+    val audioFeatures by vm.audioFeatures.collectAsState()
 
     var menuExpanded by remember { mutableStateOf(false) }
     var sourceMenuExpanded by remember { mutableStateOf(false) }
@@ -467,8 +468,18 @@ fun PlayerScreen(vm: MainViewModel, onBack: () -> Unit, navigate: (String) -> Un
                             )
                         }
                     }
-                    if (saveState?.isActive == true) {
-                        Spacer(Modifier.height(10.dp))
+                    audioFeatures[current.id]?.let { feature ->
+                        val label = feature.shortLabel()
+                        if (label.isNotBlank()) {
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                text = label,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = Color.White.copy(alpha = 0.65f),
+                            )
+                        }
+                    }
+                    if (saveState?.isActive == true) {                        Spacer(Modifier.height(10.dp))
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,

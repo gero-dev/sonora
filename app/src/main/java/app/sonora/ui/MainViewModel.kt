@@ -19,6 +19,7 @@ import app.sonora.core.settings.Accent
 import app.sonora.core.settings.AppSettings
 import app.sonora.core.settings.AudioQuality
 import app.sonora.core.settings.PlaybackMode
+import app.sonora.core.settings.StreamSource
 import app.sonora.core.settings.ThemeMode
 import app.sonora.core.settings.WaveSettings
 import app.sonora.core.util.AppLinks
@@ -26,6 +27,7 @@ import app.sonora.data.download.SaveStatus
 import app.sonora.data.download.TrackSaveState
 import app.sonora.data.metadata.ArtistNames
 import app.sonora.data.metadata.MetadataFileEntry
+import app.sonora.data.telemetry.AudioFeature
 import app.sonora.data.metadata.MetadataFiles
 import app.sonora.data.library.LibraryRepository
 import app.sonora.data.remote.youtube.innertube.StreamInfo
@@ -305,6 +307,7 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
         observeCurrentYouTubeTrack()
         observePlaybackHistory()
         observeRadio()
+        observeAudioFeatures()
         observeWarpKeepAlive()
         // Прогреваем Python/yt-dlp в фоне: первый реальный вызов будет быстрее,
         // а старт приложения не ждёт тяжёлый рантайм.
@@ -721,6 +724,17 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
 
     fun favoriteTracks(): List<Track> = graph.library.favoriteTracks()
 
+    /** Треки по id в исходном порядке — для альбомов и исполнителей в медиатеке. */
+    fun tracksByIds(ids: List<String>): List<Track> = graph.library.tracksByIds(ids)
+
+    /** Вставить набор треков сразу после текущего (альбом/исполнитель). */
+    fun playTracksNext(tracks: List<Track>) {
+        val allowed = queueable(tracks)
+        if (allowed.isEmpty()) return
+        graph.playback.playNext(allowed)
+        toast("Следующими: ${allowed.size} трек(ов)")
+    }
+
     fun toggleFavorite(trackId: String) {
         viewModelScope.launch { graph.library.toggleFavorite(trackId) }
     }
@@ -916,8 +930,39 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
             .take(limit)
     }
 
-    // ---------- Воспроизведение ----------
+    // ---------- Аудио-фичи (ReccoBeats) ----------
 
+    private val _audioFeatures = MutableStateFlow<Map<String, AudioFeature>>(emptyMap())
+
+    /** Фичи играющих треков: track.id → BPM/energy/…; пусто, если телеметрия выключена. */
+    val audioFeatures: StateFlow<Map<String, AudioFeature>> = _audioFeatures.asStateFlow()
+
+    fun audioFeature(trackId: String): AudioFeature? = _audioFeatures.value[trackId]
+
+    /**
+     * Считает фичи для каждого нового трека в фоне. Ошибки/таймауты полностью
+     * проглатываются: воспроизведение не зависит от ReccoBeats.
+     */
+    private fun observeAudioFeatures() {
+        viewModelScope.launch {
+            val requested = HashSet<String>()
+            graph.playback.state.collect { state ->
+                val track = state.current ?: return@collect
+                if (!graph.settings.current.audioTelemetry) return@collect
+                if (track.id in requested) return@collect
+                if (_audioFeatures.value.containsKey(track.id)) return@collect
+                requested += track.id
+                launch(Dispatchers.IO) {
+                    val feature = runCatching {
+                        graph.audioFeatures.featuresFor(track)
+                    }.getOrNull() ?: return@launch
+                    _audioFeatures.update { it + (track.id to feature) }
+                }
+            }
+        }
+    }
+
+    // ---------- Воспроизведение ----------
     /**
      * Играет трек, если платформа разрешает; иначе открывает официальное приложение.
      * Для локального трека при включённой автоочереди собирает очередь из похожих
@@ -1354,6 +1399,10 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
                 graph.youtube.invalidateStream(videoId)
                 graph.youtube.downloadStream(videoId)
             },
+            "yt-dlp" to suspend {
+                graph.youtube.ytDlpDownloadStream(videoId)
+                    ?: error("yt-dlp не вернул поток")
+            },
         )
         for ((_, resolve) in plans) {
             val stream = try {
@@ -1599,10 +1648,22 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
                 Result.failure(error)
             }
             if (generation != searchGeneration) return@launch
-            val remote = remoteResult.getOrDefault(emptyList())
+            var remote = remoteResult.getOrDefault(emptyList())
                 .filterNot { it.isVideoContent }
                 .filter { matchesSearchQuery(it, normalized) }
                 .distinctBy { it.id }
+            // InnerTube пуст или упал — пробуем yt-dlp (если он не отключён).
+            if (remote.isEmpty() &&
+                graph.settings.current.streamSource != StreamSource.INNERTUBE
+            ) {
+                val fromYtDlp = runCatching {
+                    graph.ytDlp.search(normalized, limit = 10)
+                }.getOrDefault(emptyList())
+                if (generation != searchGeneration) return@launch
+                remote = fromYtDlp
+                    .map { it.toSonoraTrack() }
+                    .distinctBy { it.id }
+            }
             _search.update {
                 it.copy(
                     local = local,
@@ -2774,6 +2835,61 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
             graph.playback.reloadCurrent()
         }
         toast("Мобильная сеть: ${quality.label}")
+    }
+
+    /** Источник потока: Авто / yt-dlp / только InnerTube. */
+    fun setStreamSource(source: StreamSource) {
+        updateSettings { it.copy(streamSource = source) }
+        toast("Поток: ${source.label}")
+    }
+
+    /** HTTP/SOCKS-прокси только для yt-dlp (пусто — напрямую). */
+    fun setYtDlpProxy(proxy: String) {
+        updateSettings { it.copy(ytDlpProxy = proxy.trim()) }
+        toast(if (proxy.isBlank()) "Прокси yt-dlp выключен" else "Прокси yt-dlp сохранён")
+    }
+
+    /** Считать аудио-фичи ReccoBeats для играющего трека. */
+    fun setAudioTelemetry(enabled: Boolean) {
+        updateSettings { it.copy(audioTelemetry = enabled) }
+    }
+
+    private val _streamCheck = MutableStateFlow<String?>(null)
+    val streamCheck: StateFlow<String?> = _streamCheck.asStateFlow()
+
+    /**
+     * Диагностика потока: резолвит URL текущего трека (или тестового видео)
+     * и делает реальный Range-запрос к googlevideo. Именно он показывает,
+     * блокирует ли провайдер/YouTube медиа-трафик (403).
+     */
+    fun checkStreamAccess() {
+        viewModelScope.launch(Dispatchers.IO) {
+            _streamCheck.value = "Проверяем поток…"
+            val current = graph.playback.state.value.current
+            val videoId = current?.let { youtubeVideoId(it) } ?: "dQw4w9WgXcQ"
+            val handle = runCatching { graph.ytDlp.streamHandle(videoId) }.getOrNull()
+            if (handle == null) {
+                _streamCheck.value = "yt-dlp не получил ссылку на поток"
+                toast(_streamCheck.value!!)
+                return@launch
+            }
+            val ok = runCatching {
+                val request = okhttp3.Request.Builder()
+                    .url(handle.url)
+                    .header("Range", "bytes=0-2047")
+                    .apply {
+                        handle.headers.forEach { (name, value) -> header(name, value) }
+                    }
+                    .build()
+                okhttp3.OkHttpClient().newCall(request).execute().use { it.isSuccessful }
+            }.getOrDefault(false)
+            _streamCheck.value = if (ok) {
+                "OK: поток доступен (${handle.mimeType})"
+            } else {
+                "403: YouTube блокирует медиа с вашего IP. Включите WARP или укажите прокси."
+            }
+            toast(_streamCheck.value!!)
+        }
     }
     fun setScanOnStart(enabled: Boolean) = updateSettings { it.copy(scanOnStart = enabled) }
 

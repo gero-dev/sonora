@@ -7,6 +7,7 @@ import app.sonora.core.model.Track
 import app.sonora.core.net.HttpException
 import app.sonora.data.remote.ConnectableSource
 import app.sonora.data.remote.youtube.innertube.InnerTubeApi
+import app.sonora.data.remote.youtube.innertube.StreamInfo
 
 /**
  * YouTube Music через InnerTube — тот же неофициальный, но открытый протокол,
@@ -158,8 +159,7 @@ class YouTubeSource(
         app.sonora.data.remote.youtube.innertube.InnerTubeStreams.resolveDownload(videoId)
 
     /** Резервный поток через обычный player-ответ, если InnerTubeX-ссылка не скачивается. */
-    internal suspend fun downloadStreamFallback(videoId: String) =
-        app.sonora.data.remote.youtube.innertube.InnerTubeStreams.resolveDownloadFallback(videoId)
+    internal suspend fun downloadStreamFallback(videoId: String) =        app.sonora.data.remote.youtube.innertube.InnerTubeStreams.resolveDownloadFallback(videoId)
 
     /** Сбрасывает закэшированную ссылку после 403/410/416. */
     internal fun invalidateStream(videoId: String) =
@@ -180,6 +180,23 @@ class YouTubeSource(
         val key = "transcript:$videoId"
         return transcriptCache[key] ?: runCatching { api.transcript(videoId) }
             .getOrNull()?.also { transcriptCache[key] = it }
+    }
+
+    /**
+     * Поток для скачивания через yt-dlp. Последний рубеж, когда InnerTubeX
+     * и player-ответ не дают рабочий URL (возраст/регион/SABR).
+     */
+    internal suspend fun ytDlpDownloadStream(videoId: String): StreamInfo? {
+        val handle = app.sonora.data.remote.ytdlp.YtDlpBridge.resolve(videoId) ?: return null
+        return StreamInfo(
+            videoId = videoId,
+            url = handle.url,
+            mimeType = handle.mimeType,
+            bitrate = 0,
+            itag = 0,
+            expiresAtMs = System.currentTimeMillis() + 15 * 60_000L,
+            headers = handle.headers,
+        )
     }
 
     override fun disconnect() {

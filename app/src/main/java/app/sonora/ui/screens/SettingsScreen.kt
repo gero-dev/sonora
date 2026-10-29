@@ -35,6 +35,7 @@ import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Cloud
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.PlayCircle
@@ -80,6 +81,7 @@ import app.sonora.core.settings.Accent
 import app.sonora.core.settings.AppSettings
 import app.sonora.core.settings.AudioQuality
 import app.sonora.core.settings.PlaybackMode
+import app.sonora.core.settings.StreamSource
 import app.sonora.core.settings.ThemeMode
 import app.sonora.net.warp.WarpState
 import app.sonora.ui.MainViewModel
@@ -122,6 +124,7 @@ fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
     var legalExpanded by rememberSaveable { mutableStateOf(false) }
     var showPlaylistImportHelp by rememberSaveable { mutableStateOf(false) }
     var showWaveSettings by remember { mutableStateOf(false) }
+    var showProxyDialog by remember { mutableStateOf(false) }
     var jamendoClientId by rememberSaveable(settings.jamendoClientId) {
         mutableStateOf(settings.jamendoClientId)
     }
@@ -335,6 +338,53 @@ fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
                         label = { Text(speedLabel(speed)) },
                     )
                 }
+            }
+        }
+
+        // ---------- Поток и сеть ----------
+        SettingsSection(title = "Поток и сеть", icon = Icons.Rounded.Language) {
+            SettingsLabel("Источник потока")
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(StreamSource.values().size) { index ->
+                    val source = StreamSource.values()[index]
+                    FilterChip(
+                        selected = settings.streamSource == source,
+                        onClick = { vm.setStreamSource(source) },
+                        label = { Text(source.label) },
+                    )
+                }
+            }
+            Text(
+                text = settings.streamSource.hint,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            Spacer(Modifier.height(4.dp))
+            SwitchRow(
+                title = "Аудио-фичи ReccoBeats",
+                subtitle = "BPM и энергия для играющего трека (бесплатно, без ключей)",
+                checked = settings.audioTelemetry,
+                onCheckedChange = vm::setAudioTelemetry,
+            )
+            ClickRow(
+                title = "Прокси для yt-dlp",
+                subtitle = settings.ytDlpProxy.ifBlank { "Напрямую, без прокси" },
+                onClick = { showProxyDialog = true },
+            )
+            val streamCheckState by vm.streamCheck.collectAsState()
+            ClickRow(
+                title = "Проверить поток",
+                subtitle = streamCheckState ?: "Реальный Range-запрос к YouTube",
+                onClick = { vm.checkStreamAccess() },
+            )
+            if (settings.streamSource == StreamSource.YTDLP) {
+                Text(
+                    text = "yt-dlp сам по себе не обходит блокировки провайдера: если YouTube " +
+                        "недоступен, включите WARP на Главной или укажите прокси.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
 
@@ -970,7 +1020,7 @@ fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
 
         // ---------- О приложении ----------
         SettingsSection(title = "О приложении", icon = Icons.Rounded.Info) {
-            InfoRow(title = "Версия", value = "1.4.0")
+            InfoRow(title = "Версия", value = "1.5.0")
             InfoRow(title = "Стек", value = "Kotlin · Compose · Media3")
             Spacer(Modifier.height(8.dp))
             Text(
@@ -993,6 +1043,45 @@ fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
                 },
                 onClearHistory = { vm.clearWaveHistory() },
                 onClearDislikes = { vm.clearWaveDislikes() },
+            )
+        }
+
+        if (showProxyDialog) {
+            var proxy by remember(settings.ytDlpProxy) {
+                mutableStateOf(settings.ytDlpProxy)
+            }
+            AlertDialog(
+                onDismissRequest = { showProxyDialog = false },
+                title = { Text("Прокси для yt-dlp") },
+                text = {
+                    Column {
+                        Text(
+                            text = "Только для yt-dlp: http://host:port или socks5://host:port. " +
+                                "Пустое поле — прямое подключение.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = proxy,
+                            onValueChange = { proxy = it },
+                            singleLine = true,
+                            label = { Text("Прокси") },
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showProxyDialog = false
+                            vm.setYtDlpProxy(proxy)
+                        },
+                    ) { Text("Сохранить") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showProxyDialog = false }) { Text("Отмена") }
+                },
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
             )
         }
     }

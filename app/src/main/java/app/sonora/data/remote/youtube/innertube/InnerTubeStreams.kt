@@ -52,6 +52,13 @@ internal object InnerTubeStreams {
      */
     private suspend fun resolveStream(videoId: String, level: AudioQuality): StreamInfo {
         val targetKbps = level.targetKbps
+
+        // Пользователь выбрал yt-dlp основным: он обходит ограничения InnerTube,
+        // но стартует дольше. При неудаче всё равно пробуем встроенный путь.
+        if (YtDlpBridge.isPrimary()) {
+            YtDlpBridge.resolve(videoId)?.let { return it.toStreamInfo(videoId) }
+        }
+
         var engineStream: StreamInfo? = null
         var engineFailure: Exception? = null
         try {
@@ -84,20 +91,24 @@ internal object InnerTubeStreams {
 
         // Последний рубеж: yt-dlp. Он медленный, зато умеет видео, которые
         // InnerTube/InnerTubeX не отдают (возраст, регион, SABR-only).
-        YtDlpBridge.resolve(videoId)?.let { handle ->
-            return StreamInfo(
-                videoId = videoId,
-                url = handle.url,
-                mimeType = handle.mimeType,
-                bitrate = 0,
-                itag = 0,
-                expiresAtMs = System.currentTimeMillis() + YTDLP_TTL_MS,
-                headers = handle.headers,
-            )
+        if (YtDlpBridge.isEnabled()) {
+            YtDlpBridge.resolve(videoId)?.let { return it.toStreamInfo(videoId) }
         }
 
         throw (engineFailure ?: IllegalStateException("Не удалось получить поток YouTube"))
     }
+
+    private fun app.sonora.data.remote.ytdlp.StreamHandle.toStreamInfo(
+        videoId: String,
+    ): StreamInfo = StreamInfo(
+        videoId = videoId,
+        url = url,
+        mimeType = mimeType,
+        bitrate = 0,
+        itag = 0,
+        expiresAtMs = System.currentTimeMillis() + YTDLP_TTL_MS,
+        headers = headers,
+    )
 
     /** MP4-поток для скачивания: m4a лучше подходит для офлайн-файла. */
     suspend fun resolveDownload(videoId: String): StreamInfo =

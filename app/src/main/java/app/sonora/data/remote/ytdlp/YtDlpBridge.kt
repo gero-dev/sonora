@@ -1,6 +1,8 @@
 package app.sonora.data.remote.ytdlp
 
 import android.content.Context
+import app.sonora.core.settings.SettingsStore
+import app.sonora.core.settings.StreamSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import java.util.concurrent.ConcurrentHashMap
@@ -19,19 +21,27 @@ object YtDlpBridge {
     @Volatile
     private var resolver: YtDlpResolver? = null
 
+    @Volatile
+    private var settings: SettingsStore? = null
+
     private data class Cached(val handle: StreamHandle, val atMs: Long)
 
     private val cache = ConcurrentHashMap<String, Cached>()
 
-    fun init(context: Context) {
-        if (resolver == null) resolver = YtDlpResolver(context.applicationContext)
-    }
-
-    fun init(resolver: YtDlpResolver) {
+    fun init(resolver: YtDlpResolver, settings: SettingsStore) {
         this.resolver = resolver
+        this.settings = settings
     }
 
     fun isInitialized(): Boolean = resolver != null
+
+    /** Пользователь выбрал yt-dlp основным источником. */
+    fun isPrimary(): Boolean =
+        settings?.current?.streamSource == StreamSource.YTDLP
+
+    /** yt-dlp разрешён как источник или резерв. */
+    fun isEnabled(): Boolean =
+        settings?.current?.streamSource != StreamSource.INNERTUBE
 
     /** Прогрев Python-рантайма: первый реальный вызов будет быстрее. */
     suspend fun warmUp() {
