@@ -42,10 +42,12 @@ import androidx.compose.material.icons.rounded.PlayCircle
 import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Shuffle
+import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material.icons.rounded.UploadFile
 import androidx.compose.material.icons.rounded.VpnKey
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -69,6 +71,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
@@ -167,6 +170,13 @@ fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
     val autoPilotAuditState by vm.autoPilotAudit.collectAsState()
     val autoPilotRunningState by vm.autoPilotRunning.collectAsState()
     val autoPilotMessageState by vm.autoPilotMessage.collectAsState()
+    val updateAvailableState by vm.updateAvailable.collectAsState()
+    val updateCheckingState by vm.updateChecking.collectAsState()
+    val updateDownloadingState by vm.updateDownloading.collectAsState()
+    val updateProgressState by vm.updateProgress.collectAsState()
+    val updateErrorState by vm.updateError.collectAsState()
+    var updateNotesExpanded by remember { mutableStateOf(false) }
+    val context = LocalContext.current
     val takeoutLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(),
     ) { uri ->
@@ -1136,9 +1146,103 @@ fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
             }
         }
 
+        // ---------- Обновления ----------
+        SettingsSection(title = "Обновления", icon = Icons.Rounded.SystemUpdate) {
+            InfoRow(title = "Установлено", value = vm.appVersionLabel())
+            SwitchRow(
+                title = "Проверять обновления автоматически",
+                subtitle = "Раз в сутки, без навязчивых напоминаний",
+                checked = settings.updateAutoCheck,
+                onCheckedChange = vm::setUpdateAutoCheck,
+            )
+            ClickRow(
+                title = "Проверить обновления",
+                subtitle = when {
+                    updateCheckingState -> "Проверяем GitHub…"
+                    updateAvailableState != null -> "Доступна ${updateAvailableState?.versionName}"
+                    updateErrorState != null -> updateErrorState
+                    else -> "У вас последняя версия"
+                },
+                onClick = { vm.checkForUpdates() },
+            )
+            val update = updateAvailableState
+            if (update != null) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = buildString {
+                        append("Sonora ${update.versionName}")
+                        update.sizeMb?.let { append(" · $it") }
+                    },
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                if (updateDownloadingState) {
+                    Spacer(Modifier.height(6.dp))
+                    LinearProgressIndicator(
+                        progress = { updateProgressState },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Text(
+                        text = "Скачиваем… ${(updateProgressState * 100).toInt()}%",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    TextButton(onClick = { vm.cancelUpdateDownload() }) { Text("Отменить") }
+                } else {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Button(onClick = {
+                            val intent = vm.updatePermissionIntent()
+                            if (intent != null) {
+                                context.startActivity(intent)
+                            } else {
+                                vm.downloadUpdate()
+                            }
+                        }) {
+                            Text(
+                                if (vm.updatePermissionIntent() != null) {
+                                    "Разрешить установку"
+                                } else {
+                                    "Скачать и установить"
+                                },
+                            )
+                        }
+                        Spacer(Modifier.size(8.dp))
+                        TextButton(onClick = { vm.dismissUpdate() }) { Text("Позже") }
+                    }
+                }
+                if (updateErrorState != null) {
+                    Text(
+                        text = updateErrorState.orEmpty(),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+                if (update.notes.isNotBlank()) {
+                    TextButton(onClick = { updateNotesExpanded = !updateNotesExpanded }) {
+                        Text(if (updateNotesExpanded) "Скрыть изменения" else "Что нового")
+                    }
+                    if (updateNotesExpanded) {
+                        Text(
+                            text = update.notes.take(2000),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            } else if (updateErrorState != null) {
+                Text(
+                    text = updateErrorState.orEmpty(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+            TextButton(onClick = { vm.openReleasePage() }) {
+                Text("Открыть релизы на GitHub")
+            }
+        }
+
         // ---------- О приложении ----------
         SettingsSection(title = "О приложении", icon = Icons.Rounded.Info) {
-            InfoRow(title = "Версия", value = "1.5.0")
+            InfoRow(title = "Версия", value = vm.appVersionLabel())
             InfoRow(title = "Стек", value = "Kotlin · Compose · Media3")
             Spacer(Modifier.height(8.dp))
             Text(

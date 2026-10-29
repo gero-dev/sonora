@@ -203,6 +203,10 @@ data class AppSettings(
     val warpAutoConfigAtMs: Long = 0L,
     /** id WARP-конфига, который последним реально поднял handshake. */
     val warpLastGoodConfigId: String = "",
+    /** Автоматически проверять обновления на GitHub (раз в сутки). */
+    val updateAutoCheck: Boolean = true,
+    /** Версия, которую пользователь отложил («Позже»), чтобы не напоминать. */
+    val updateSkippedVersion: String = "",
     /** Время последней успешной проверки/обновления yt-dlp (мс). */
     val ytDlpCheckedAtMs: Long = 0L,
     /** Версия установленного yt-dlp (для настроек и диагностики). */

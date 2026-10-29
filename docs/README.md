@@ -30,6 +30,7 @@
 | [INTEGRATIONS.md](INTEGRATIONS.md) | устройство интеграций: Spotify, YouTube Music, SoundCloud, DownloadManager |
 | [STREAMING-RF.md](STREAMING-RF.md) | стриминг без VPN/WARP: автопилот, собственный WARP, авто-обновление yt-dlp, медиашлюз, диагностика |
 | [PC-STREAMING-AUDIT.md](PC-STREAMING-AUDIT.md) | замеры на реальной сети: DPI-блокировка TLS, yt-dlp/шлюзы без WARP, WARP как рабочий egress |
+| [UPDATE.md](UPDATE.md) | обновления из GitHub: автопроверка, кэш, добровольное скачивание, SHA-256, установка |
 | [YTDLP_INTEGRATION.md](YTDLP_INTEGRATION.md) | yt-dlp + ReccoBeats: поиск, поток, аудио-фичи, кэш, оптимизации |
 | [RF-STREAMING-RESEARCH.md](RF-STREAMING-RESEARCH.md) | замеры зеркал и блокировок из РФ (29.10.2026), ограничения и рекомендации |
 | [DISCOVERY.md](DISCOVERY.md) | открытые каталоги Internet Archive и Jamendo |
@@ -53,4 +54,4 @@
 - Сборка: `./gradlew :app:assembleDebug` (JDK 21, Android SDK 37).
 - APK: `app/build/outputs/apk/debug/app-debug.apk`.
 - Проверка: `./gradlew :app:testDebugUnitTest :app:lintDebug`.
-- Версия: `1.8.0`, `versionCode 30`.
+- Версия: `1.9.0`, `versionCode 31`.

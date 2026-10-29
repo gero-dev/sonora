@@ -36,6 +36,8 @@ import app.sonora.data.remote.youtube.innertube.StreamInfo
 import app.sonora.data.streaming.StreamingAudit
 import app.sonora.data.streaming.StreamingAutoPilot
 import app.sonora.data.streaming.TransportKind
+import app.sonora.data.update.UpdateInfo
+import app.sonora.data.update.UpdateManager
 import app.sonora.data.wave.WaveEngine
 import app.sonora.data.wave.WaveHistoryEntry
 import app.sonora.net.relay.RelayGateway
@@ -339,6 +341,20 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
                     _autoPilotAudit.value = StreamingAutoPilot.lastAudit()
                     _autoPilotMessage.value = StreamingAutoPilot.lastAudit()?.summaryLine()
                 }
+            }
+        }
+        // Проверка обновлений: раз в сутки в фоне, ничего не устанавливаем сами.
+        viewModelScope.launch(Dispatchers.IO) {
+            delay(5_000)
+            val available = runCatching { UpdateManager.checkIfDue() }.getOrNull()
+            if (available != null) {
+                withContext(Dispatchers.Main) {
+                    toast("Доступна Sonora ${available.versionName} — Настройки → Обновления")
+                }
+            }
+            while (isActive) {
+                delay(6 * 60 * 60_000L)
+                runCatching { UpdateManager.checkIfDue() }
             }
         }
         // Прогреваем Python/yt-dlp в фоне: первый реальный вызов будет быстрее,
@@ -3033,6 +3049,70 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
 
     /** Intent системного диалога разрешения VPN; null — уже выдано. */
     fun autoPilotVpnPermissionIntent(): Intent? = graph.warp.vpnPermissionIntent()
+
+    // ---------- Обновления из GitHub ----------
+
+    val updateAvailable: StateFlow<UpdateInfo?> = UpdateManager.available
+    val updateChecking: StateFlow<Boolean> = UpdateManager.checking
+    val updateDownloading: StateFlow<Boolean> = UpdateManager.downloading
+    val updateProgress: StateFlow<Float> = UpdateManager.progress
+    val updateError: StateFlow<String?> = UpdateManager.error
+    val updateReadyToInstall: StateFlow<Boolean> = UpdateManager.readyToInstall
+
+    fun appVersionLabel(): String = "Sonora ${UpdateManager.currentVersion()}"
+
+    /** Автоматическая проверка обновлений (раз в сутки). */
+    fun setUpdateAutoCheck(enabled: Boolean) {
+        updateSettings { it.copy(updateAutoCheck = enabled) }
+        UpdateManager.setAutoCheck(enabled)
+        toast(if (enabled) "Автопроверка обновлений включена" else "Автопроверка обновлений выключена")
+        if (enabled) checkForUpdates()
+    }
+
+    /** Проверить обновления по кнопке. */
+    fun checkForUpdates() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val info = runCatching { UpdateManager.checkForUpdates(force = true) }.getOrNull()
+            withContext(Dispatchers.Main) {
+                toast(
+                    when {
+                        info != null -> "Доступна Sonora ${info.versionName}"
+                        UpdateManager.error.value != null -> UpdateManager.error.value!!
+                        else -> "У вас последняя версия"
+                    },
+                )
+            }
+        }
+    }
+
+    /** Добровольное скачивание обновления и запуск системного установщика. */
+    fun downloadUpdate() {
+        viewModelScope.launch(Dispatchers.IO) {
+            toast("Скачиваем обновление…")
+            val ok = runCatching { UpdateManager.downloadAndInstall() }.getOrDefault(false)
+            if (!ok) {
+                withContext(Dispatchers.Main) {
+                    toast(UpdateManager.error.value ?: "Не удалось скачать обновление")
+                }
+            }
+        }
+    }
+
+    fun cancelUpdateDownload() = UpdateManager.cancelDownload()
+
+    fun dismissUpdate() = UpdateManager.dismiss()
+
+    fun updatePermissionIntent(): Intent? = UpdateManager.installPermissionIntent()
+
+    /** Открыть страницу релизов в браузере (если хочется скачать вручную). */
+    fun openReleasePage() {
+        runCatching {
+            graph.appContext.startActivity(
+                Intent(Intent.ACTION_VIEW, Uri.parse(UpdateManager.releasePageUrl()))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+        }
+    }
 
     /**
      * Плеер не смог открыть поток (403/сеть). Сбрасываем кэши и просим

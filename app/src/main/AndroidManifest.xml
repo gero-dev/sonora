@@ -17,6 +17,9 @@
 
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
 
+    <!-- Обновления из GitHub: скачиваем APK и предлагаем установить (добровольно) -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
     <!-- Приложения, которые мы умеем открывать по deep link -->
     <queries>
         <intent>
@@ -154,6 +157,17 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/sonora_widget_4x4" />
         </receiver>
+
+        <!-- Обновления: отдаём скачанный APK системному установщику через FileProvider. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.updates"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/update_file_paths" />
+        </provider>
 
     </application>
 

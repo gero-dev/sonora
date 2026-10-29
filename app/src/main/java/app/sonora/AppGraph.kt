@@ -57,6 +57,8 @@ class AppGraph private constructor(context: Context) {
         app.sonora.net.relay.RelayGateway.init(settings)
         // Автопилот стриминга: проверяет все способы и выбирает рабочий.
         app.sonora.data.streaming.StreamingAutoPilot.init(appContext, settings, ytDlp, warp)
+        // Проверка обновлений из GitHub Releases (добровольная установка).
+        app.sonora.data.update.UpdateManager.init(appContext, settings)
     }
 
     val scanner = MediaStoreScanner(appContext)
