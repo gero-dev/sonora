@@ -1624,6 +1624,25 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
     fun togglePlayPause() = graph.playback.togglePlayPause()
     fun next() = graph.playback.next()
     fun previous() = graph.playback.previous()
+
+    /**
+     * «Слушать всю медиатеку» одной кнопкой: вся фонотека вперемешку, как
+     * «Понравившиеся» в Spotify. Shuffle включается сам, очередь стартует с
+     * первого случайного трека.
+     */
+    fun playLibraryShuffled() {
+        val all = graph.library.tracks.value
+            .filter { it.playable && !it.uri.isNullOrBlank() }
+            .filterNot { blockedVideo(it) }
+            .filterNot { blockedByMode(it) }
+        if (all.isEmpty()) {
+            toast("В медиатеке пока нет треков")
+            return
+        }
+        graph.playback.setShuffle(true)
+        graph.playback.playQueue(all.shuffled(), 0)
+        toast("Вся медиатека: ${all.size} треков · вперемешку")
+    }
     fun seekTo(ms: Long) = graph.playback.seekTo(ms)
     fun seekToIndex(index: Int) = graph.playback.seekToIndex(index)
     fun toggleShuffle() = graph.playback.setShuffle(!graph.playback.state.value.shuffle)

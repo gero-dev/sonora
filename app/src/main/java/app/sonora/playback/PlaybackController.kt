@@ -193,19 +193,41 @@ class PlaybackController(context: Context) {
         }
     }
 
+    /**
+     * Следующий трек. Устойчиво к трём случаям, из-за которых кнопка «вперёд»
+     * раньше казалась «залипшей»:
+     *  - очередь кончилась, но расширятель ещё не успел;
+     *  - Media3 ещё не пересчитал timeline (hasNextMediaItem=false сразу
+     *    после setMediaItems/appendToQueue);
+     *  - плеер был на паузе/буферизации — после seek нужно вернуть play().
+     */
     fun next() {
-        val mediaController = controller ?: return
-        if (mediaController.hasNextMediaItem()) {
-            mediaController.seekToNextMediaItem()
+        val mediaController = controller ?: run {
+            connect()
             return
         }
-        // Очередь кончилась: подкидываем ещё и только потом переключаем.
-        // Так кнопка «вперёд» не «залипает» после нескольких переключений.
-        val extender = queueExtender ?: return
-        val batch = runCatching { extender() }.getOrDefault(emptyList())
-        if (batch.isNotEmpty()) {
-            appendToQueue(batch)
-            if (mediaController.hasNextMediaItem()) mediaController.seekToNextMediaItem()
+        val wasPlaying = mediaController.isPlaying
+        val beforeIndex = mediaController.currentMediaItemIndex
+
+        if (mediaController.hasNextMediaItem()) {
+            mediaController.seekToNextMediaItem()
+            if (wasPlaying) mediaController.play()
+            return
+        }
+        // Очередь кончилась: сначала докупаем треки, потом переключаем.
+        val batch = runCatching { queueExtender?.invoke() ?: emptyList() }
+            .getOrDefault(emptyList())
+        if (batch.isNotEmpty()) appendToQueue(batch)
+        if (mediaController.hasNextMediaItem()) {
+            mediaController.seekToNextMediaItem()
+            if (wasPlaying) mediaController.play()
+            return
+        }
+        // Последний рубеж: идём по абсолютному индексу, не полагаясь на timeline.
+        val count = mediaController.mediaItemCount
+        if (beforeIndex in 0 until count - 1) {
+            mediaController.seekTo(beforeIndex + 1, 0L)
+            if (wasPlaying) mediaController.play()
         }
     }
 

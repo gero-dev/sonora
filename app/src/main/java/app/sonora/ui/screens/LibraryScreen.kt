@@ -1,4 +1,4 @@
-package app.sonora.ui.screens
+﻿package app.sonora.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -25,6 +25,7 @@ import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.ArrowDownward
@@ -250,6 +251,11 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
                     LibraryChips(
                         selected = section,
                         onSelect = { sectionName = it.name },
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    LibraryPlayAllRow(
+                        trackCount = localTracks.size,
+                        onPlayAll = { vm.playLibraryShuffled() },
                     )
                     Spacer(Modifier.height(8.dp))
                 }
@@ -635,10 +641,84 @@ private fun LibraryHeader(
     }
 }
 
+/**
+ * «Слушать всю медиатеку» — одна большая кнопка, как Play у «Понравившихся»
+ * в Spotify: вся фонотека вперемешку, shuffle включается автоматически.
+ */
+@Composable
+private fun LibraryPlayAllRow(
+    trackCount: Int,
+    onPlayAll: () -> Unit,
+) {
+    val enabled = trackCount > 0
+    val gradient = LocalSonoraColors.current.gradient
+    val contentColor = if (enabled) {
+        accentContentColor()
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 2.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(
+                if (enabled) {
+                    Brush.linearGradient(gradient)
+                } else {
+                    Brush.linearGradient(
+                        listOf(
+                            MaterialTheme.colorScheme.surfaceContainerHigh,
+                            MaterialTheme.colorScheme.surfaceContainerHigh,
+                        ),
+                    )
+                },
+            )
+            .clickable(enabled = enabled, onClick = onPlayAll)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = Icons.Rounded.Shuffle,
+            contentDescription = null,
+            tint = contentColor,
+            modifier = Modifier.size(22.dp),
+        )
+        Spacer(Modifier.size(10.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = "Слушать всю медиатеку",
+                style = MaterialTheme.typography.titleMedium,
+                color = contentColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = if (enabled) {
+                    "${tracksLabel(trackCount)} · вперемешку, как плейлист"
+                } else {
+                    "Пока нет треков"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = contentColor.copy(alpha = 0.82f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        if (enabled) {
+            Icon(
+                imageVector = Icons.Rounded.PlayArrow,
+                contentDescription = "Слушать всю медиатеку",
+                tint = contentColor,
+                modifier = Modifier.size(26.dp),
+            )
+        }
+    }
+}
+
 /** Горизонтальные фильтры-чипы в духе Spotify; выбранный залит акцентом. */
 @Composable
-private fun LibraryChips(
-    selected: LibrarySection,
+private fun LibraryChips(    selected: LibrarySection,
     onSelect: (LibrarySection) -> Unit,
 ) {
     Row(
