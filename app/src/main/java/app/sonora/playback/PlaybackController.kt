@@ -307,6 +307,48 @@ class PlaybackController(context: Context) {
         }
     }
 
+    /**
+     * Вставляет пачку треков сразу после текущего — «играть следующим» для
+     * плейлиста или альбома. Порядок сохраняется.
+     */
+    fun playNext(tracks: List<Track>) {
+        val c = controller ?: return
+        val playable = tracks.filter { it.playable && !it.uri.isNullOrBlank() }
+        if (playable.isEmpty()) return
+        var insertAt = (c.currentMediaItemIndex + 1).coerceAtLeast(0)
+        playable.forEach { track ->
+            c.addMediaItem(insertAt, toMediaItem(track))
+            insertAt++
+        }
+        _state.update { st ->
+            val mutable = st.queue.toMutableList()
+            val at = insertAt.coerceIn(0, mutable.size)
+            val start = (at - playable.size).coerceAtLeast(0)
+            mutable.addAll(start, playable)
+            st.copy(queue = mutable)
+        }
+        refresh()
+    }
+
+    /**
+     * Пересоздаёт текущий MediaItem: поток открывается заново и подхватывает
+     * новое качество из настроек. Позиция и состояние play/pause сохраняются.
+     */
+    fun reloadCurrent() {
+        val c = controller ?: return
+        val index = runCatching { c.currentMediaItemIndex }.getOrDefault(-1)
+        if (index < 0) return
+        val track = _state.value.queue.getOrNull(index) ?: return
+        val position = runCatching { c.currentPosition }.getOrDefault(0L)
+        val wasPlaying = c.isPlaying
+        runCatching {
+            c.replaceMediaItem(index, toMediaItem(track))
+            c.seekTo(index, position)
+            if (wasPlaying) c.play()
+        }
+        refresh()
+    }
+
     fun removeAt(index: Int) {
         val c = controller ?: return
         if (index !in 0 until c.mediaItemCount) return

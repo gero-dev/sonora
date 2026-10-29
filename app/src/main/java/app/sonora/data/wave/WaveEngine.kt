@@ -64,19 +64,38 @@ object WaveEngine {
     private const val HIGH_NOVELTY = 60
     private const val RECENT_ARTIST_PENALTY = 0.6
 
+    /** Бонус за треки, которые пользователь дослушивал (а не пропускал). */
+    private const val TRACK_AFFINITY_BONUS = 1.2
+
     private val BRACKET_NOISE = Regex("""[\(\[][^\)\]]*[\)\]]""")
     private val WHITESPACE = Regex("""\s+""")
 
     /** Маркеры нежелательного видеоконтента в названии. */
-    private val VIDEO_MARKERS = listOf(
+    val VIDEO_MARKERS = listOf(
         "official video", "music video", "клип", "концерт", "live at",
         "interview", "подкаст", "podcast", "shorts", "full album",
         "полный альбом", "reaction", "trailer", "тизер", "1 hour",
         "10 hours", "gameplay", "asmr", "обзор", "прямой эфир", "live stream",
     )
 
+    /**
+     * Демо-исполнители самого приложения. Раньше тестовые файлы вида
+     * «Sonora Test» попадали в рекомендации и выглядели как отсылка плеера
+     * к самому себе — в волне их больше не показываем.
+     */
+    private val SELF_REFERENCE_ARTISTS = setOf(
+        "sonora", "sonora test", "sonora import", "sonora demo",
+    )
+
     /** Ключ дедупликации: «исполнитель|название» без скобочных пометок. */
     fun waveKey(track: Track): String = keyOf(track.artist, track.title)
+
+    /** Трек принадлежит демо-контенту самого приложения, а не пользователю. */
+    fun isSelfReference(track: Track): Boolean {
+        val artist = track.artist.trim().lowercase()
+        if (artist in SELF_REFERENCE_ARTISTS) return true
+        return artist.startsWith("sonora test") || artist.startsWith("sonora import")
+    }
 
     /**
      * Пропускает только музыку: пустые поля, слишком короткие/длинные записи
@@ -90,6 +109,7 @@ object WaveEngine {
      */
     fun isMusic(track: Track, tuning: WaveSettings): Boolean {
         if (track.title.isBlank() || track.artist.isBlank()) return false
+        if (isSelfReference(track)) return false
 
         if (tuning.musicOnly || tuning.excludeVideos) {
             val title = track.title.lowercase()
@@ -121,7 +141,12 @@ object WaveEngine {
         }
     }
 
-    /** Вес артиста по истории: свежие дослушивания +, пропуски −. */
+    /**
+     * Вес артиста по истории. Учитываем не только «дослушал/пропустил», но и
+     * долю реально прослушанного: 80 % трека весит как полное прослушивание,
+     * 40–80 % — половину, короткий пропуск — отрицательно. Свежесть затухает
+     * с полураспадом 45 дней.
+     */
     fun artistAffinity(
         history: List<WaveHistoryEntry>,
         nowMs: Long = System.currentTimeMillis(),
@@ -131,10 +156,56 @@ object WaveEngine {
         history.forEach { entry ->
             val artist = entry.artist.trim().lowercase()
             if (artist.isBlank()) return@forEach
+            val engagement = engagementScore(entry) ?: return@forEach
+            if (engagement == 0.0) return@forEach
             val ageDays = (nowMs - entry.playedAtMs).coerceAtLeast(0L).toDouble() / DAY_MS
-            val sign = if (entry.completed) 1.0 else SKIP_WEIGHT
-            val weight = exp(-ageDays / AFFINITY_HALF_LIFE_DAYS) * sign
+            val weight = exp(-ageDays / AFFINITY_HALF_LIFE_DAYS) * engagement
             result[artist] = (result[artist] ?: 0.0) + weight
+        }
+        return result.filterValues { it != 0.0 }
+    }
+
+    /**
+     * Вклад одного прослушивания: +1 за полное, +0.45 за половину, −0.35 за
+     * пропуск. null — запись-заглушка, которая ещё не стала прослушиванием.
+     */
+    fun engagementScore(entry: WaveHistoryEntry): Double? {
+        // Плейсхолдер пишется в момент старта трека (0 мс, не completed).
+        if (entry.listenedMs <= 0L && !entry.completed) return if (entry.durationMs > 0L) null else 0.0
+        if (entry.durationMs <= 0L) return if (entry.completed) 1.0 else 0.0
+        val ratio = (entry.listenedMs.toDouble() / entry.durationMs).coerceIn(0.0, 2.0)
+        return when {
+            ratio >= 0.8 -> 1.0
+            ratio >= 0.4 -> 0.45
+            ratio > 0.15 -> 0.1
+            else -> SKIP_WEIGHT
+        }
+    }
+
+    /** Ключи треков, которые пользователь явно отметил «не интересно». */
+    fun dislikeKey(track: Track): String = "t:${waveKey(track)}"
+
+    fun isDisliked(track: Track, disliked: Set<String>): Boolean =
+        dislikeKey(track) in disliked
+
+    /**
+     * Вклад конкретных треков: дослушанные получают плюс, пропущенные — минус.
+     * Нужен, чтобы «Моя волна» держала любимые композиции, но не повторяла их
+     * каждый раз (за повтор отвечает штраф за свежую историю).
+     */
+    fun trackEngagement(
+        history: List<WaveHistoryEntry>,
+        nowMs: Long = System.currentTimeMillis(),
+    ): Map<String, Double> {
+        if (history.isEmpty()) return emptyMap()
+        val result = HashMap<String, Double>()
+        history.forEach { entry ->
+            val engagement = engagementScore(entry) ?: return@forEach
+            if (engagement == 0.0) return@forEach
+            val ageDays = (nowMs - entry.playedAtMs).coerceAtLeast(0L).toDouble() / DAY_MS
+            val key = keyOf(entry.artist, entry.title)
+            result[key] = (result[key] ?: 0.0) +
+                exp(-ageDays / AFFINITY_HALF_LIFE_DAYS) * engagement
         }
         return result.filterValues { it != 0.0 }
     }
@@ -159,8 +230,9 @@ object WaveEngine {
      *
      * Веса из контракта: база 1.0; +2.5 за избранный трек; +1.6·(1−novelty/150)
      * за любимого артиста; + affinity·(1−novelty/160); + min(count,8)·0.12;
-     * −0.2 за пустого артиста; +0.3 локальному при [localBias]; + (novelty/100)·0.9
-     * за нового артиста; штраф за артиста из свежей истории при novelty ≥ [HIGH_NOVELTY].
+     * −0.2 за пустого артиста; локальный бонус гаснет с ростом новизны;
+     * бонус за нового артиста растёт с новизной; штрафы за свежего артиста
+     * и за недавно игравший трек (вместо жёсткого исключения).
      */
     fun rank(
         candidates: List<Track>,
@@ -172,6 +244,8 @@ object WaveEngine {
         localBias: Boolean,
         random: Random = Random.Default,
         nowMs: Long = System.currentTimeMillis(),
+        dislikedKeys: Set<String> = emptySet(),
+        recentTrackKeys: Set<String>? = null,
     ): List<Track> {
         if (candidates.isEmpty()) return emptyList()
         val novelty = tuning.novelty.coerceIn(0, 100)
@@ -184,37 +258,58 @@ object WaveEngine {
         }
 
         val affinity = if (tuning.useHistory) artistAffinity(history, nowMs) else emptyMap()
+        val trackScores = if (tuning.useHistory) trackEngagement(history) else emptyMap()
         val knownArtists = if (tuning.useHistory) historyArtists(history) else emptySet()
         val recentArtists = if (tuning.useHistory) recentArtists(history, nowMs) else emptySet()
+        val recentTracks = recentTrackKeys
+            ?: if (tuning.useHistory) recentKeys(history, nowMs) else emptySet()
+        val discovery = novelty / 100.0
 
         fun weightOf(track: Track): Double {
             val artist = track.artist.trim().lowercase()
+            val key = waveKey(track)
+            if (dislikedKeys.isNotEmpty() && (
+                    dislikeKey(track) in dislikedKeys || "t:$key" in dislikedKeys
+                    )
+            ) {
+                return 0.0
+            }
             var weight = BASE_WEIGHT
             if (track.id in favoriteIds) weight += FAVORITE_TRACK_BONUS
             if (artist.isNotBlank() && artist in favoriteArtistKeys) {
-                weight += FAVORITE_ARTIST_BONUS * (1.0 - novelty / 150.0)
+                weight += FAVORITE_ARTIST_BONUS * (1.0 - discovery * 0.7)
             }
-            weight += (affinity[artist] ?: 0.0) * (1.0 - novelty / 160.0)
+            weight += (affinity[artist] ?: 0.0) * (1.0 - discovery * 0.6)
+            weight += (trackScores[key] ?: 0.0) * TRACK_AFFINITY_BONUS * (1.0 - discovery * 0.8)
             weight += minOf(artistCountKeys[artist] ?: 0, 8) * POPULARITY_STEP
             if (artist.isBlank()) weight -= BLANK_ARTIST_PENALTY
-            if (localBias && track.source == Source.LOCAL) weight += LOCAL_BONUS
+            // Чем выше новизна, тем меньше «своей» музыки в начале подборки.
+            if (localBias && track.source == Source.LOCAL) {
+                weight += LOCAL_BONUS * (1.0 - discovery * 0.8)
+            }
             val newArtist = artist.isNotBlank() &&
                 artist !in favoriteArtistKeys &&
                 (artistCountKeys[artist] ?: 0) == 0 &&
                 artist !in knownArtists
-            if (newArtist) weight += novelty / 100.0 * NEW_ARTIST_BONUS
+            if (newArtist) weight += NEW_ARTIST_BONUS * (0.3 + discovery * 0.9)
             if (novelty >= HIGH_NOVELTY && artist in recentArtists) {
                 weight -= (novelty - HIGH_NOVELTY) / 40.0 * RECENT_ARTIST_PENALTY
             }
-            return weight.coerceAtLeast(MIN_WEIGHT)
+            // Недавно игравший трек отодвигаем, но не выбрасываем: иначе
+            // у небольшой фонотеки волна остаётся пустой.
+            if (key in recentTracks) {
+                weight *= 1.0 - 0.75 * (0.4 + discovery * 0.6)
+            }
+            return weight.coerceAtLeast(0.0)
         }
 
         // Взвешенная выборка без повторов по ключам Efraimidis–Spirakis:
         // key = -ln(U)/weight, затем сортировка по возрастанию. Это O(n log n)
         // вместо O(n²) у пошагового пересчёта суммы весов, распределение то же.
         return candidates
-            .map { track ->
-                val weight = weightOf(track).coerceAtLeast(MIN_WEIGHT)
+            .mapNotNull { track ->
+                val weight = weightOf(track)
+                if (weight < MIN_WEIGHT) return@mapNotNull null
                 val u = random.nextDouble(0.0, 1.0).coerceAtLeast(MIN_RANDOM)
                 track to -ln(u) / weight
             }

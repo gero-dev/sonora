@@ -345,6 +345,21 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
                     playlistMenu = null
                     vm.downloadPlaylist(playlist)
                 },
+                onPlayNext = {
+                    playlistMenu = null
+                    vm.playPlaylistNext(playlist)
+                },
+                onSortByTitle = {
+                    playlistMenu = null
+                    vm.sortPlaylist(playlist, compareBy { it.title.lowercase() })
+                },
+                onSortByArtist = {
+                    playlistMenu = null
+                    vm.sortPlaylist(
+                        playlist,
+                        compareBy({ it.artist.lowercase() }, { it.title.lowercase() }),
+                    )
+                },
                 onRename = {
                     playlistMenu = null
                     renameTarget = playlist
@@ -1087,6 +1102,9 @@ private fun PlaylistActionsSheet(
     onPlay: () -> Unit,
     onShuffle: () -> Unit,
     onDownload: () -> Unit,
+    onPlayNext: () -> Unit,
+    onSortByTitle: () -> Unit,
+    onSortByArtist: () -> Unit,
     onRename: () -> Unit,
     onDelete: (() -> Unit)?,
 ) {
@@ -1119,6 +1137,21 @@ private fun PlaylistActionsSheet(
                 Icons.Rounded.Download,
                 "Скачать весь плейлист",
                 onDownload,
+            )
+            PlaylistSheetAction(
+                Icons.Rounded.Sort,
+                "Играть следующими",
+                onPlayNext,
+            )
+            PlaylistSheetAction(
+                Icons.Rounded.Sort,
+                "Сортировать по названию",
+                onSortByTitle,
+            )
+            PlaylistSheetAction(
+                Icons.Rounded.Sort,
+                "Сортировать по исполнителю",
+                onSortByArtist,
             )
             if (playlist.editable) {
                 PlaylistSheetAction(Icons.Rounded.Edit, "Переименовать", onRename)

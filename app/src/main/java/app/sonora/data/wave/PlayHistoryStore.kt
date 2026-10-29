@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.serializer
 
 /**
  * Постоянная история прослушиваний/пропусков для «Моей волны».
@@ -21,6 +22,7 @@ class PlayHistoryStore(context: Context) {
 
     private val appContext = context.applicationContext
     private val serializer = ListSerializer(WaveHistoryEntry.serializer())
+    private val dislikedSerializer = ListSerializer(String.serializer())
     private val mutex = Mutex()
 
     private val _entries = MutableStateFlow<List<WaveHistoryEntry>>(emptyList())
@@ -28,6 +30,10 @@ class PlayHistoryStore(context: Context) {
 
     private val _size = MutableStateFlow(0)
     val size: StateFlow<Int> = _size.asStateFlow()
+
+    /** Треки, отмеченные «не интересно» (ключи `t:<исполнитель|название>`). */
+    private val _disliked = MutableStateFlow<Set<String>>(emptySet())
+    val disliked: StateFlow<Set<String>> = _disliked.asStateFlow()
 
     @Volatile
     private var loaded = false
@@ -37,6 +43,7 @@ class PlayHistoryStore(context: Context) {
         runCatching {
             mutex.withLock {
                 readLocked()
+                readDislikedLocked()
                 loaded = true
             }
         }
@@ -85,6 +92,40 @@ class PlayHistoryStore(context: Context) {
     fun affinity(nowMs: Long = System.currentTimeMillis()): Map<String, Double> =
         WaveEngine.artistAffinity(_entries.value, nowMs)
 
+    /** «Не интересно»: трек больше не попадает в волну. */
+    suspend fun dislike(track: Track) {
+        runCatching {
+            ensureLoaded()
+            mutex.withLock {
+                val next = _disliked.value + WaveEngine.dislikeKey(track)
+                _disliked.value = next
+                persistDislikedLocked(next)
+            }
+        }
+    }
+
+    /** Вернуть трек в рекомендации. */
+    suspend fun undislike(track: Track) {
+        runCatching {
+            ensureLoaded()
+            mutex.withLock {
+                val next = _disliked.value - WaveEngine.dislikeKey(track)
+                _disliked.value = next
+                persistDislikedLocked(next)
+            }
+        }
+    }
+
+    suspend fun clearDislikes() {
+        runCatching {
+            ensureLoaded()
+            mutex.withLock {
+                _disliked.value = emptySet()
+                persistDislikedLocked(emptySet())
+            }
+        }
+    }
+
     /** Полностью очистить историю — и в памяти, и в файле. */
     suspend fun clear() {
         runCatching {
@@ -105,6 +146,7 @@ class PlayHistoryStore(context: Context) {
         mutex.withLock {
             if (loaded) return
             readLocked()
+            readDislikedLocked()
             loaded = true
         }
     }
@@ -117,8 +159,23 @@ class PlayHistoryStore(context: Context) {
         _size.value = limited.size
     }
 
+    private suspend fun readDislikedLocked() {
+        val stored = JsonFile.read(
+            appContext,
+            FILE_DISLIKED,
+            dislikedSerializer,
+            emptyList(),
+        )
+        _disliked.value = stored.toSet()
+    }
+
+    private suspend fun persistDislikedLocked(keys: Set<String>) {
+        JsonFile.write(appContext, FILE_DISLIKED, dislikedSerializer, keys.toList())
+    }
+
     private companion object {
         const val FILE_NAME = "play_history.json"
+        const val FILE_DISLIKED = "wave_disliked.json"
         /** История для экрана «История» и статистики; файл остаётся небольшим. */
         const val MAX_ENTRIES = 2000
     }

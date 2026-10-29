@@ -23,10 +23,16 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Album
+import androidx.compose.material.icons.rounded.ArrowDownward
+import androidx.compose.material.icons.rounded.ArrowUpward
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.PlaylistPlay
+import androidx.compose.material.icons.rounded.QueueMusic
+import androidx.compose.material.icons.rounded.Radio
+import androidx.compose.material.icons.rounded.SwapVert
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material3.Button
@@ -40,6 +46,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -82,6 +89,7 @@ fun PlaylistDetailScreen(vm: MainViewModel, playlistId: String, navigate: (Strin
         playlist?.let { vm.playlistSaveProgress(it) } ?: PlaylistSaveProgress()
     }
     val downloadable = remember(playlistTracks) { playlistTracks.any { it.source != Source.LOCAL } }
+    var reorderMode by rememberSaveable { mutableStateOf(false) }
 
     Column(
         Modifier
@@ -107,13 +115,38 @@ fun PlaylistDetailScreen(vm: MainViewModel, playlistId: String, navigate: (Strin
                 onFavorite = { vm.toggleFavorite(it.id) },
                 trailing = { track ->
                     if (playlist.editable) {
-                        IconButton(onClick = { vm.removeFromPlaylist(playlist.id, track.id) }) {
-                            Icon(
-                                imageVector = Icons.Rounded.Delete,
-                                contentDescription = "Убрать из плейлиста",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(20.dp),
-                            )
+                        val index = playlistTracks.indexOf(track)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (reorderMode) {
+                                IconButton(
+                                    onClick = { vm.movePlaylistTrack(playlist.id, index, index - 1) },
+                                    enabled = index > 0,
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.ArrowUpward,
+                                        contentDescription = "Выше",
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                }
+                                IconButton(
+                                    onClick = { vm.movePlaylistTrack(playlist.id, index, index + 1) },
+                                    enabled = index in 0 until playlistTracks.lastIndex,
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.ArrowDownward,
+                                        contentDescription = "Ниже",
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                }
+                            }
+                            IconButton(onClick = { vm.removeFromPlaylist(playlist.id, track.id) }) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Delete,
+                                    contentDescription = "Убрать из плейлиста",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            }
                         }
                     }
                 },
@@ -137,6 +170,14 @@ fun PlaylistDetailScreen(vm: MainViewModel, playlistId: String, navigate: (Strin
                     },
                     onDownload = if (downloadable) {
                         { vm.downloadPlaylist(playlist) }
+                    } else {
+                        null
+                    },
+                    onRadio = { vm.startPlaylistRadio(playlist) },
+                    onPlayNext = { vm.playPlaylistNext(playlist) },
+                    reorderActive = reorderMode,
+                    onToggleReorder = if (playlist.editable) {
+                        { reorderMode = !reorderMode }
                     } else {
                         null
                     },
@@ -327,6 +368,10 @@ private fun PlaylistHeader(
     onShuffle: () -> Unit,
     downloadLabel: String? = null,
     onDownload: (() -> Unit)? = null,
+    onRadio: (() -> Unit)? = null,
+    onPlayNext: (() -> Unit)? = null,
+    reorderActive: Boolean = false,
+    onToggleReorder: (() -> Unit)? = null,
 ) {
     Column(
         Modifier
@@ -363,6 +408,10 @@ private fun PlaylistHeader(
             onShuffle = onShuffle,
             downloadLabel = downloadLabel,
             onDownload = onDownload,
+            onRadio = onRadio,
+            onPlayNext = onPlayNext,
+            reorderActive = reorderActive,
+            onToggleReorder = onToggleReorder,
         )
         Spacer(Modifier.height(8.dp))
     }
@@ -430,7 +479,7 @@ private fun DetailCoverHeader(
     }
 }
 
-/** Кнопки «Играть», «Перемешать» и опционально «Скачать». */
+/** Кнопки «Играть», «Перемешать», «Скачать», «Радио» и режим порядка. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun HeaderActions(
@@ -439,6 +488,10 @@ private fun HeaderActions(
     onShuffle: () -> Unit,
     downloadLabel: String? = null,
     onDownload: (() -> Unit)? = null,
+    onRadio: (() -> Unit)? = null,
+    onPlayNext: (() -> Unit)? = null,
+    reorderActive: Boolean = false,
+    onToggleReorder: (() -> Unit)? = null,
 ) {
     FlowRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -471,6 +524,46 @@ private fun HeaderActions(
                 )
                 Spacer(Modifier.width(6.dp))
                 Text(downloadLabel)
+            }
+        }
+        if (onPlayNext != null) {
+            OutlinedButton(onClick = onPlayNext, enabled = enabled) {
+                Icon(
+                    imageVector = Icons.Rounded.QueueMusic,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(Modifier.width(6.dp))
+                Text("Следующими")
+            }
+        }
+        if (onRadio != null) {
+            OutlinedButton(onClick = onRadio, enabled = enabled) {
+                Icon(
+                    imageVector = Icons.Rounded.Radio,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(Modifier.width(6.dp))
+                Text("Радио")
+            }
+        }
+        if (onToggleReorder != null) {
+            OutlinedButton(
+                onClick = onToggleReorder,
+                enabled = enabled,
+            ) {
+                Icon(
+                    imageVector = if (reorderActive) {
+                        Icons.Rounded.Check
+                    } else {
+                        Icons.Rounded.SwapVert
+                    },
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(if (reorderActive) "Готово" else "Порядок")
             }
         }
     }

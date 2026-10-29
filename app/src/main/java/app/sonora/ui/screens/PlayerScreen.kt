@@ -32,6 +32,7 @@ import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Cloud
 import androidx.compose.material.icons.rounded.CloudOff
 import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
@@ -49,6 +50,7 @@ import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -91,6 +93,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.Player
 import app.sonora.core.model.Source
+import app.sonora.core.settings.AudioQuality
 import app.sonora.core.settings.PlaybackMode
 import app.sonora.core.util.Formatters
 import app.sonora.data.download.SaveStatus
@@ -134,6 +137,7 @@ fun PlayerScreen(vm: MainViewModel, onBack: () -> Unit, navigate: (String) -> Un
     var menuExpanded by remember { mutableStateOf(false) }
     var sourceMenuExpanded by remember { mutableStateOf(false) }
     var sleepDialogVisible by remember { mutableStateOf(false) }
+    var qualityDialogVisible by remember { mutableStateOf(false) }
     var lyricsVisible by remember { mutableStateOf(false) }
     var lyricsRequestedFor by remember { mutableStateOf<String?>(null) }
     var hint by remember { mutableStateOf<String?>(null) }
@@ -280,6 +284,16 @@ fun PlayerScreen(vm: MainViewModel, onBack: () -> Unit, navigate: (String) -> Un
                             onClick = {
                                 menuExpanded = false
                                 sleepDialogVisible = true
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Качество · ${settings.audioQuality.label}") },
+                            leadingIcon = {
+                                Icon(Icons.Rounded.GraphicEq, contentDescription = null)
+                            },
+                            onClick = {
+                                menuExpanded = false
+                                qualityDialogVisible = true
                             },
                         )
                         HorizontalDivider()
@@ -894,6 +908,60 @@ fun PlayerScreen(vm: MainViewModel, onBack: () -> Unit, navigate: (String) -> Un
             },
             dismissButton = {
                 TextButton(onClick = { sleepDialogVisible = false }) { Text("Закрыть") }
+            },
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        )
+    }
+
+    if (qualityDialogVisible) {
+        AlertDialog(
+            onDismissRequest = { qualityDialogVisible = false },
+            title = { Text("Качество аудио") },
+            text = {
+                Column {
+                    Text(
+                        text = "Для онлайн-воспроизведения. Сохранённые файлы играются " +
+                            "в исходном качестве.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    AudioQuality.values().forEach { quality ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    vm.setAudioQuality(quality)
+                                    qualityDialogVisible = false
+                                }
+                                .padding(vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            RadioButton(
+                                selected = settings.audioQuality == quality,
+                                onClick = {
+                                    vm.setAudioQuality(quality)
+                                    qualityDialogVisible = false
+                                },
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    text = quality.label,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                )
+                                Text(
+                                    text = quality.hint,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { qualityDialogVisible = false }) { Text("Закрыть") }
             },
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         )

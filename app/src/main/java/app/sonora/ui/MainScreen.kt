@@ -47,6 +47,7 @@ import androidx.navigation.compose.rememberNavController
 import app.sonora.AppGraph
 import app.sonora.ui.components.MiniPlayer
 import app.sonora.ui.nav.LocalArtistNavigator
+import app.sonora.ui.nav.LocalTrackRadio
 import app.sonora.ui.nav.Routes
 import app.sonora.ui.screens.AlbumDetailScreen
 import app.sonora.ui.screens.ArtistDetailScreen
@@ -111,6 +112,7 @@ fun MainScreen(graph: AppGraph) {
                 launchSingleTop = true
             }
         },
+        LocalTrackRadio provides { track -> viewModel.startTrackRadio(track) },
     ) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,

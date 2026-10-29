@@ -1,6 +1,7 @@
 package app.sonora.data.remote.youtube.innertube
 
-import com.metrolist.innertubex.extraction.AudioQuality
+import app.sonora.core.settings.AudioQuality
+import com.metrolist.innertubex.extraction.AudioQuality as EngineQuality
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
@@ -13,10 +14,16 @@ import java.util.concurrent.ConcurrentHashMap
  * Ссылки googlevideo живут несколько часов, но перевыпускать их на каждый
  * `open()` источника всё равно дорого: ExoPlayer открывает поток при каждом
  * переходе и seek-е через границу чанка. Держим ссылку до истечения `expire`.
+ *
+ * Ключ кэша включает уровень качества, поэтому переключение «Низкое → Высокое»
+ * не требует сброса кэша: для нового уровня просто резолвится своя ссылка.
  */
 internal object InnerTubeStreams {
 
     private const val RENEW_BEFORE_MS = 60_000L
+
+    /** Запас, ниже которого формат считается «попавшим» в целевой битрейт. */
+    private const val BITRATE_TOLERANCE = 16_000
 
     private val api = InnerTubeApi()
     private val cache = ConcurrentHashMap<String, StreamInfo>()
@@ -24,37 +31,63 @@ internal object InnerTubeStreams {
 
     suspend fun resolve(
         videoId: String,
-        quality: AudioQuality = AudioQuality.HIGH,
-    ): StreamInfo {
-        val cacheKey = "$videoId|${quality.name}"
-        val now = System.currentTimeMillis()
-        cache[cacheKey]?.let { cached ->
-            if (cached.expiresAtMs - now > RENEW_BEFORE_MS) return cached
+        quality: AudioQuality = AudioQuality.AUTO,
+    ): StreamInfo = cached("$videoId|${quality.name}") {
+        resolveStream(videoId, quality)
+    }
+
+    /**
+     * Двухступенчатый резолв:
+     * 1. InnerTubeX — быстрый и устойчивый путь, сам выбирает формат.
+     * 2. Если нужен более низкий битрейт (Низкое/Обычное), чем отдал движок,
+     *    пробуем прямой `player`-ответ с целевым битрейтом: там доступны
+     *    отдельные форматы 64/128/160 кбит/с.
+     *
+     * Если дешёвый формат получить не удалось, играем то, что есть, — качество
+     * не должно ломать воспроизведение.
+     */
+    private suspend fun resolveStream(videoId: String, level: AudioQuality): StreamInfo {
+        val targetKbps = level.targetKbps
+        var engineStream: StreamInfo? = null
+        var engineFailure: Exception? = null
+        try {
+            engineStream = InnerTubeXEngine.resolve(videoId, level.engineQuality())
+        } catch (error: Exception) {
+            engineFailure = error
         }
-        val lock = locks.getOrPut(cacheKey) { Mutex() }
-        return lock.withLock {
-            val latest = cache[cacheKey]
-            val current = System.currentTimeMillis()
-            if (latest != null && latest.expiresAtMs - current > RENEW_BEFORE_MS) {
-                return@withLock latest
+
+        // Авто и «Очень высокое» — отдаём максимум, который нашёл движок.
+        if (engineStream != null && targetKbps == null) return engineStream
+
+        val engineTooHigh = engineStream != null &&
+            engineStream.bitrate > targetKbps!! * 1000 + BITRATE_TOLERANCE
+        if (engineStream == null || engineTooHigh) {
+            val direct = try {
+                api.stream(videoId, targetKbps)
+            } catch (error: Exception) {
+                null
             }
-            val resolved = runCatching { InnerTubeXEngine.resolve(videoId, quality) }
-                .recoverCatching { api.stream(videoId) }
-                .getOrThrow()
-            // Sonora — музыкальный плеер: видеопотоки не воспроизводим и не качаем.
-            if (!resolved.mimeType.startsWith("audio/", ignoreCase = true)) {
-                throw IllegalStateException(
-                    "YouTube отдал только видеопоток. Sonora играет только музыку (audio).",
-                )
+            if (direct != null) {
+                // Для «Авто» сравниваем оба варианта и берём лучший.
+                if (targetKbps == null && engineStream != null) {
+                    return if (engineStream.bitrate >= direct.bitrate) engineStream else direct
+                }
+                return direct
             }
-            cache[cacheKey] = resolved
-            resolved
         }
+
+        return engineStream ?: throw (
+            engineFailure ?: IllegalStateException("Не удалось получить поток YouTube")
+            )
     }
 
     /** MP4-поток для скачивания: m4a лучше подходит для офлайн-файла. */
     suspend fun resolveDownload(videoId: String): StreamInfo =
-        resolve(videoId, AudioQuality.MP4)
+        cached("$videoId|MP4") {
+            runCatching { InnerTubeXEngine.resolve(videoId, EngineQuality.MP4) }
+                .recoverCatching { api.stream(videoId) }
+                .getOrThrow()
+        }
 
     /**
      * Резервный источник для скачивания: обычный `player`-ответ InnerTube без
@@ -62,7 +95,7 @@ internal object InnerTubeStreams {
      * сервер затем отклоняет (403/410/416).
      */
     suspend fun resolveDownloadFallback(videoId: String): StreamInfo {
-        val cacheKey = "$videoId|${AudioQuality.MP4.name}"
+        val cacheKey = "$videoId|MP4"
         val resolved = api.stream(videoId)
         if (!resolved.mimeType.startsWith("audio/", ignoreCase = true)) {
             throw IllegalStateException(
@@ -77,8 +110,8 @@ internal object InnerTubeStreams {
      * Синхронный вариант для `ResolvingDataSource.Resolver`: Media3 зовёт его
      * на собственном loading-потоке, поэтому блокировать UI не страшно.
      */
-    fun resolveBlocking(videoId: String): StreamInfo =
-        runBlocking(Dispatchers.IO) { resolve(videoId) }
+    fun resolveBlocking(videoId: String, quality: AudioQuality): StreamInfo =
+        runBlocking(Dispatchers.IO) { resolve(videoId, quality) }
 
     fun invalidate(videoId: String) {
         // Ключ кэша — «videoId|QUALITY», поэтому remove(videoId) не срабатывал.
@@ -93,5 +126,40 @@ internal object InnerTubeStreams {
         val id = rawUri.removePrefix("innertube:").trimStart('/')
             .substringBefore('/').substringBefore('?')
         return id.takeIf { it.isNotBlank() }
+    }
+
+    /** Общий кэш с двойной проверкой под мьютексом и TTL. */
+    private suspend fun cached(
+        cacheKey: String,
+        block: suspend () -> StreamInfo,
+    ): StreamInfo {
+        val now = System.currentTimeMillis()
+        cache[cacheKey]?.let { cached ->
+            if (cached.expiresAtMs - now > RENEW_BEFORE_MS) return cached
+        }
+        val lock = locks.getOrPut(cacheKey) { Mutex() }
+        return lock.withLock {
+            val latest = cache[cacheKey]
+            val current = System.currentTimeMillis()
+            if (latest != null && latest.expiresAtMs - current > RENEW_BEFORE_MS) {
+                return@withLock latest
+            }
+            val resolved = block()
+            // Sonora — музыкальный плеер: видеопотоки не воспроизводим и не качаем.
+            if (!resolved.mimeType.startsWith("audio/", ignoreCase = true)) {
+                throw IllegalStateException(
+                    "YouTube отдал только видеопоток. Sonora играет только музыку (audio).",
+                )
+            }
+            cache[cacheKey] = resolved
+            resolved
+        }
+    }
+
+    /** Соответствие уровней Sonora возможностям библиотеки InnerTubeX. */
+    private fun AudioQuality.engineQuality(): EngineQuality = when (this) {
+        AudioQuality.AUTO -> EngineQuality.AUTO
+        AudioQuality.LOW, AudioQuality.NORMAL -> EngineQuality.LOW
+        AudioQuality.HIGH, AudioQuality.VERY_HIGH -> EngineQuality.HIGH
     }
 }

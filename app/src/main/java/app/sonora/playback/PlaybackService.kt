@@ -11,6 +11,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
+import app.sonora.AppGraph
 import app.sonora.core.settings.SettingsStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -43,7 +44,13 @@ class PlaybackService : MediaSessionService() {
             .build()
 
         val mediaSourceFactory = DefaultMediaSourceFactory(this)
-            .setDataSourceFactory(InnerTubeDataSourceFactory(this))
+            .setDataSourceFactory(
+                InnerTubeDataSourceFactory(this) {
+                    // Читаем актуальные настройки приложения (не кэш сервиса):
+                    // смена качества в UI применяется к следующему открытию потока.
+                    AppGraph.get(this@PlaybackService).settings.current.audioQuality
+                },
+            )
 
         player = ExoPlayer.Builder(this)
             .setMediaSourceFactory(mediaSourceFactory)

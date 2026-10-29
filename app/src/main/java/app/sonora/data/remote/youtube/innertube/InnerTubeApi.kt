@@ -551,8 +551,12 @@ internal class InnerTubeApi {
     /**
      * Прямой аудио-URL. Клиенты перебираются, потому что YouTube может
      * отдать одному клиенту только signatureCipher, а другому — готовый `url`.
+     *
+     * [targetKbps] — желаемый битрейт (64/128/160). Подбираем ближайший формат
+     * не ниже целевого; если такого нет — самый близкий снизу. null — лучшее
+     * доступное качество.
      */
-    suspend fun stream(videoId: String): StreamInfo {
+    suspend fun stream(videoId: String, targetKbps: Int? = null): StreamInfo {
         var lastError: Exception? = null
         for (profile in STREAM_CLIENTS) {
             try {
@@ -581,9 +585,8 @@ internal class InnerTubeApi {
                     ?.arr("adaptiveFormats")
                     ?.mapNotNull { it.asObjectOrNull() }
                     .orEmpty()
-                val best = formats
-                    .mapNotNull(::parseAudioFormat)
-                    .maxByOrNull { formatScore(it) }
+                val parsed = formats.mapNotNull(::parseAudioFormat)
+                val best = pickAudioFormat(parsed, targetKbps)
                     ?: throw IllegalStateException("YouTube не вернул аудиоформаты")
                 val expire = EXPIRE_PARAM.find(best.url)?.groupValues?.getOrNull(1)
                     ?.toLongOrNull()
@@ -781,6 +784,31 @@ internal class InnerTubeApi {
         249 -> 2_000_000_000L + format.bitrate
         139 -> 1_000_000_000L + format.bitrate
         else -> format.bitrate.toLong()
+    }
+
+    /**
+     * Выбор формата под желаемый битрейт.
+     *
+     * Сначала пробуем формат не ниже цели с минимальным превышением (чтобы
+     * «Обычное» не превращалось в 160 кбит/с), затем — самый близкий снизу.
+     * При равном битрейте предпочитаем Opus (251/250/249) и m4a (140/139).
+     */
+    private fun pickAudioFormat(formats: List<RawFormat>, targetKbps: Int?): RawFormat? {
+        if (formats.isEmpty()) return null
+        if (targetKbps == null) return formats.maxByOrNull { formatScore(it) }
+        val target = targetKbps * 1000
+        val atLeast = formats.filter { it.bitrate >= target }
+            .minWithOrNull(
+                compareBy<RawFormat> { it.bitrate - target }
+                    .thenByDescending { formatScore(it) },
+            )
+        if (atLeast != null) return atLeast
+        // Источник не отдаёт столько: берём самый высокий формат НИЖЕ цели,
+        // а не максимальный вообще — иначе «Низкое» звучало бы как «Высокое».
+        return formats.filter { it.bitrate > 0 && it.bitrate < target }
+            .maxByOrNull { it.bitrate }
+            ?: formats.minByOrNull { it.bitrate }
+            ?: formats.maxByOrNull { formatScore(it) }
     }
 
     private fun continuationToken(root: JsonObject): String? {

@@ -267,6 +267,33 @@ class LibraryRepository(
         persistPlaylists()
     }
 
+    /**
+     * Меняет порядок треков внутри плейлиста — как перетаскивание в Spotify.
+     * Индексы проверяются, чтобы не потерять состав при гонке с удалением.
+     */
+    suspend fun moveInPlaylist(playlistId: String, from: Int, to: Int) {
+        if (from == to) return
+        var changed = false
+        _playlists.value = _playlists.value.map { playlist ->
+            if (playlist.id != playlistId) return@map playlist
+            val ids = playlist.trackIds.toMutableList()
+            if (from !in ids.indices || to !in ids.indices) return@map playlist
+            val item = ids.removeAt(from)
+            ids.add(to, item)
+            changed = true
+            playlist.copy(trackIds = ids)
+        }
+        if (changed) persistPlaylists()
+    }
+
+    /** Полное замещение состава: нужно для сортировки плейлиста. */
+    suspend fun setPlaylistTracks(playlistId: String, trackIds: List<String>) {
+        _playlists.value = _playlists.value.map { playlist ->
+            if (playlist.id == playlistId) playlist.copy(trackIds = trackIds) else playlist
+        }
+        persistPlaylists()
+    }
+
     // ---------- Избранное ----------
 
     suspend fun toggleFavorite(trackId: String): Boolean {

@@ -57,9 +57,11 @@ private const val DURATION_SLIDER_STEPS =
 fun WaveSettingsSheet(
     settings: WaveSettings,
     historySize: Int,
+    dislikedCount: Int,
     onDismiss: () -> Unit,
     onApply: (WaveSettings) -> Unit,
     onClearHistory: () -> Unit,
+    onClearDislikes: () -> Unit,
 ) {
     // Черновик: правки применяются только по кнопке «Применить».
     var draft by remember(settings) { mutableStateOf(settings) }
@@ -166,6 +168,22 @@ fun WaveSettingsSheet(
                     )
                     TextButton(onClick = onClearHistory) {
                         Text("Очистить историю", style = MaterialTheme.typography.labelLarge)
+                    }
+                }
+                if (dislikedCount > 0) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = "Скрыто кнопкой «Не интересно»: $dislikedCount",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.weight(1f),
+                        )
+                        TextButton(onClick = onClearDislikes) {
+                            Text("Вернуть", style = MaterialTheme.typography.labelLarge)
+                        }
                     }
                 }
 

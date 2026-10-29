@@ -78,6 +78,7 @@ import androidx.compose.ui.unit.dp
 import app.sonora.core.model.Source
 import app.sonora.core.settings.Accent
 import app.sonora.core.settings.AppSettings
+import app.sonora.core.settings.AudioQuality
 import app.sonora.core.settings.PlaybackMode
 import app.sonora.core.settings.ThemeMode
 import app.sonora.net.warp.WarpState
@@ -111,6 +112,7 @@ private const val LEGAL_TEXT =
 fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) -> Unit) {
     val settings by vm.settings.collectAsState()
     val waveHistorySize by vm.waveHistorySize.collectAsState()
+    val waveDisliked by vm.waveDisliked.collectAsState()
     val connections by vm.connections.collectAsState()
     val scanning by vm.scanning.collectAsState()
     val enriching by vm.enriching.collectAsState()
@@ -275,6 +277,31 @@ fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
                     Text("Сбросить эквалайзер")
                 }
             }
+            Spacer(Modifier.height(6.dp))
+            SettingsLabel("Качество аудио")
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(AudioQuality.values().size) { index ->
+                    val quality = AudioQuality.values()[index]
+                    FilterChip(
+                        selected = settings.audioQuality == quality,
+                        onClick = { vm.setAudioQuality(quality) },
+                        label = { Text(quality.label) },
+                    )
+                }
+            }
+            Text(
+                text = settings.audioQuality.hint,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            Text(
+                text = "Влияет на онлайн-воспроизведение. Сохранённые файлы играются " +
+                    "в исходном качестве.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 2.dp),
+            )
             Spacer(Modifier.height(6.dp))
             SettingsLabel("Скорость воспроизведения")
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -921,7 +948,7 @@ fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
 
         // ---------- О приложении ----------
         SettingsSection(title = "О приложении", icon = Icons.Rounded.Info) {
-            InfoRow(title = "Версия", value = "1.2.0")
+            InfoRow(title = "Версия", value = "1.3.0")
             InfoRow(title = "Стек", value = "Kotlin · Compose · Media3")
             Spacer(Modifier.height(8.dp))
             Text(
@@ -936,12 +963,14 @@ fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
             WaveSettingsSheet(
                 settings = settings.wave,
                 historySize = waveHistorySize,
+                dislikedCount = waveDisliked.size,
                 onDismiss = { showWaveSettings = false },
                 onApply = { draft ->
                     vm.updateWaveSettings { _ -> draft }
                     showWaveSettings = false
                 },
                 onClearHistory = { vm.clearWaveHistory() },
+                onClearDislikes = { vm.clearWaveDislikes() },
             )
         }
     }

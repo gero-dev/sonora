@@ -10,6 +10,7 @@ import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.ResolvingDataSource
+import app.sonora.core.settings.AudioQuality
 import app.sonora.data.remote.youtube.innertube.InnerTube
 import app.sonora.data.remote.youtube.innertube.InnerTubeStreams
 import java.io.IOException
@@ -20,9 +21,15 @@ import java.io.IOException
  * ExoPlayer видит обычный MediaItem с URI, а при открытии мы подменяем его
  * на прямой аудио-URL InnerTube. Побочный эффект: очередь, seek, уведомление
  * и виджет работают без отдельного «резолвера перед play».
+ *
+ * [quality] читается при каждом открытии потока, поэтому смена качества
+ * в настройках применяется к следующему треку без пересоздания сервиса.
  */
 @OptIn(UnstableApi::class)
-class InnerTubeDataSourceFactory(context: Context) : DataSource.Factory {
+class InnerTubeDataSourceFactory(
+    context: Context,
+    private val quality: () -> AudioQuality = { AudioQuality.AUTO },
+) : DataSource.Factory {
 
     private val appContext = context.applicationContext
 
@@ -40,7 +47,7 @@ class InnerTubeDataSourceFactory(context: Context) : DataSource.Factory {
             dataSpec
         } else {
             val stream = try {
-                InnerTubeStreams.resolveBlocking(videoId)
+                InnerTubeStreams.resolveBlocking(videoId, quality())
             } catch (error: Exception) {
                 throw IOException(
                     error.message ?: "Не удалось открыть поток YouTube",

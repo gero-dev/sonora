@@ -17,6 +17,7 @@ import app.sonora.core.model.Track
 import app.sonora.core.model.TrackMetadata
 import app.sonora.core.settings.Accent
 import app.sonora.core.settings.AppSettings
+import app.sonora.core.settings.AudioQuality
 import app.sonora.core.settings.PlaybackMode
 import app.sonora.core.settings.ThemeMode
 import app.sonora.core.settings.WaveSettings
@@ -37,6 +38,9 @@ import app.sonora.net.warp.WarpStatus
 import app.sonora.data.import.ImportedTrackEntry
 import app.sonora.playback.PlayerUiState
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -187,6 +191,12 @@ private const val WAVE_LIMIT = 30
 /** Сколько треков добавляет кнопка «Ещё» в бесконечной волне. */
 private const val WAVE_LOAD_MORE_LIMIT = 20
 
+/** Радио: сколько похожих треков брать сразу и какими порциями добирать. */
+private const val RADIO_LIMIT = 40
+private const val RADIO_BATCH = 20
+/** Порог остатка очереди, после которого радио догружает следующую пачку. */
+private const val RADIO_REFILL_THRESHOLD = 6
+
 /** Максимум треков за один импорт списка: каждый неизвестный ищется в InnerTube. */
 private const val MAX_PLAYLIST_IMPORT = 150
 
@@ -267,6 +277,7 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
         observeInfiniteQueue()
         observeCurrentYouTubeTrack()
         observePlaybackHistory()
+        observeRadio()
         observeWarpKeepAlive()
         // Страховка для кнопки «вперёд»: если очередь кончилась, PlaybackController
         // сам попросит новую пачку и переключит трек (только при включённой бесконечной очереди).
@@ -722,6 +733,144 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
         viewModelScope.launch { graph.library.removeFromPlaylist(playlistId, trackId) }
     }
 
+    /** Перестановка треков внутри плейлиста (как перетаскивание в Spotify). */
+    fun movePlaylistTrack(playlistId: String, from: Int, to: Int) {
+        viewModelScope.launch { graph.library.moveInPlaylist(playlistId, from, to) }
+    }
+
+    /** Сортировка плейлиста по названию/исполнителю/альбому. */
+    fun sortPlaylist(playlist: Playlist, comparator: Comparator<Track>) {
+        viewModelScope.launch {
+            val ordered = playlistTracks(playlist).sortedWith(comparator).map { it.id }
+            if (ordered.isNotEmpty()) graph.library.setPlaylistTracks(playlist.id, ordered)
+        }
+    }
+
+    /**
+     * Ставит весь плейлист сразу после текущего трека — «играть следующим»,
+     * как в Spotify. Состав подгружается, если удалённый плейлист ещё не синхронизирован.
+     */
+    fun playPlaylistNext(playlist: Playlist) {
+        viewModelScope.launch {
+            val tracks = resolvePlaylistTracks(playlist)
+            if (tracks.isEmpty()) {
+                toast("В этом плейлисте нет треков")
+                return@launch
+            }
+            val allowed = queueable(tracks)
+            if (allowed.isEmpty()) return@launch
+            graph.playback.playNext(allowed)
+            toast("Следующими: ${allowed.size} трек(ов)")
+        }
+    }
+
+    /** Единая точка получения состава плейлиста: локальный кэш или InnerTube. */
+    private suspend fun resolvePlaylistTracks(playlist: Playlist): List<Track> {
+        val local = playlistTracks(playlist)
+        if (local.isNotEmpty() || playlist.remoteId == null) return local
+        val remote = runCatching { graph.youtube.playlistTracks(playlist.remoteId) }
+            .getOrDefault(emptyList())
+        if (remote.isNotEmpty()) {
+            graph.library.cacheRemoteTracks(remote)
+            graph.library.addToPlaylist(playlist.id, remote.map { it.id })
+        }
+        return remote.filterNot { it.isVideoContent }
+    }
+
+    // ---------- Радио (по треку и по плейлисту) ----------
+
+    /**
+     * Активно ли радио. Пока оно включено, очередь автоматически пополняется
+     * похожими треками, а обычное воспроизведение его выключает.
+     */
+    private var radioActive = false
+    private var radioRefilling = false
+
+    /** Радио по треку — как «Перейти в радио песни» в Spotify. */
+    fun startTrackRadio(track: Track) {
+        if (blockedVideo(track)) return
+        startRadio(localCopyOf(track) ?: track, "Радио по треку: ${track.title}")
+    }
+
+    /** Радио по плейлисту: сид — случайный трек, дальше похожее. */
+    fun startPlaylistRadio(playlist: Playlist) {
+        viewModelScope.launch {
+            val tracks = resolvePlaylistTracks(playlist)
+            if (tracks.isEmpty()) {
+                toast("В этом плейлисте нет треков")
+                return@launch
+            }
+            val seed = tracks.random()
+            startRadio(seed, "Радио по плейлисту «${playlist.name}»")
+        }
+    }
+
+    /** Выключает режим радио (вызывается при обычном запуске очереди). */
+    private fun stopRadio() {
+        radioActive = false
+        radioRefilling = false
+    }
+
+    private fun startRadio(seed: Track, label: String) {
+        stopRadio()
+        radioActive = true
+        viewModelScope.launch {
+            val related = radioCandidates(seed, RADIO_LIMIT)
+            val queue = playableNow(listOf(seed) + related).distinctBy { it.id }
+            if (queue.isEmpty()) {
+                radioActive = false
+                toast("Не удалось собрать радио для этого трека")
+                return@launch
+            }
+            graph.playback.playQueue(queue, 0)
+            toast(label)
+        }
+    }
+
+    /**
+     * Следит за очередью и подгружает следующую пачку, пока радио активно.
+     * Порог небольшой, чтобы «вперёд» никогда не упирался в конец.
+     */
+    private fun observeRadio() {
+        viewModelScope.launch {
+            graph.playback.state.collect { state ->
+                if (!radioActive || radioRefilling) return@collect
+                if (state.queue.isEmpty()) return@collect
+                val remaining = state.queue.size - state.index
+                if (remaining > RADIO_REFILL_THRESHOLD) return@collect
+                val last = state.queue.lastOrNull() ?: return@collect
+                radioRefilling = true
+                try {
+                    val batch = radioCandidates(last, RADIO_BATCH)
+                    val known = state.queue.mapTo(HashSet()) { it.id }
+                    val fresh = queueable(batch).filterNot { it.id in known }
+                    if (fresh.isNotEmpty()) graph.playback.appendToQueue(fresh)
+                } finally {
+                    radioRefilling = false
+                }
+            }
+        }
+    }
+
+    /**
+     * Кандидаты для радио: очередь «дальше» из YouTube Music плюс локальные
+     * похожие (тот же альбом/артист). Онлайн-часть работает только когда
+     * стриминг разрешён — иначе радио остаётся в пределах устройства.
+     */
+    private suspend fun radioCandidates(seed: Track, limit: Int): List<Track> {
+        val videoId = youtubeVideoId(seed)
+        val remote = if (videoId != null && streamingAllowed()) {
+            runCatching { graph.youtube.related(videoId, limit) }.getOrDefault(emptyList())
+        } else {
+            emptyList()
+        }
+        val local = buildQueueFor(seed).filterNot { it.id == seed.id }
+        return WaveEngine.dedupe(remote + local)
+            .filter { !it.isVideoContent && it.playable && !it.uri.isNullOrBlank() }
+            .filterNot { WaveEngine.isSelfReference(it) }
+            .take(limit)
+    }
+
     // ---------- Воспроизведение ----------
 
     /**
@@ -735,6 +884,7 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
         val playableTrack = localCopyOf(track) ?: track
         if (playableTrack.playable && !playableTrack.uri.isNullOrBlank()) {
             if (blockedByMode(playableTrack)) return false
+            stopRadio()
             graph.playback.playQueue(buildQueueFor(playableTrack), 0)
             if (playableTrack.source == Source.YOUTUBE) {
                 cacheAndEnrichYouTube(playableTrack)
@@ -1329,6 +1479,7 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
 
     fun playQueue(tracks: List<Track>, startIndex: Int = 0) {
         // Прямой запуск списка: выключатель «Стриминг в очереди» здесь не мешает.
+        stopRadio()
         val allowed = playableNow(tracks)
         if (allowed.isEmpty()) {
             toast("Режим «Только загруженное»: здесь нет треков с устройства.")
@@ -1581,6 +1732,7 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
             toast("Волна пуста: добавьте музыку на устройство или включите стриминг.")
             return
         }
+        stopRadio()
         graph.playback.playQueue(tracks, 0)
         // «Похожие» подтягиваем для того трека, который реально заиграл.
         tracks.firstOrNull()?.takeIf { it.source == Source.YOUTUBE }?.let(::appendYouTubeRelated)
@@ -1594,6 +1746,38 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
 
     /** Сколько прослушиваний учтено в рекомендациях (показывается в настройках волны). */
     val waveHistorySize: StateFlow<Int> = graph.playHistory.size
+
+    /** Треки, отмеченные «не интересно» в волне. */
+    val waveDisliked: StateFlow<Set<String>> = graph.playHistory.disliked
+
+    /**
+     * «Не интересно»: трек убирается из текущей волны и больше не предлагается.
+     * Обратное действие — [undoWaveDislike].
+     */
+    fun dislikeWaveTrack(track: Track) {
+        viewModelScope.launch {
+            graph.playHistory.dislike(track)
+            markWaveSeen(listOf(track))
+            _wave.update { st -> st.copy(tracks = st.tracks.filterNot { it.id == track.id }) }
+            toast("Больше не будем предлагать этот трек")
+        }
+    }
+
+    fun undoWaveDislike(track: Track) {
+        viewModelScope.launch {
+            graph.playHistory.undislike(track)
+            refreshWave()
+        }
+    }
+
+    /** Вернуть в рекомендации все скрытые треки. */
+    fun clearWaveDislikes() {
+        viewModelScope.launch {
+            graph.playHistory.clearDislikes()
+            toast("Скрытые треки снова в рекомендациях")
+            refreshWave()
+        }
+    }
 
     /** Сырые записи истории — экран «История» пересобирает из них списки. */
     val historyEntries: StateFlow<List<WaveHistoryEntry>> = graph.playHistory.entries
@@ -1733,6 +1917,7 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
         val useHistory = tuning.useHistory
         val recent = if (useHistory) WaveEngine.recentKeys(history, now) else emptySet()
         val affinity = if (useHistory) WaveEngine.artistAffinity(history, now) else emptyMap()
+        val disliked = graph.playHistory.disliked.value
 
         val allTracks = graph.library.tracks.value
         val localCandidates = allTracks.filter { track ->
@@ -1763,6 +1948,8 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
                 tuning = tuning,
                 localBias = true,
                 nowMs = now,
+                dislikedKeys = disliked,
+                recentTrackKeys = recent,
             )
         }
 
@@ -1770,7 +1957,9 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
         val online = if (!onlineAllowed) {
             emptyList()
         } else {
-            // Каждая порция — новый запрос: любимые артисты, частые артисты, миксы.
+            // Берём сразу несколько запросов: один даёт узкую выдачу и слишком
+            // часто возвращает уже знакомые треки. Любимые артисты, частые
+            // артисты и настроение идут параллельно.
             val queries = WaveEngine.queries(
                 moodQuery = state.filters.mood.takeIf { it != WaveMood.ANY }?.query,
                 favoriteArtists = favoriteArtists.toList(),
@@ -1781,44 +1970,65 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
                 affinity = affinity,
                 tuning = tuning,
             )
-            val query = queries.getOrNull(waveQueryCursor++ % queries.size.coerceAtLeast(1))
-            if (query.isNullOrBlank()) {
+            val picks = if (queries.isEmpty()) {
                 emptyList()
             } else {
-                graph.youtube.search(query, REMOTE_SEARCH_LIMIT)
-                    .filter { it.playable && !it.uri.isNullOrBlank() }
-                    .filter { WaveEngine.isMusic(it, tuning) }
-                    .let { candidates ->
-                        WaveEngine.rank(
-                            candidates = candidates,
-                            favoriteIds = favoriteIds,
-                            favoriteArtists = favoriteArtists,
-                            artistCounts = artistCounts,
-                            history = history,
-                            tuning = tuning,
-                            localBias = false,
-                            nowMs = now,
-                        )
-                    }
+                val start = waveQueryCursor
+                waveQueryCursor = (waveQueryCursor + 3) % queries.size
+                (0 until minOf(3, queries.size))
+                    .map { queries[(start + it) % queries.size] }
+                    .distinct()
             }
+            val responses = if (picks.isEmpty()) {
+                emptyList()
+            } else {
+                coroutineScope {
+                    picks.map { query ->
+                        async {
+                            runCatching { graph.youtube.search(query, REMOTE_SEARCH_LIMIT) }
+                                .getOrDefault(emptyList())
+                        }
+                    }.awaitAll()
+                }
+            }
+            val candidates = responses.flatten()
+                .filter { it.playable && !it.uri.isNullOrBlank() }
+                .filter { WaveEngine.isMusic(it, tuning) }
+            WaveEngine.rank(
+                candidates = candidates,
+                favoriteIds = favoriteIds,
+                favoriteArtists = favoriteArtists,
+                artistCounts = artistCounts,
+                history = history,
+                tuning = tuning,
+                localBias = false,
+                nowMs = now,
+                dislikedKeys = disliked,
+                recentTrackKeys = recent,
+            )
         }
 
         val merged = WaveEngine.mix(localPool, online, tuning, limit * 2)
-        // Исключаем показанное и недавно игравшее: и по id, и по «исполнитель|название».
+        // Исключаем только показанное в прошлых порциях и явные дизлайки.
+        // Недавно игравшее больше не вырезается подчистую — за него отвечает
+        // штраф в rank, иначе у небольшой фонотеки волна остаётся пустой.
         val filtered = WaveEngine.dedupe(merged).filter { track ->
             val key = WaveEngine.waveKey(track)
-            track.id !in excludeIds && key !in excludeKeys && key !in recent
+            track.id !in excludeIds &&
+                key !in excludeKeys &&
+                !WaveEngine.isDisliked(track, disliked)
         }
         val diversified = WaveEngine.diversify(filtered, limit, tuning.artistDiversity.coerceIn(1, 5))
         val sorted = sortWave(diversified, state.sort)
+        // Подписи — про подборку, а не про «ваши N прослушиваний»: волна
+        // должна ощущаться как открытие нового, а не как отчёт о себе.
         val label = when {
             state.filters.mood != WaveMood.ANY -> "Настроение: ${state.filters.mood.label}"
             !streamingAllowed() -> "Только устройство: стриминг выключен"
             sourceMode == WaveSourceMode.LOCAL -> "Только музыка с устройства"
-            sourceMode == WaveSourceMode.ONLINE -> "Только музыка онлайн"
-            useHistory && history.isNotEmpty() -> "На основе ${history.size} прослушиваний"
-            favoriteArtists.isNotEmpty() -> "На основе ${favoriteArtists.size} любимых исполнителей"
-            else -> "Только музыка: без видео и концертов"
+            sourceMode == WaveSourceMode.ONLINE -> "Новые исполнители и знакомые треки"
+            tuning.novelty >= 65 -> "Больше новых исполнителей"
+            else -> "Новая подборка каждый раз"
         }
         return@withContext sorted to label
     }
@@ -2439,6 +2649,20 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
     fun setDynamicColor(enabled: Boolean) = updateSettings { it.copy(dynamicColor = enabled) }
     fun setGapless(enabled: Boolean) = updateSettings { it.copy(gapless = enabled) }
     fun setSkipSilence(enabled: Boolean) = updateSettings { it.copy(skipSilence = enabled) }
+
+    /**
+     * Смена качества онлайн-аудио. Сбрасываем кэш ссылок текущего трека и
+     * переоткрываем поток, чтобы новое качество применилось сразу, а не со
+     * следующего трека.
+     */
+    fun setAudioQuality(quality: AudioQuality) {
+        updateSettings { it.copy(audioQuality = quality) }
+        val current = graph.playback.state.value.current ?: return
+        val videoId = youtubeVideoId(current) ?: return
+        graph.youtube.invalidateStream(videoId)
+        graph.playback.reloadCurrent()
+        toast("Качество: ${quality.label}")
+    }
     fun setScanOnStart(enabled: Boolean) = updateSettings { it.copy(scanOnStart = enabled) }
 
     fun setReadSidecarMetadata(enabled: Boolean) =

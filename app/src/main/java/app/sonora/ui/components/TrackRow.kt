@@ -34,6 +34,7 @@ import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.PlaylistAdd
 import androidx.compose.material.icons.rounded.PlaylistPlay
+import androidx.compose.material.icons.rounded.Radio
 import androidx.compose.material.icons.rounded.QueueMusic
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -72,6 +73,7 @@ import app.sonora.core.model.Track
 import app.sonora.data.download.SaveStatus
 import app.sonora.data.download.TrackSaveState
 import app.sonora.ui.nav.LocalArtistNavigator
+import app.sonora.ui.nav.LocalTrackRadio
 import app.sonora.ui.theme.LocalSonoraColors
 import coil.compose.AsyncImage
 
@@ -285,6 +287,7 @@ fun TrackRow(
 ) {
     val hasLyrics = !track.lyrics.isNullOrBlank() || !track.syncedLyrics.isNullOrBlank()
     val openArtist = LocalArtistNavigator.current
+    val trackRadio = LocalTrackRadio.current
     val canDownload = onDownload != null && track.streamingOnly &&
         saveState?.status != SaveStatus.UNAVAILABLE
     val saving = saveState?.status == SaveStatus.QUEUED ||
@@ -392,7 +395,7 @@ fun TrackRow(
             trailing()
         }
         // Меню показываем только когда в нём есть хотя бы одно действие.
-        if (hasLyrics || canDownload) {
+        if (hasLyrics || canDownload || trackRadio != null) {
             Box {
                 IconButton(onClick = { menuOpen = true }) {
                     Icon(
@@ -406,6 +409,22 @@ fun TrackRow(
                     expanded = menuOpen,
                     onDismissRequest = { menuOpen = false },
                 ) {
+                    if (trackRadio != null) {
+                        DropdownMenuItem(
+                            text = { Text("Радио по треку") },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Rounded.Radio,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            },
+                            onClick = {
+                                menuOpen = false
+                                trackRadio.invoke(track)
+                            },
+                        )
+                    }
                     if (hasLyrics) {
                         DropdownMenuItem(
                             text = { Text("Текст песни") },
@@ -508,6 +527,7 @@ fun TrackActionSheet(
     } else {
         null
     }
+    val startRadio = LocalTrackRadio.current
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -536,6 +556,13 @@ fun TrackActionSheet(
             SheetAction(Icons.Rounded.PlayArrow, "Играть", onPlay)
             SheetAction(Icons.Rounded.QueueMusic, "В очередь", onAddToQueue)
             SheetAction(Icons.Rounded.PlaylistPlay, "Играть следующим", onPlayNext)
+            if (startRadio != null) {
+                SheetAction(
+                    icon = Icons.Rounded.Radio,
+                    label = "Радио по треку",
+                    onClick = { startRadio.invoke(track) },
+                )
+            }
             if (artistAction != null) {
                 SheetAction(Icons.Rounded.Person, "Перейти к исполнителю", artistAction)
             }

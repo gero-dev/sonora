@@ -22,6 +22,45 @@ enum class PlaybackMode(val label: String, val hint: String) {
     LOCAL_ONLY("Только загруженное", "Играем только то, что сохранено на устройстве"),
 }
 
+/**
+ * Качество воспроизведения, как в Spotify. Значения влияют на выбор
+ * аудиоформата InnerTube: от экономии трафика до максимального качества,
+ * которое отдаёт источник.
+ */
+@Serializable
+enum class AudioQuality(
+    val label: String,
+    val hint: String,
+    /** Целевой битрейт, кбит/с; null — лучшее доступное. */
+    val targetKbps: Int?,
+) {
+    AUTO(
+        "Авто",
+        "Лучшее качество с учётом сети и источника",
+        null,
+    ),
+    LOW(
+        "Низкое",
+        "Экономит трафик · около 64 кбит/с",
+        64,
+    ),
+    NORMAL(
+        "Обычное",
+        "Баланс качества и трафика · около 128 кбит/с",
+        128,
+    ),
+    HIGH(
+        "Высокое",
+        "Качество по умолчанию · около 160 кбит/с",
+        160,
+    ),
+    VERY_HIGH(
+        "Очень высокое",
+        "Максимум, который отдаёт источник (до 320 кбит/с)",
+        null,
+    ),
+}
+
 /** Тонкая настройка «Моей волны»: что и как подбирается в рекомендации. */
 @Serializable
 data class WaveSettings(
@@ -93,6 +132,8 @@ data class AppSettings(
     val eqPreset: String = "flat",
     val eqBands: List<Float> = List(BANDS_COUNT) { 0f },
     val playbackSpeed: Float = 1f,
+    /** Качество онлайн-воспроизведения: авто, низкое, обычное, высокое, максимум. */
+    val audioQuality: AudioQuality = AudioQuality.AUTO,
 
     // Воспроизведение: онлайн-стриминг можно выключить, как «офлайн-режим» в Spotify.
     val playbackMode: PlaybackMode = PlaybackMode.STREAMING,

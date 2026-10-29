@@ -2,7 +2,9 @@ package app.sonora.ui.screens
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -33,6 +35,8 @@ import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Radio
+import androidx.compose.material.icons.rounded.ThumbDown
 import androidx.compose.material.icons.rounded.PlayCircle
 import androidx.compose.material.icons.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Refresh
@@ -118,6 +122,7 @@ fun HomeScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) -> 
     val fileImport by vm.fileImport.collectAsState()
     val settings by vm.settings.collectAsState()
     val waveHistorySize by vm.waveHistorySize.collectAsState()
+    val waveDisliked by vm.waveDisliked.collectAsState()
 
     var showImportGuide by remember { mutableStateOf(false) }
     var showWaveSettings by remember { mutableStateOf(false) }
@@ -170,6 +175,8 @@ fun HomeScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) -> 
                     onTrackClick = { vm.playOrOpen(it) },
                     onLoadMore = { vm.loadMoreWave() },
                     onSettings = { showWaveSettings = true },
+                    onDislike = { vm.dislikeWaveTrack(it) },
+                    onRadio = { vm.startTrackRadio(it) },
                 )
             }
 
@@ -350,12 +357,14 @@ fun HomeScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) -> 
             app.sonora.ui.screens.WaveSettingsSheet(
                 settings = settings.wave,
                 historySize = waveHistorySize,
+                dislikedCount = waveDisliked.size,
                 onDismiss = { showWaveSettings = false },
                 onApply = { draft ->
                     vm.updateWaveSettings { _ -> draft }
                     showWaveSettings = false
                 },
                 onClearHistory = { vm.clearWaveHistory() },
+                onClearDislikes = { vm.clearWaveDislikes() },
             )
         }
 
@@ -629,6 +638,8 @@ private fun WaveCard(
     onTrackClick: (Track) -> Unit,
     onLoadMore: () -> Unit,
     onSettings: () -> Unit,
+    onDislike: (Track) -> Unit,
+    onRadio: (Track) -> Unit,
 ) {
     var sortMenu by remember { mutableStateOf(false) }
     Column(
@@ -663,7 +674,7 @@ private fun WaveCard(
             Column(Modifier.weight(1f)) {
                 Text("Моя волна", style = MaterialTheme.typography.titleLarge)
                 Text(
-                    text = state.seedLabel.ifBlank { "Подборка под ваш вкус" },
+                    text = state.seedLabel.ifBlank { "Новая подборка каждый раз" },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
@@ -765,7 +776,12 @@ private fun WaveCard(
             Spacer(Modifier.height(8.dp))
             LazyRow(horizontalArrangement = Arrangement.spacedBy(RailSpacing)) {
                 items(state.tracks, key = { "wave-${it.id}" }) { track ->
-                    TrackTile(track = track, onClick = { onTrackClick(track) })
+                    TrackTile(
+                        track = track,
+                        onClick = { onTrackClick(track) },
+                        onDislike = { onDislike(track) },
+                        onRadio = { onRadio(track) },
+                    )
                 }
             }
             Spacer(Modifier.height(12.dp))
@@ -827,42 +843,85 @@ private fun WaveCard(
 /**
  * Карточка трека для подборок: 160dp, обложка 12dp, тональный фон без тени.
  * Текст живёт на том же тональном контейнере, поэтому тёмная тема выглядит ровно.
+ * Долгое нажатие в «Моей волне» открывает «Радио по треку» и «Не интересно».
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun TrackTile(track: Track, onClick: () -> Unit) {
-    Column(
-        modifier = Modifier
-            .width(TileWidth)
-            .clip(RoundedCornerShape(CardRadius))
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-            .clickable(onClick = onClick)
-            .padding(8.dp),
-    ) {
-        CoverArtBox(
-            url = track.artworkUrl ?: track.artworkUri,
-            cornerRadius = ArtworkRadius,
+private fun TrackTile(
+    track: Track,
+    onClick: () -> Unit,
+    onDislike: (() -> Unit)? = null,
+    onRadio: (() -> Unit)? = null,
+) {
+    var menuOpen by remember { mutableStateOf(false) }
+    val hasMenu = onDislike != null || onRadio != null
+    Box {
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(1f),
-        )
-        Spacer(Modifier.height(10.dp))
-        Text(
-            text = track.title,
-            style = MaterialTheme.typography.titleMedium,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = 2.dp),
-        )
-        Spacer(Modifier.height(2.dp))
-        Text(
-            text = track.artist,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = 2.dp),
-        )
-        Spacer(Modifier.height(6.dp))
+                .width(TileWidth)
+                .clip(RoundedCornerShape(CardRadius))
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                .combinedClickable(
+                    onClick = onClick,
+                    onLongClick = if (hasMenu) ({ menuOpen = true }) else null,
+                )
+                .padding(8.dp),
+        ) {
+            CoverArtBox(
+                url = track.artworkUrl ?: track.artworkUri,
+                cornerRadius = ArtworkRadius,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f),
+            )
+            Spacer(Modifier.height(10.dp))
+            Text(
+                text = track.title,
+                style = MaterialTheme.typography.titleMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 2.dp),
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = track.artist,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 2.dp),
+            )
+            Spacer(Modifier.height(6.dp))
+        }
+        DropdownMenu(
+            expanded = menuOpen,
+            onDismissRequest = { menuOpen = false },
+        ) {
+            if (onRadio != null) {
+                DropdownMenuItem(
+                    text = { Text("Радио по треку") },
+                    leadingIcon = {
+                        Icon(Icons.Rounded.Radio, contentDescription = null)
+                    },
+                    onClick = {
+                        menuOpen = false
+                        onRadio()
+                    },
+                )
+            }
+            if (onDislike != null) {
+                DropdownMenuItem(
+                    text = { Text("Не интересно") },
+                    leadingIcon = {
+                        Icon(Icons.Rounded.ThumbDown, contentDescription = null)
+                    },
+                    onClick = {
+                        menuOpen = false
+                        onDislike()
+                    },
+                )
+            }
+        }
     }
 }
 
