@@ -28,6 +28,7 @@
 |---|---|
 | [ARCHITECTURE.md](ARCHITECTURE.md) | слои, потоки данных, InnerTube, воспроизведение, загрузка, импорт |
 | [INTEGRATIONS.md](INTEGRATIONS.md) | устройство интеграций: Spotify, YouTube Music, SoundCloud, DownloadManager |
+| [YTDLP_INTEGRATION.md](YTDLP_INTEGRATION.md) | yt-dlp + ReccoBeats: поиск, поток, аудио-фичи, кэш, оптимизации |
 | [DISCOVERY.md](DISCOVERY.md) | открытые каталоги Internet Archive и Jamendo |
 | [UI.md](UI.md) | дизайн-система, экраны, состояния, ограничения |
 | [ROADMAP.md](ROADMAP.md) | планы и направления развития |
