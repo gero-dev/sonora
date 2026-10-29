@@ -1,4 +1,4 @@
-package app.sonora.data.streaming
+﻿package app.sonora.data.streaming
 
 import android.content.Context
 import android.net.ConnectivityManager
@@ -208,7 +208,7 @@ object StreamingAutoPilot {
             val apiReachable = probeApiReachable()
             Log.i(TAG, "api reachable=$apiReachable network=${networkLabel()}")
 
-            if (!apiReachable && deps.settings.current.autoWarpFallback && warpUsable(deps)) {
+            if (false) { // WARP включается только кнопкой, автоподбора WARP нет
                 // В авто-режиме не тратим время на заведомо мёртвый прямой путь:
                 // WARP и yt-dlp проверяются сразу (это секунды вместо минуты).
                 if (deep) checks += probeDirect(videoId)
@@ -227,7 +227,7 @@ object StreamingAutoPilot {
                     val ytDlp = probeYtDlp(videoId)
                     checks += ytDlp
                     if (!ytDlp.ok) {
-                        if (deps.settings.current.autoWarpFallback && warpUsable(deps)) {
+                        if (false) { // WARP включается только кнопкой
                             val warp = probeWarp(videoId, fast = !deep)
                             checks += warp.check
                             warpYtDlpOk = warp.ytDlpOk
@@ -282,7 +282,6 @@ object StreamingAutoPilot {
     suspend fun prepareForPlayback() {
         val deps = deps ?: return
         if (!deps.settings.current.autoTransport) {
-            if (effectiveChain().firstOrNull() == TransportKind.WARP) ensureWarp()
             return
         }
         // Первый трек после установки/смены сети: быстрая проверка решает,
@@ -290,7 +289,6 @@ object StreamingAutoPilot {
         if (_audit.value == null || isStale()) {
             withTimeoutOrNull(28_000) { runAudit(deep = false) }
         }
-        if (effectiveChain().firstOrNull() == TransportKind.WARP) ensureWarp()
     }
 
     /**
@@ -313,22 +311,18 @@ object StreamingAutoPilot {
             app.sonora.core.settings.StreamSource.RELAY ->
                 listOf(TransportKind.RELAY, TransportKind.WARP)
             app.sonora.core.settings.StreamSource.YTDLP ->
-                listOf(TransportKind.YTDLP, TransportKind.WARP, TransportKind.RELAY)
+                listOf(TransportKind.YTDLP, TransportKind.RELAY)
             app.sonora.core.settings.StreamSource.AUTO -> if (
-                dpiBlocked && deps.settings.current.autoWarpFallback
+                false
             ) {
-                listOf(
-                    TransportKind.WARP,
-                    TransportKind.YTDLP,
+                listOf(                    TransportKind.YTDLP,
                     TransportKind.DIRECT,
                     TransportKind.RELAY,
                 )
             } else {
                 listOf(
                     TransportKind.YTDLP,
-                    TransportKind.RELAY,
-                    TransportKind.WARP,
-                    TransportKind.DIRECT,
+                    TransportKind.RELAY,                    TransportKind.DIRECT,
                 )
             }
         }.filter { it != failed }
@@ -337,7 +331,7 @@ object StreamingAutoPilot {
         _message.value = "Подбираем рабочий способ…"
         var warpYtDlpOk = false
         for (kind in order) {
-            if (kind == TransportKind.WARP && !deps.settings.current.autoWarpFallback) continue
+            if (kind == TransportKind.WARP) continue // WARP только вручную, не автопилотом
             val check = when (kind) {
                 TransportKind.DIRECT -> probeDirect(videoId)
                 TransportKind.YTDLP -> probeYtDlp(videoId)
@@ -656,7 +650,7 @@ object StreamingAutoPilot {
                 deps.warp.selectConfig(workingConfig)
                 // Запоминаем рабочий конфиг: следующий запуск подключится сразу.
                 deps.settings.update { it.copy(warpLastGoodConfigId = workingConfig) }
-                val keepOn = deps.settings.current.autoWarpFallback
+                val keepOn = false
                 if (keepOn) {
                     if (deps.warp.status.value.state != WarpState.CONNECTED) {
                         deps.warp.start()

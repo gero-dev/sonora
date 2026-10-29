@@ -71,13 +71,24 @@ import app.sonora.ui.nav.Routes
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun QueueScreen(vm: MainViewModel, navigate: (String) -> Unit) {
-    val player by vm.player.collectAsState()
+    // Очереди не нужна позиция воспроизведения — только состав и текущий индекс.
+    val player by vm.playerChrome.collectAsState()
     val playlists by vm.playlists.collectAsState()
     val google by vm.googleAccount.collectAsState()
     val settings by vm.settings.collectAsState()
     val queue = player.queue
     // Сколько треков в очереди требуют сети — для строки «Онлайн-треков в очереди».
     val onlineInQueue = remember(queue) { queue.count { !vm.offlinePlayable(it) } }
+    // Ключ строки = id трека + номер вхождения: в очереди бывают дубликаты,
+    // а id-ключ помогает Compose переиспользовать строки при перестановке/удалении.
+    val queueKeys = remember(queue) {
+        val seen = HashMap<String, Int>(queue.size)
+        queue.map { track ->
+            val occurrence = seen.getOrDefault(track.id, 0)
+            seen[track.id] = occurrence + 1
+            "${track.id}#$occurrence"
+        }
+    }
     var showSaved by remember { mutableStateOf(false) }
 
     Column(
@@ -151,7 +162,7 @@ fun QueueScreen(vm: MainViewModel, navigate: (String) -> Unit) {
             ) {
                 itemsIndexed(
                     items = queue,
-                    key = { index, _ -> "queue-$index" },
+                    key = { index, _ -> queueKeys[index] },
                 ) { index, track ->
                     QueueRow(
                         track = track,

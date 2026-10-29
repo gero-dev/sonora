@@ -1,4 +1,4 @@
-# Виджеты Sonora
+﻿# Виджеты Sonora
 
 Sonora ставит на домашний экран несколько независимых виджетов. В списке выбора
 сейчас пять записей: четыре фиксированных (2×2, 4×1, 4×2, 4×4) и старый
@@ -108,3 +108,26 @@ Glance и Compose), потому что виджет живёт в чужом п
 * `res/layout/widget_sonora*.xml` — раскладки.
 * `res/xml/sonora_widget_info.xml`, `sonora_widget_2x2.xml`,
   `sonora_widget_4x1.xml`, `sonora_widget_4x2.xml`, `sonora_widget_4x4.xml` — метаданные.
+
+## Виджет без приложения и последний трек (2.1.0)
+
+* Снимок состояния `files/playback_state.json` (`PlaybackSnapshot`) хранит
+  очередь, текущий трек, позицию, shuffle/repeat и статус play/pause. Пишется
+  при смене трека/статуса и раз в 2 секунды во время игры.
+* `SonoraWidget.updateAll(context)` рисует виджет из снимка, а не из
+  `AppGraph` — поэтому виджет показывает последний трек, даже когда приложение
+  убито, и синхронизируется с плеером в обе стороны.
+* Кнопки виджета больше не требуют живого процесса приложения:
+  `BaseSonoraWidgetProvider` отправляет `startForegroundService` в
+  `PlaybackService`, а сервис сам поднимает сохранённую очередь
+  (`playFromSnapshot`) и играет. Проверено: приложение убито, launcher на
+  экране → после нажатия `PlaybackState.PLAYING`, повторное нажатие → PAUSED.
+* При холодном старте `PlaybackController.restoreLastSession()` восстанавливает
+  очередь и позицию на паузе — мини-плеер сразу показывает последний трек.
+  Если сервис уже играет, очередь не перезаписывается и UI подхватывает
+  метаданные из снимка.
+
+Файлы: `playback/PlaybackSnapshot.kt`, `playback/TrackMediaItem.kt`,
+`playback/PlaybackController.kt` (restore/persist), `playback/PlaybackService.kt`
+(onStartCommand, действия виджета), `widget/BaseSonoraWidgetProvider.kt`
+(запуск сервиса), `widget/SonoraWidget.kt` (рендер из снимка).

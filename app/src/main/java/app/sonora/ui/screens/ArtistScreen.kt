@@ -1,4 +1,4 @@
-package app.sonora.ui.screens
+﻿package app.sonora.ui.screens
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -63,7 +63,7 @@ fun ArtistDetailScreen(vm: MainViewModel, artistName: String, navigate: (String)
     val tracks by vm.tracks.collectAsState()
     val favorites by vm.favorites.collectAsState()
     val playlists by vm.playlists.collectAsState()
-    val player by vm.player.collectAsState()
+    val player by vm.playerChrome.collectAsState()
     val artistState by vm.artist.collectAsState()
     val saveStates by vm.saveStates.collectAsState()
 

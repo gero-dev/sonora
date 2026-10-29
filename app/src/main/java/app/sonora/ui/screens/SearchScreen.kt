@@ -62,7 +62,8 @@ fun SearchScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) -
     val tracks by vm.tracks.collectAsState()
     val favorites by vm.favorites.collectAsState()
     val playlists by vm.playlists.collectAsState()
-    val player by vm.player.collectAsState()
+    // Поиску позиция не нужна: только текущий трек и признак игры.
+    val player by vm.playerChrome.collectAsState()
     val saveStates by vm.saveStates.collectAsState()
 
     var actionTrack by remember { mutableStateOf<Track?>(null) }
@@ -79,6 +80,14 @@ fun SearchScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) -
         (search.local + remote).distinctBy { it.id }
     }
     val nothingFound = !queryBlank && !search.loading && results.isEmpty()
+    // vm.isTrackDownloaded() просматривает всю фонотеку. Считаем это один раз
+    // на список результатов, а не в композиции каждой строки при каждой перерисовке.
+    val downloadedIds = remember(results, tracks) {
+        results.asSequence()
+            .filter { vm.isTrackDownloaded(it) }
+            .map { it.id }
+            .toSet()
+    }
 
     Column(
         Modifier
@@ -184,7 +193,7 @@ fun SearchScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) -
                             onFavorite = { vm.toggleFavorite(track.id) },
                             showSource = true,
                             saveState = saveStates[track.id]
-                                ?: if (vm.isTrackDownloaded(track)) {
+                                ?: if (track.id in downloadedIds) {
                                     app.sonora.data.download.TrackSaveState.done()
                                 } else {
                                     null

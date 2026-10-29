@@ -93,6 +93,8 @@ import app.sonora.ui.components.TrackRow
 import app.sonora.ui.nav.Routes
 import app.sonora.ui.theme.LocalSonoraColors
 import java.time.LocalTime
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /** Единый шаг страницы: 16dp по краям и 12dp между блоками. */
 private val PagePadding = 16.dp
@@ -112,7 +114,9 @@ fun HomeScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) -> 
     val tracks by vm.tracks.collectAsState()
     val favorites by vm.favorites.collectAsState()
     val playlists by vm.playlists.collectAsState()
-    val player by vm.player.collectAsState()
+    // Позиция здесь не показывается: берём состояние без positionMs, чтобы
+    // не пересобирать Главную на каждый тик плеера (500 мс).
+    val player by vm.playerChrome.collectAsState()
     val scanning by vm.scanning.collectAsState()
     val wave by vm.wave.collectAsState()
     val warpStatus by vm.warpStatus.collectAsState()
@@ -135,11 +139,14 @@ fun HomeScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) -> 
     val vpnPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult(),
     ) { vm.startWarp() }
-    LaunchedEffect(Unit) { vm.refreshWarp() }
+    // refreshWarp() читает JSON-индекс конфигов с диска и перебирает сетевые
+    // интерфейсы — уводим это с главного потока, чтобы вход на Главную не подвисал.
+    LaunchedEffect(Unit) { withContext(Dispatchers.IO) { vm.refreshWarp() } }
 
     val localTracks = remember(tracks) { tracks.filter { it.source == Source.LOCAL } }
     val recent = remember(localTracks) { localTracks.take(15) }
     val favoriteTracks = remember(tracks, favorites) { tracks.filter { it.id in favorites } }
+    val favoritePreview = remember(favoriteTracks) { favoriteTracks.take(10) }
     val ownPlaylists = remember(playlists) { playlists.filter { it.editable } }
 
     var showCreateDialog by remember { mutableStateOf(false) }
@@ -271,7 +278,7 @@ fun HomeScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) -> 
                     )
                 }
             } else {
-                items(favoriteTracks.take(10), key = { "fav-${it.id}" }) { track ->
+                items(favoritePreview, key = { "fav-${it.id}" }) { track ->
                     TrackRow(
                         track = track,
                         isFavorite = track.id in favorites,
@@ -478,11 +485,12 @@ private fun greetingForNow(): String {
 @Composable
 private fun ScanLibraryCard(scanning: Boolean, onScan: () -> Unit) {
     val gradient = LocalSonoraColors.current.gradient
+    val brush = remember(gradient) { Brush.linearGradient(gradient) }
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(CardRadius))
-            .background(Brush.linearGradient(gradient))
+            .background(brush)
             .padding(20.dp),
     ) {
         Box(
@@ -645,18 +653,17 @@ private fun WaveCard(
     onRadio: (Track) -> Unit,
 ) {
     var sortMenu by remember { mutableStateOf(false) }
+    // Градиент пересоздаём только при смене палитры, а не на каждой перерисовке.
+    val waveStart = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.85f)
+    val waveEnd = MaterialTheme.colorScheme.surfaceContainerHigh
+    val waveBrush = remember(waveStart, waveEnd) {
+        Brush.linearGradient(listOf(waveStart, waveEnd))
+    }
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(CardRadius))
-            .background(
-                Brush.linearGradient(
-                    listOf(
-                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.85f),
-                        MaterialTheme.colorScheme.surfaceContainerHigh,
-                    ),
-                ),
-            )
+            .background(waveBrush)
             .padding(16.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -709,7 +716,7 @@ private fun WaveCard(
 
         Spacer(Modifier.height(12.dp))
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(WaveSourceMode.entries) { mode ->
+            items(WaveSourceMode.entries, key = { it.name }) { mode ->
                 FilterChip(
                     selected = state.filters.source == mode,
                     onClick = { onSource(mode) },
@@ -733,7 +740,7 @@ private fun WaveCard(
         }
         Spacer(Modifier.height(4.dp))
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(WaveMood.entries) { mood ->
+            items(WaveMood.entries, key = { it.name }) { mood ->
                 FilterChip(
                     selected = state.filters.mood == mood,
                     onClick = { onMood(mood) },

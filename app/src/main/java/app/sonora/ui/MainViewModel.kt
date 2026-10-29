@@ -56,6 +56,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -265,6 +269,19 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
     val favorites: StateFlow<Set<String>> = graph.library.favorites
     val scanning: StateFlow<Boolean> = graph.library.scanning
     val player: StateFlow<PlayerUiState> = graph.playback.state
+    /**
+     * Состояние плеера без позиции: экранам, которым нужен только трек/статус,
+     * не надо перерисовываться каждые полсекунды из-за обновления позиции.
+     */
+    val playerChrome: StateFlow<PlayerUiState> = graph.playback.state
+        .map { state -> state.copy(positionMs = 0L, positionSampledAtMs = 0L) }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, graph.playback.state.value)
+    /** Грубый прогресс для мини-плеера: меняется не чаще, чем на 1 %. */
+    val playerProgress: StateFlow<Float> = graph.playback.state
+        .map { it.progress }
+        .distinctUntilChanged { old, new -> kotlin.math.abs(old - new) < 0.01f }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, graph.playback.state.value.progress)
     val settings: StateFlow<AppSettings> = graph.settings.state
     val downloads = graph.downloads.items
 
@@ -306,22 +323,15 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
                 enrichLibrary()
             }
             refreshWave()
-            // WARP: автоподключение при старте, если пользователь включил автозапуск,
-            // есть конфиги, разрешение VPN уже выдано и чужой VPN не активен.
-            if (graph.settings.current.warpAutoConnect &&
-                graph.warp.configs().isNotEmpty() &&
-                !graph.warp.externalVpnActive() &&
-                graph.warp.hasVpnPermission()
-            ) {
-                graph.warp.startIfNoExternalVpn()
-            }
+            // WARP не включается автоматически: только кнопкой в интерфейсе.
+
         }
         observeInfiniteQueue()
         observeCurrentYouTubeTrack()
         observePlaybackHistory()
         observeRadio()
         observeAudioFeatures()
-        observeWarpKeepAlive()
+        // observeWarpKeepAlive() — WARP не поднимается сам, только кнопкой.
         // Автопилот: при ошибке источника подбираем другой способ и переоткрываем трек.
         graph.playback.onStreamError = { error -> onPlaybackStreamError(error) }
         // Фоновая проверка способов стриминга: не блокирует старт приложения.
@@ -3673,9 +3683,12 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
 
     /** Перечитать список конфигов/настройки (после импорта, выбора, удаления). */
     fun refreshWarp() {
-        _warpConfigs.value = graph.warp.configs()
-        _warpAutoRotate.value = graph.warp.isAutoRotate()
-        _warpExternalVpn.value = graph.warp.externalVpnActive()
+        // Чтение JSON-индекса и перебор сетевых интерфейсов — не на главном потоке.
+        viewModelScope.launch(Dispatchers.IO) {
+            _warpConfigs.value = graph.warp.configs()
+            _warpAutoRotate.value = graph.warp.isAutoRotate()
+            _warpExternalVpn.value = graph.warp.externalVpnActive()
+        }
     }
 
     /** Intent системного запроса разрешения VPN; null, если разрешение уже выдано. */

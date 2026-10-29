@@ -95,7 +95,8 @@ fun MainScreen(graph: AppGraph) {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
-    val playerState by viewModel.player.collectAsState()
+    // Только «хром» плеера: без позиции — экран не перерисовывается каждые 500 мс.
+    val playerState by viewModel.playerChrome.collectAsState()
     val mobilePending by viewModel.pendingMobileDownloads.collectAsState()
 
     val showChrome = currentRoute != null && TABS.any { it.route == currentRoute }
@@ -124,6 +125,7 @@ fun MainScreen(graph: AppGraph) {
                     if (playerState.current != null) {
                         MiniPlayer(
                             state = playerState,
+                            progress = viewModel.playerProgress,
                             onOpen = { navigate(Routes.PLAYER) },
                             onTogglePlay = viewModel::togglePlayPause,
                             onNext = viewModel::next,

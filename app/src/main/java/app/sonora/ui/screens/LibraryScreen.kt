@@ -95,6 +95,7 @@ import app.sonora.ui.components.accentContentColor
 import app.sonora.ui.components.tracksLabel
 import app.sonora.ui.nav.Routes
 import app.sonora.ui.theme.LocalSonoraColors
+import kotlinx.coroutines.flow.StateFlow
 
 /**
  * Разделы медиатеки. Порядок чипов — как в Spotify: «Все», затем плейлисты,
@@ -146,9 +147,9 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
     val tracks by vm.tracks.collectAsState()
     val favorites by vm.favorites.collectAsState()
     val playlists by vm.playlists.collectAsState()
-    val player by vm.player.collectAsState()
+    // Медиатеке нужен только текущий трек/статус — позиция не показывается.
+    val player by vm.playerChrome.collectAsState()
     val scanning by vm.scanning.collectAsState()
-    val saveStates by vm.saveStates.collectAsState()
     val importError by vm.playlistImportError.collectAsState()
 
     var sectionName by rememberSaveable { mutableStateOf(LibrarySection.ALL.name) }
@@ -202,29 +203,40 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
     val albums = remember(localTracks) { vm.albums() }
     val artists = remember(localTracks) { vm.artists() }
     val favoriteTracks = remember(tracks, favorites) { tracks.filter { it.id in favorites } }
+    // Не пересчитываем «хвосты» списков в теле композиции на каждой перерисовке.
+    val recentTracks = remember(localTracks) { localTracks.take(8) }
+    val editablePlaylists = remember(playlists) { playlists.filter { it.editable } }
     val importedTracks = remember(tracks) {
         vm.withoutSavedCopies(
             tracks.filter { it.source == Source.YOUTUBE && !it.isVideoContent },
         )
     }
     // Обложки плейлистов для коллажей: постер плейлиста или до 4 обложек треков.
+    // Индекс id→трек строим один раз: vm.playlistTracks() пересобирал бы всю
+    // таблицу для каждого плейлиста (O(плейлисты × треки) на главном потоке).
     val playlistCovers = remember(playlists, tracks) {
+        val trackById = tracks.associateBy { it.id }
         playlists.associate { playlist ->
             val own = playlist.artworkUrl?.takeIf { it.isNotBlank() }
             val covers = if (own != null) {
                 listOf(own)
             } else {
-                vm.playlistTracks(playlist)
+                playlist.trackIds.asSequence()
+                    .mapNotNull { trackById[it] }
                     .mapNotNull { it.artworkUrl ?: it.artworkUri }
                     .filter { it.isNotBlank() }
                     .distinct()
                     .take(4)
+                    .toList()
             }
             playlist.id to covers
         }
     }
     val bottomPadding = padding.calculateBottomPadding()
     val playlistPlay: (Playlist) -> Unit = { vm.playPlaylist(it) }
+    // Мягкий градиент шапки — один объект Brush на экран, а не на перерисовку.
+    val headerColors = LocalSonoraColors.current.header
+    val headerBrush = remember(headerColors) { Brush.verticalGradient(headerColors) }
 
     Box(Modifier.fillMaxSize()) {
         Column(
@@ -236,7 +248,7 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .background(Brush.verticalGradient(LocalSonoraColors.current.header)),
+                    .background(headerBrush),
             ) {
                 Column {
                     LibraryHeader(
@@ -266,7 +278,7 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
                     playlistCovers = playlistCovers,
                     albums = albums,
                     artists = artists,
-                    recentTracks = localTracks.take(8),
+                    recentTracks = recentTracks,
                     favorites = favorites,
                     player = player,
                     bottomPadding = bottomPadding,
@@ -343,7 +355,7 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
                     onImport = { navigate(Routes.SETTINGS) },
                     onImportLink = { showYouTubeImport = true },
                     importError = importError,
-                    saveStates = saveStates,
+                    saveStatesFlow = vm.saveStates,
                     bottomPadding = bottomPadding,
                 )
             }
@@ -498,7 +510,7 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
 
         playlistPickerIds?.let { ids ->
             PlaylistPickerDialog(
-                playlists = playlists.filter { it.editable },
+                playlists = editablePlaylists,
                 onDismiss = { playlistPickerIds = null },
                 onPick = { target ->
                     playlistPickerIds = null
@@ -585,6 +597,8 @@ private fun LibraryHeader(
     onScan: () -> Unit,
     onAvatarClick: () -> Unit,
 ) {
+    val gradient = LocalSonoraColors.current.gradient
+    val avatarBrush = remember(gradient) { Brush.linearGradient(gradient) }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -627,7 +641,7 @@ private fun LibraryHeader(
             modifier = Modifier
                 .size(42.dp)
                 .clip(CircleShape)
-                .background(Brush.linearGradient(LocalSonoraColors.current.gradient))
+                .background(avatarBrush)
                 .clickable(onClick = onAvatarClick),
             contentAlignment = Alignment.Center,
         ) {
@@ -652,6 +666,13 @@ private fun LibraryPlayAllRow(
 ) {
     val enabled = trackCount > 0
     val gradient = LocalSonoraColors.current.gradient
+    val disabledColor = MaterialTheme.colorScheme.surfaceContainerHigh
+    // Оба варианта Brush помним: кнопка перерисовывается при каждом обновлении
+    // счётчика треков, и градиент не должен пересоздаваться каждый раз.
+    val enabledBrush = remember(gradient) { Brush.linearGradient(gradient) }
+    val disabledBrush = remember(disabledColor) {
+        Brush.linearGradient(listOf(disabledColor, disabledColor))
+    }
     val contentColor = if (enabled) {
         accentContentColor()
     } else {
@@ -662,18 +683,7 @@ private fun LibraryPlayAllRow(
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 2.dp)
             .clip(RoundedCornerShape(14.dp))
-            .background(
-                if (enabled) {
-                    Brush.linearGradient(gradient)
-                } else {
-                    Brush.linearGradient(
-                        listOf(
-                            MaterialTheme.colorScheme.surfaceContainerHigh,
-                            MaterialTheme.colorScheme.surfaceContainerHigh,
-                        ),
-                    )
-                },
-            )
+            .background(if (enabled) enabledBrush else disabledBrush)
             .clickable(enabled = enabled, onClick = onPlayAll)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -786,6 +796,10 @@ private fun AllTab(
     onLongClickTrack: (Track) -> Unit,
     onFavoriteTrack: (Track) -> Unit,
 ) {
+    // Срезы для рельсов считаем один раз на список, а не на каждую перерисовку.
+    val featuredPlaylists = remember(playlists) { playlists.take(8) }
+    val featuredAlbums = remember(albums) { albums.take(10) }
+    val featuredArtists = remember(artists) { artists.take(10) }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(
@@ -818,7 +832,7 @@ private fun AllTab(
                         )
                     }
                 } else {
-                    items(playlists.take(8), key = { "all-pl-${it.id}" }) { playlist ->
+                    items(featuredPlaylists, key = { "all-pl-${it.id}" }) { playlist ->
                         PlaylistCard(
                             playlist = playlist,
                             coverUrls = playlistCovers[playlist.id].orEmpty(),
@@ -857,7 +871,7 @@ private fun AllTab(
             }
             item(key = "all-albums-rail") {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    items(albums.take(10), key = { "all-alb-${it.name}|${it.artist}" }) { album ->
+                    items(featuredAlbums, key = { "all-alb-${it.name}|${it.artist}" }) { album ->
                         AlbumCard(
                             album = album,
                             onClick = { navigate(Routes.album(album.name, album.artist)) },
@@ -880,7 +894,7 @@ private fun AllTab(
             }
             item(key = "all-artists-rail") {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    items(artists.take(10), key = { "all-art-${it.name}" }) { artist ->
+                    items(featuredArtists, key = { "all-art-${it.name}" }) { artist ->
                         ArtistCard(
                             artist = artist,
                             onClick = { navigate(Routes.artist(artist.name)) },
@@ -1296,9 +1310,12 @@ private fun YouTubeTab(
     onImport: () -> Unit,
     onImportLink: () -> Unit,
     importError: String?,
-    saveStates: Map<String, TrackSaveState>,
+    saveStatesFlow: StateFlow<Map<String, TrackSaveState>>,
     bottomPadding: Dp,
 ) {
+    // Прогресс скачиваний обновляется часто: подписку держим внутри вкладки,
+    // чтобы проценты сохранения не перерисовывали всю Медиатеку.
+    val saveStates by saveStatesFlow.collectAsState()
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(

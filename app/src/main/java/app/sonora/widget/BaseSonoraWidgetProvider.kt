@@ -65,12 +65,11 @@ open class BaseSonoraWidgetProvider : AppWidgetProvider() {
         }
 
         runCatching {
-            val playback = AppGraph.get(context).playback
-            when (action) {
-                SonoraWidget.ACTION_PLAY_PAUSE -> playback.togglePlayPause()
-                SonoraWidget.ACTION_NEXT -> playback.next()
-                SonoraWidget.ACTION_PREVIOUS -> playback.previous()
-            }
+            // Запускаем музыку через сервис, а не через AppGraph: виджет должен
+            // работать, когда приложение убито. startForegroundService нужен,
+            // чтобы Android не убил сервис, поднятый из виджета.
+            val serviceIntent = app.sonora.playback.PlaybackService.widgetAction(context, action)
+            androidx.core.content.ContextCompat.startForegroundService(context, serviceIntent)
         }.onFailure { t ->
             Log.w(TAG, "Не удалось обработать действие виджета: $action", t)
         }

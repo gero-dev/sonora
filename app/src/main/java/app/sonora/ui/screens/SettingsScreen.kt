@@ -425,9 +425,9 @@ fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
                 onClick = { vm.tuneNohit() },
             )
             Text(
-                text = "WARP больше не требуется по умолчанию: он оставлен резервом ниже " +
-                    "и запускается, только если включён WARP-автопилот. Переключатель " +
-                    "NoHiT полностью применяется после перезапуска приложения.",
+                text = "Автопилот больше не включает WARP: только ручная кнопка в разделе " +
+                    "«Туннель WARP» ниже. Переключатель NoHiT полностью применяется " +
+                    "после перезапуска приложения.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(vertical = 4.dp),
@@ -435,26 +435,9 @@ fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
             SettingsLabel("Автопилот")
             SwitchRow(
                 title = "Автопилот стриминга",
-                subtitle = "Проверяет все способы и выбирает рабочий автоматически",
+                subtitle = "Автоматически перебирает способы и стратегии без WARP",
                 checked = settings.autoTransport,
                 onCheckedChange = vm::setAutoTransport,
-            )
-            SwitchRow(
-                title = "WARP-автопилот",
-                subtitle = "Поднимать свой WARP, если прямой путь не работает — быстро и без ручного выбора",
-                checked = settings.autoWarpFallback,
-                onCheckedChange = vm::setAutoWarpFallback,
-            )
-            SwitchRow(
-                title = "Авто-регистрация WARP",
-                subtitle = "Свежий WARP-профиль без ручных файлов: старые конфиги со временем перестают подключаться",
-                checked = settings.warpAutoRegister,
-                onCheckedChange = vm::setWarpAutoRegister,
-            )
-            ClickRow(
-                title = "Перерегистрировать WARP",
-                subtitle = "Получить новый профиль WARP и сразу проверить поток",
-                onClick = { vm.autoRegisterWarp() },
             )
             SwitchRow(
                 title = "Автопереключение потока",
@@ -1104,22 +1087,17 @@ fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
                     },
                 )
                 SwitchRow(
-                    title = "Автовосстановление",
-                    subtitle = "Поднять WARP, если вы выключили свой VPN/WARP во время сессии",
-                    checked = warpKeepAlive,
-                    onCheckedChange = { vm.setWarpKeepAlive(it) },
-                )
-                SwitchRow(
                     title = "Автоматически перебирать конфиги",
-                    subtitle = "Если конфиг не поднялся за 12 секунд — пробовать следующий",
+                    subtitle = "Если конфиг не поднялся за 12 секунд — пробовать следующий (после ручного подключения)",
                     checked = warpAutoRotate,
                     onCheckedChange = { vm.setWarpAutoRotate(it) },
                 )
-                SwitchRow(
-                    title = "Подключать при запуске",
-                    subtitle = "Если разрешение VPN уже выдано и чужой VPN не активен",
-                    checked = settings.warpAutoConnect,
-                    onCheckedChange = { vm.setWarpAutoConnect(it) },
+                Text(
+                    text = "WARP включается только этой кнопкой: автозапуска, автовосстановления " +
+                        "и подъёма из автопилота больше нет.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(vertical = 4.dp),
                 )
                 TextButton(onClick = { vm.clearWarpConfig() }) {
                     Text("Удалить все конфигурации")

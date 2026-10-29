@@ -25,6 +25,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -57,7 +58,10 @@ fun PlaylistCover(
     modifier: Modifier = Modifier,
     cornerRadius: Dp = 12.dp,
 ) {
-    val urls = coverUrls.filter { it.isNotBlank() }.distinct().take(4)
+    // Коллаж зависит только от списка обложек — фильтруем один раз на изменение.
+    val urls = remember(coverUrls) {
+        coverUrls.filter { it.isNotBlank() }.distinct().take(4)
+    }
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(cornerRadius))
@@ -103,8 +107,10 @@ private fun CoverCell(url: String, modifier: Modifier = Modifier) {
 
 @Composable
 private fun GradientCoverPlaceholder(modifier: Modifier = Modifier) {
+    val gradient = LocalSonoraColors.current.gradient
+    val brush = remember(gradient) { Brush.linearGradient(gradient) }
     Box(
-        modifier = modifier.background(Brush.linearGradient(LocalSonoraColors.current.gradient)),
+        modifier = modifier.background(brush),
         contentAlignment = Alignment.Center,
     ) {
         Icon(

@@ -124,10 +124,12 @@ fun CoverArtBox(
             )
         } else {
             val gradient = LocalSonoraColors.current.gradient
+            // Brush не пересоздаём при каждой перерисовке строки/карточки.
+            val fallbackBrush = remember(gradient) { Brush.linearGradient(gradient) }
             Box(
                 modifier = Modifier
                     .matchParentSize()
-                    .background(Brush.linearGradient(gradient)),
+                    .background(fallbackBrush),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(

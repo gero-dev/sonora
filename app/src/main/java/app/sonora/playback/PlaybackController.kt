@@ -61,6 +61,10 @@ class PlaybackController(context: Context) {
     private var controller: MediaController? = null
     private var sleepJob: Job? = null
     private var lastWidgetUpdateAt = 0L
+    private var lastPersistAt = 0L
+    private var lastPersistTrackId: String? = null
+    private var lastPersistPlaying: Boolean? = null
+    private var restoredSession = false
     /** Пока идёт пакетное удаление из очереди, снимок состояния не пересчитываем. */
     private var suppressingRefresh = false
 
@@ -106,6 +110,7 @@ class PlaybackController(context: Context) {
                     controller = c
                     c.addListener(playerListener)
                     _state.update { it.copy(connected = true) }
+                    restoreLastSession(c)
                     refresh()
                 }
             },
@@ -123,6 +128,7 @@ class PlaybackController(context: Context) {
                     _state.update {
                         it.copy(positionMs = position, positionSampledAtMs = sampledAt)
                     }
+                    persistState()
                 }
                 delay(500)
             }
@@ -147,13 +153,95 @@ class PlaybackController(context: Context) {
                 speed = c.playbackParameters.speed,
             )
         }
-        // Виджет рабочего стола живёт в этом же процессе — обновляем его без опроса,
-        // но не чаще раза в секунду: прогресс-бар в виджете не требует 2 Гц.
-        val now = android.os.SystemClock.elapsedRealtime()
-        if (now - lastWidgetUpdateAt >= WIDGET_UPDATE_INTERVAL_MS) {
-            lastWidgetUpdateAt = now
-            runCatching { SonoraWidget.updateAll(appContext, _state.value) }
+        // Снимок последнего трека + виджет: обновляем только по значимым
+        // изменениям (трек/play-pause) или раз в две секунды, чтобы прогресс
+        // не дёргал RemoteViews и не подтормаживал UI.
+        persistState()
+    }
+
+    /**
+     * Восстановление последнего трека/очереди после запуска приложения.
+     * Играть автоматически не начинаем: пользователь сам нажмёт Play.
+     */
+    private fun restoreLastSession(c: MediaController) {
+        if (restoredSession) return
+        restoredSession = true
+        if (_state.value.queue.isNotEmpty()) return
+        val snapshot = PlaybackSnapshotStore.load(appContext)
+        if (snapshot.queue.isEmpty()) return
+        runCatching {
+            // Если сервис уже играет (приложение перезапустили), не трогаем
+            // его очередь — просто подхватываем метаданные для UI.
+            if (c.mediaItemCount > 0) {
+                if (snapshot.queue.size == c.mediaItemCount) {
+                    _state.update {
+                        it.copy(
+                            queue = snapshot.queue,
+                            index = c.currentMediaItemIndex.coerceIn(0, snapshot.queue.lastIndex),
+                            positionMs = c.currentPosition.coerceAtLeast(0L),
+                            positionSampledAtMs = android.os.SystemClock.elapsedRealtime(),
+                            isPlaying = c.isPlaying,
+                            shuffle = c.shuffleModeEnabled,
+                            repeatMode = c.repeatMode,
+                        )
+                    }
+                }
+                return@runCatching
+            }
+            val index = snapshot.index.coerceIn(0, snapshot.queue.lastIndex)
+            c.setMediaItems(snapshot.queue.map { trackToMediaItem(it) }, index, snapshot.positionMs)
+            c.shuffleModeEnabled = snapshot.shuffle
+            c.repeatMode = snapshot.repeatMode
+            c.prepare()
+            c.pause()
+            _state.update {
+                it.copy(
+                    queue = snapshot.queue,
+                    index = index,
+                    positionMs = snapshot.positionMs,
+                    positionSampledAtMs = android.os.SystemClock.elapsedRealtime(),
+                    shuffle = snapshot.shuffle,
+                    repeatMode = snapshot.repeatMode,
+                    isPlaying = false,
+                )
+            }
+        }.onFailure { android.util.Log.w("Playback", "restore failed: ${it.message}") }
+    }
+
+    /**
+     * Сохраняет очередь/трек/позицию для виджета и следующего запуска.
+     * Троттлинг: принудительно — при смене трека/статуса, иначе раз в 2 с.
+     */
+    private fun persistState(force: Boolean = false) {
+        val state = _state.value
+        if (state.queue.isEmpty()) {
+            PlaybackSnapshotStore.clear(appContext)
+            lastPersistTrackId = null
+            lastPersistPlaying = null
+            return
         }
+        val trackId = state.current?.id
+        val important = force ||
+            trackId != lastPersistTrackId ||
+            state.isPlaying != lastPersistPlaying
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (!important && now - lastPersistAt < PERSIST_INTERVAL_MS) return
+        lastPersistAt = now
+        lastPersistTrackId = trackId
+        lastPersistPlaying = state.isPlaying
+        PlaybackSnapshotStore.save(
+            appContext,
+            PlaybackSnapshot(
+                queue = state.queue,
+                index = state.index,
+                positionMs = state.positionMs,
+                shuffle = state.shuffle,
+                repeatMode = state.repeatMode,
+                isPlaying = state.isPlaying,
+                updatedAtMs = System.currentTimeMillis(),
+            ),
+        )
+        SonoraWidget.updateAll(appContext)
     }
 
     // ---------------- Воспроизведение ----------------
@@ -476,26 +564,10 @@ class PlaybackController(context: Context) {
         controller = null
     }
 
-    private fun toMediaItem(track: Track): MediaItem {
-        val artwork = track.artworkUrl ?: track.artworkUri
-        val metadata = MediaMetadata.Builder()
-            .setTitle(track.title)
-            .setArtist(track.artist)
-            .apply {
-                if (!track.album.isNullOrBlank()) setAlbumTitle(track.album)
-                if (!artwork.isNullOrBlank()) setArtworkUri(Uri.parse(artwork))
-            }
-            .build()
-
-        return MediaItem.Builder()
-            .setMediaId(track.id)
-            .setUri(track.uri)
-            .setMediaMetadata(metadata)
-            .build()
-    }
+    private fun toMediaItem(track: Track): MediaItem = trackToMediaItem(track)
 
     private companion object {
-        /** Виджет не нужно перерисовывать чаще раза в секунду. */
-        const val WIDGET_UPDATE_INTERVAL_MS = 1_000L
+        /** Позицию для восстановления/виджета сохраняем не чаще раза в 2 с. */
+        const val PERSIST_INTERVAL_MS = 2_000L
     }
 }

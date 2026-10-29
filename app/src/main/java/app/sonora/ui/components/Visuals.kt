@@ -10,6 +10,7 @@ import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -44,12 +45,16 @@ fun CircularPlayButton(
     size: Dp = 44.dp,
     contentDescription: String = "Играть",
 ) {
+    val gradient = LocalSonoraColors.current.gradient
+    // Кнопка есть в каждой карточке: градиент запоминаем, чтобы не аллоцировать
+    // Brush при каждом проходе списка.
+    val brush = remember(gradient) { Brush.linearGradient(gradient) }
     Box(
         modifier = modifier
             .size(size)
             .shadow(elevation = 8.dp, shape = CircleShape, clip = false)
             .clip(CircleShape)
-            .background(Brush.linearGradient(LocalSonoraColors.current.gradient))
+            .background(brush)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {

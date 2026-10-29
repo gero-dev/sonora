@@ -1,4 +1,4 @@
-package app.sonora.ui.screens
+﻿package app.sonora.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -78,7 +78,7 @@ fun PlaylistDetailScreen(vm: MainViewModel, playlistId: String, navigate: (Strin
     val playlists by vm.playlists.collectAsState()
     val tracks by vm.tracks.collectAsState()
     val favorites by vm.favorites.collectAsState()
-    val player by vm.player.collectAsState()
+    val player by vm.playerChrome.collectAsState()
 
     val actions = remember { DetailActions() }
     val playlist = playlists.firstOrNull { it.id == playlistId }
@@ -208,7 +208,7 @@ fun AlbumDetailScreen(
     val tracks by vm.tracks.collectAsState()
     val favorites by vm.favorites.collectAsState()
     val playlists by vm.playlists.collectAsState()
-    val player by vm.player.collectAsState()
+    val player by vm.playerChrome.collectAsState()
 
     val actions = remember { DetailActions() }
     // Онлайн-версия сохранённого трека не должна дублировать локальную копию.

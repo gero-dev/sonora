@@ -1,4 +1,4 @@
-package app.sonora.widget
+﻿package app.sonora.widget
 
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
@@ -18,11 +18,11 @@ import android.util.Log
 import android.view.View
 import android.widget.RemoteViews
 import androidx.core.graphics.drawable.toBitmap
-import app.sonora.AppGraph
+import app.sonora.playback.PlaybackSnapshotStore
+import app.sonora.playback.PlayerUiState
 import app.sonora.MainActivity
 import app.sonora.R
 import app.sonora.core.model.Track
-import app.sonora.playback.PlayerUiState
 import coil.Coil
 import coil.request.ImageRequest
 import kotlinx.coroutines.CoroutineScope
@@ -181,8 +181,21 @@ object SonoraWidget {
      * подключён, если приложение живо.
      */
     fun updateAll(context: Context) {
-        val state = runCatching { AppGraph.get(context).playback.state.value }
-            .getOrDefault(PlayerUiState())
+        // Читаем снимок, а не AppGraph: виджет должен показывать последний
+        // трек и статус, даже когда приложение не запущено.
+        val snapshot = runCatching { PlaybackSnapshotStore.load(context) }
+            .getOrDefault(app.sonora.playback.PlaybackSnapshot())
+        val current = snapshot.current
+        val state = PlayerUiState(
+            connected = snapshot.queue.isNotEmpty(),
+            isPlaying = snapshot.isPlaying,
+            positionMs = snapshot.positionMs,
+            durationMs = current?.durationMs ?: 0L,
+            index = snapshot.index,
+            shuffle = snapshot.shuffle,
+            repeatMode = snapshot.repeatMode,
+            queue = snapshot.queue,
+        )
         updateAll(context, state)
     }
 

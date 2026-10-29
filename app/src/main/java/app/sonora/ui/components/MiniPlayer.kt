@@ -26,6 +26,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -40,6 +41,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.sonora.playback.PlayerUiState
 import app.sonora.ui.theme.LocalSonoraColors
+import kotlinx.coroutines.flow.StateFlow
 
 /**
  * Мини-плеер в духе Spotify: плавающая скруглённая панель над навигацией,
@@ -50,6 +52,7 @@ import app.sonora.ui.theme.LocalSonoraColors
 @Composable
 fun MiniPlayer(
     state: PlayerUiState,
+    progress: StateFlow<Float>,
     onOpen: () -> Unit,
     onTogglePlay: () -> Unit,
     onNext: () -> Unit,
@@ -58,7 +61,11 @@ fun MiniPlayer(
     modifier: Modifier = Modifier,
 ) {
     val track = state.current ?: return
+    // Грубый прогресс приходит отдельным потоком (шаг ~1 %) и обновляет
+    // только сам мини-плеер, не заставляя перерисовываться весь экран.
+    val currentProgress by progress.collectAsState()
     val gradient = LocalSonoraColors.current.gradient
+    val progressBrush = remember(gradient) { Brush.linearGradient(gradient) }
     val density = LocalDensity.current
     val swipeThresholdPx = with(density) { 56.dp.toPx() }
     var horizontalDrag by remember { mutableStateOf(0f) }
@@ -121,10 +128,10 @@ fun MiniPlayer(
         ) {
             Box(
                 modifier = Modifier
-                    .width(maxWidth * state.progress.coerceIn(0f, 1f))
+                    .width(maxWidth * currentProgress.coerceIn(0f, 1f))
                     .fillMaxHeight()
                     .clip(CircleShape)
-                    .background(Brush.linearGradient(gradient)),
+                    .background(progressBrush),
             )
         }
         Spacer(Modifier.height(8.dp))
@@ -166,7 +173,7 @@ fun MiniPlayer(
                 modifier = Modifier
                     .size(42.dp)
                     .clip(CircleShape)
-                    .background(Brush.linearGradient(gradient))
+                    .background(progressBrush)
                     .clickable(onClick = onTogglePlay),
                 contentAlignment = Alignment.Center,
             ) {

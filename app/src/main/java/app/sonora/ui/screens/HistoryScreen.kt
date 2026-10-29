@@ -86,13 +86,15 @@ fun HistoryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
     val tracks by vm.tracks.collectAsState()
     val favorites by vm.favorites.collectAsState()
     val playlists by vm.playlists.collectAsState()
-    val player by vm.player.collectAsState()
+    // Истории не нужна позиция — только текущий трек и признак игры.
+    val player by vm.playerChrome.collectAsState()
     val saveStates by vm.saveStates.collectAsState()
 
     val trackEntries = remember(entries, tracks) { vm.historyTracks() }
     val artists = remember(entries, tracks) { vm.historyArtists() }
     val listenedMs = remember(entries) { entries.sumOf { it.listenedMs } }
     val dayGroups = remember(trackEntries) { groupByDay(trackEntries) }
+    val featuredArtists = remember(artists) { artists.take(14) }
 
     var tab by rememberSaveable { mutableStateOf(0) }
     var confirmClear by remember { mutableStateOf(false) }
@@ -154,7 +156,7 @@ fun HistoryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
                     }
                     item(key = "recent-artists") {
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                            items(artists.take(14), key = { "artist-${it.name}" }) { artist ->
+                            items(featuredArtists, key = { "artist-${it.name}" }) { artist ->
                                 ArtistCircle(
                                     name = artist.name,
                                     artworkUrl = artist.artworkUrl,
