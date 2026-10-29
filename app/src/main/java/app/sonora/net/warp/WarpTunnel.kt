@@ -1,4 +1,4 @@
-package app.sonora.net.warp
+﻿package app.sonora.net.warp
 
 import android.content.Context
 import android.content.Intent
@@ -53,6 +53,10 @@ private val BUNDLED_WARP_CONFIGS = listOf(
     BundledWarpConfig("warp_09027.conf", "Встроенный WARP 09027"),
     BundledWarpConfig("warp_25786.conf", "Встроенный WARP 25786"),
     BundledWarpConfig("warp_65867.conf", "Встроенный WARP 65867"),
+    BundledWarpConfig("warp_gogogaga.conf", "Встроенный WARP gogogaga (AWG)"),
+    BundledWarpConfig("warp_60093.conf", "Встроенный WARP 60093 (AWG)"),
+    BundledWarpConfig("warp_sanctions.conf", "Встроенный WARP sanctions (AWG)"),
+    BundledWarpConfig("warp_faster.conf", "Встроенный WARP faster (AWG)"),
 )
 
 /** Состояние встроенного WARP-туннеля. */
@@ -402,8 +406,27 @@ class WarpTunnel(
         val previousSelectedId = store.selectedId()
         var added = 0
         var firstProcessedId: String? = null
+        // Чистим дубли встроенных конфигов, оставляя самый свежий (миграция
+        // после добавления новых файлов), — иначе список забивается копиями.
+        runCatching {
+            val bundledNames = BUNDLED_WARP_CONFIGS.map { it.displayName }.toSet()
+            store.entries()
+                .filter { it.name in bundledNames }
+                .groupBy { it.name }
+                .forEach { (_, group) ->
+                    group.sortedByDescending { it.importedAtMs }.drop(1).forEach { store.remove(it.id) }
+                }
+        }
         for (descriptor in BUNDLED_WARP_CONFIGS) {
             try {
+                // Уже есть конфиг с таким именем — не добавляем ещё одну копию.
+                if (store.entries().any { it.name == descriptor.displayName }) {
+                    if (firstProcessedId == null) {
+                        firstProcessedId = store.entries()
+                            .firstOrNull { it.name == descriptor.displayName }?.id
+                    }
+                    continue
+                }
                 val text = appContext.assets
                     .open(assetPath(descriptor.fileName))
                     .bufferedReader(Charsets.UTF_8)
@@ -701,7 +724,7 @@ class WarpTunnel(
 
     companion object {
         /** Максимальное количество хранимых конфигов. */
-        const val MAX_CONFIGS = 8
+        const val MAX_CONFIGS = 16
 
         /** Ожидание handshake после поднятия туннеля, мс. */
         const val HANDSHAKE_TIMEOUT_MS = 12_000L

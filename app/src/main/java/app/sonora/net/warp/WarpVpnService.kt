@@ -1,4 +1,4 @@
-package app.sonora.net.warp
+﻿package app.sonora.net.warp
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -14,10 +14,11 @@ import androidx.core.app.NotificationCompat
 import app.sonora.MainActivity
 import app.sonora.R
 import app.sonora.core.security.SecureStore
-import com.wireguard.android.backend.BackendException
-import com.wireguard.android.backend.GoBackend
-import com.wireguard.android.backend.Tunnel
-import com.wireguard.config.Config
+import org.amnezia.awg.backend.BackendException
+import org.amnezia.awg.backend.GoBackend
+import org.amnezia.awg.backend.NoopTunnelActionHandler
+import org.amnezia.awg.backend.Tunnel
+import org.amnezia.awg.config.Config
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -40,8 +41,8 @@ import java.net.Socket
  * Foreground-сервис-координатор WARP.
  *
  * Важно: сам VPN-интерфейс создаёт НЕ этот класс, а официальная библиотека
- * `com.wireguard.android:tunnel`: `GoBackend` внутри объявляет и запускает
- * собственный `com.wireguard.android.backend.GoBackend$VpnService` (он приходит
+ * `com.zaneschepke:amneziawg-android`: `GoBackend` внутри объявляет и запускает
+ * собственный `org.amnezia.awg.backend.GoBackend$VpnService` (он приходит
  * в манифест из AAR автоматически). Этот сервис:
  *  - держит процесс в foreground (уведомление, живучесть туннеля);
  *  - implements автоперебор: выбранный конфиг → остальные, пока не получен
@@ -81,6 +82,13 @@ class WarpVpnService : Service() {
         createNotificationChannel()
         tunnel = object : Tunnel {
             override fun getName(): String = TUNNEL_NAME
+
+            // AmneziaWG-интерфейс требует ещё два метода. Приоритет IPv4 не
+            // важен (endpoint задан хостом), metered-флаг — false: туннель
+            // считается обычной сетью.
+            override fun isIpv4ResolutionPreferred(): Boolean = false
+
+            override fun isMetered(): Boolean = false
 
             override fun onStateChange(newState: Tunnel.State) {
                 if (newState == Tunnel.State.DOWN && !stopping && connected) {
@@ -177,7 +185,7 @@ class WarpVpnService : Service() {
             ensureBackend()
         } catch (error: Throwable) {
             failTerminal(
-                "Не удалось загрузить WireGuard: ${error.message ?: error.javaClass.simpleName}",
+                "Не удалось загрузить AmneziaWG: ${error.message ?: error.javaClass.simpleName}",
             )
             return
         }
@@ -525,7 +533,7 @@ class WarpVpnService : Service() {
 
     @Synchronized
     private fun ensureBackend(): GoBackend =
-        goBackend ?: GoBackend(applicationContext).also { goBackend = it }
+        goBackend ?: GoBackend(applicationContext, NoopTunnelActionHandler()).also { goBackend = it }
 
     // ---------------------------------------------------------------- уведомление
 
@@ -536,7 +544,7 @@ class WarpVpnService : Service() {
             "WARP-туннель",
             NotificationManager.IMPORTANCE_LOW,
         ).apply {
-            description = "Состояние встроенного WireGuard-туннеля Sonora"
+            description = "Состояние встроенного AmneziaWG-туннеля Sonora"
             setShowBadge(false)
         }
         manager.createNotificationChannel(channel)
@@ -605,18 +613,24 @@ class WarpVpnService : Service() {
             BackendException.Reason.TUN_CREATION_ERROR ->
                 "Android не смог создать VPN-интерфейс — возможно, активен другой VPN."
             BackendException.Reason.UNABLE_TO_START_VPN ->
-                "Не удалось запустить VPN-сервис WireGuard."
+                "Не удалось запустить VPN-сервис AmneziaWG."
             BackendException.Reason.TUNNEL_MISSING_CONFIG ->
                 "Внутренняя ошибка: конфигурация WireGuard не передана."
             BackendException.Reason.GO_ACTIVATION_ERROR_CODE ->
-                "wireguard-go не поднял туннель (код ${error.format.firstOrNull()})."
-            BackendException.Reason.WG_QUICK_CONFIG_ERROR_CODE ->
-                "wireguard-go отклонил конфигурацию (код ${error.format.firstOrNull()})."
+                "AmneziaWG не поднял туннель (код ${error.format.firstOrNull()})."
+            BackendException.Reason.AWG_QUICK_CONFIG_ERROR_CODE ->
+                "AmneziaWG отклонил конфигурацию (код ${error.format.firstOrNull()})."
             BackendException.Reason.UNKNOWN_KERNEL_MODULE_NAME ->
                 "Не удалось определить имя туннеля."
+            BackendException.Reason.UAPI_UPDATE_FAILED ->
+                "AmneziaWG не применил обновление конфигурации пиров."
+            BackendException.Reason.SERVICE_NOT_RUNNING ->
+                "VPN-сервис AmneziaWG не запущен."
+            else ->
+                "AmneziaWG: ${error.reason.name.lowercase()} (${error.format.firstOrNull() ?: "—"})"
         }
         is UnsatisfiedLinkError ->
-            "Нативная библиотека WireGuard не поддерживается на этом устройстве/ABI."
+            "Нативная библиотека AmneziaWG не поддерживается на этом устройстве/ABI."
         else -> error.message ?: error.javaClass.simpleName
     }
 

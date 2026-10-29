@@ -3,6 +3,37 @@
 Все заметные изменения проекта. Формат — [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/),
 версии — [Semantic Versioning](https://semver.org/lang/ru/).
 
+## [2.2.0] - 2026-10-29
+
+### Движок AmneziaWG вместо WireGuard
+
+- Встроенный WireGuard-движок (com.wireguard.android:tunnel) заменён на
+  **AmneziaWG** (com.zaneschepke:amneziawg-android:2.3.7, форк WireGuard для
+  Android). Тот же VpnService/GoBackend, но с поддержкой обфускации.
+- WarpConfig теперь сохраняет **AWG-параметры** (Jc/Jmin/Jmax, S1–S4,
+  H1–H4, I1–I5) и передаёт их движку при подключении; неизвестные
+  AWG-3.x-ключи не ломают импорт.
+- Ошибки и подписи в UI/логах обновлены: «AmneziaWG», а не «WireGuard».
+- Проверено на эмуляторе: AWG-конфиг aster (AWG) с обфускацией подключился
+  к engage.cloudflareclient.com:2408 за ~3 секунды — тот же endpoint у
+  стандартного WireGuard-конфига раньше не проходил handshake.
+
+### Четыре новых встроенных WARP/AWG-конфига
+
+- В ssets/warp/ добавлены gogogaga, WARPw60093, sanctions, aster
+  (все с AmneziaWG-обфускацией) — теперь в комплекте **7 конфигов**.
+- «Восстановить встроенные конфиги» досевает недостающие, чистит дубликаты
+  старых встроенных конфигов и больше не забивает список копиями.
+- Лимит конфигов увеличен с 8 до **16**.
+
+### Технически
+
+- **Версия 2.2.0**, versionCode **37**.
+- WarpVpnService работает с org.amnezia.awg.*, NoopTunnelActionHandler,
+  расширенным Tunnel (isIpv4ResolutionPreferred/isMetered),
+  BackendException.Reason.AWG_QUICK_CONFIG_ERROR_CODE.
+- Новые тесты WarpConfigAmneziaTest: сохранение AWG-параметров, генерация
+  текста и приём парсером AmneziaWG.
 ## [2.1.0] - 2026-10-29
 
 ### Интерфейс: быстрее и без залипаний

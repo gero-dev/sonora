@@ -1,4 +1,4 @@
-package app.sonora.ui.screens
+﻿package app.sonora.ui.screens
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -962,7 +962,7 @@ fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
         }
 
         // ---------- Туннель WARP ----------
-        SettingsSection(title = "Туннель WARP (только Sonora)", icon = Icons.Rounded.VpnKey) {
+        SettingsSection(title = "Туннель WARP (AmneziaWG)", icon = Icons.Rounded.VpnKey) {
             Text(
                 text = "Необязательный WireGuard-туннель Cloudflare WARP: через него идёт " +
                     "только трафик Sonora, остальные приложения ходят напрямую. Если один " +
@@ -1019,7 +1019,7 @@ fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
             Spacer(Modifier.height(6.dp))
             ActionRow(
                 title = "Восстановить встроенные конфиги",
-                subtitle = "3 конфига уже в комплекте; импорт дополнительных — ниже",
+                subtitle = "7 конфигов (WARP + AmneziaWG) уже в комплекте; импорт дополнительных — ниже",
                 onClick = { vm.restoreBundledWarpConfigs() },
             )
             Button(

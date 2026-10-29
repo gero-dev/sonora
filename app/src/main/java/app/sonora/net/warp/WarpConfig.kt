@@ -26,6 +26,11 @@ data class WarpConfig(
     val dnsServers: List<String>,
     val mtu: Int?,
     val peers: List<WarpPeer>,
+    /**
+     * Обфускация AmneziaWG: Jc/Jmin/Jmax, S1–S4, H1–H4, I1–I5.
+     * Сохраняется как есть и передаётся движку AmneziaWG.
+     */
+    val awgOptions: Map<String, String> = emptyMap(),
     val ignoredInterfaceKeys: List<String> = emptyList(),
     val ignoredPeerKeys: List<String> = emptyList(),
     val ignoredSections: List<String> = emptyList(),
@@ -44,17 +49,11 @@ data class WarpConfig(
         get() = peers.firstOrNull()?.endpoint?.takeIf { it.isNotBlank() }
 
     /**
-     * AmneziaWG-параметры, которые были в файле, но игнорируются: стоковый
-     * WireGuard-бэкенд не умеет обфускацию трафика.
+     * AmneziaWG-параметры, которые были в файле и передаются движку
+     * AmneziaWG (обфускация трафика).
      */
     val amneziaKeys: List<String>
-        get() {
-            val known = AMNEZIA_KEY_NAMES
-            return (ignoredInterfaceKeys + ignoredPeerKeys)
-                .map { it.trim() }
-                .filter { it.isNotEmpty() && it.uppercase() in known }
-                .distinct()
-        }
+        get() = awgOptions.keys.sorted()
 
     /**
      * Собирает валидный wg-quick-текст для `com.wireguard.config.Config.parse`.
@@ -73,6 +72,8 @@ data class WarpConfig(
         if (addresses.isNotEmpty()) appendLine("Address = ${addresses.joinToString(", ")}")
         if (dnsServers.isNotEmpty()) appendLine("DNS = ${dnsServers.joinToString(", ")}")
         mtu?.let { appendLine("MTU = $it") }
+        // Обфускация AmneziaWG: движок применяет эти параметры к handshake/трафику.
+        for ((key, value) in awgOptions) appendLine("$key = $value")
         if (includedApplications.isNotEmpty()) {
             appendLine("IncludedApplications = ${includedApplications.joinToString(", ")}")
         }
@@ -92,7 +93,8 @@ data class WarpConfig(
     /** Не даём приватному ключу утечь в логи через data-class toString. */
     override fun toString(): String =
         "WarpConfig(privateKey=***, addresses=$addresses, dnsServers=$dnsServers, " +
-            "mtu=$mtu, peers=${peers.size}, ignored=${(ignoredInterfaceKeys + ignoredPeerKeys).distinct()})"
+            "mtu=$mtu, peers=${peers.size}, awg=${awgOptions.keys}, " +
+            "ignored=${(ignoredInterfaceKeys + ignoredPeerKeys).distinct()})"
 
     companion object {
         private const val MAX_PEERS = 16
@@ -132,6 +134,7 @@ data class WarpConfig(
             val ignoredInterfaceKeys = linkedSetOf<String>()
             val ignoredPeerKeys = linkedSetOf<String>()
             val ignoredSections = linkedSetOf<String>()
+            val awgOptions = linkedMapOf<String, String>()
 
             fun finishPeer() {
                 currentPeer?.let { peers += it }
@@ -200,7 +203,19 @@ data class WarpConfig(
                         // Это Android-специфичные ключи библиотеки; мы принудительно
                         // задаём собственный allow-list приложений, поэтому не сохраняем.
                         "includedapplications", "excludedapplications" -> ignoredInterfaceKeys += key
-                        else -> ignoredInterfaceKeys += key
+                        else -> {
+                            val upper = key.uppercase()
+                            if (upper in AMNEZIA_KEY_NAMES) {
+                                if (value.isBlank()) {
+                                    throw WarpConfigException(
+                                        "Строка $lineNo: пустой параметр AmneziaWG «$key».",
+                                    )
+                                }
+                                awgOptions[upper] = value
+                            } else {
+                                ignoredInterfaceKeys += key
+                            }
+                        }
                     }
                 } else {
                     val peer = currentPeer ?: throw WarpConfigException(
@@ -266,6 +281,7 @@ data class WarpConfig(
                 dnsServers = dnsServers.toList(),
                 mtu = mtu,
                 peers = parsedPeers,
+                awgOptions = awgOptions.toMap(),
                 ignoredInterfaceKeys = ignoredInterfaceKeys.toList(),
                 ignoredPeerKeys = ignoredPeerKeys.toList(),
                 ignoredSections = ignoredSections.toList(),

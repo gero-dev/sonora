@@ -1,8 +1,8 @@
-package app.sonora.net.warp
+﻿package app.sonora.net.warp
 
 import android.util.Log
 import app.sonora.core.net.Http
-import com.wireguard.crypto.KeyPair
+import org.amnezia.awg.crypto.KeyPair
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonArray
