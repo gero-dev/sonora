@@ -3089,11 +3089,20 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
     fun downloadUpdate() {
         viewModelScope.launch(Dispatchers.IO) {
             toast("Скачиваем обновление…")
-            val ok = runCatching { UpdateManager.downloadAndInstall() }.getOrDefault(false)
-            if (!ok) {
-                withContext(Dispatchers.Main) {
-                    toast(UpdateManager.error.value ?: "Не удалось скачать обновление")
+            // GitHub доступен напрямую: туннель WARP нужен для YouTube, а
+            // большое APK через него качается медленно и рвётся. Пауза туннеля
+            // ускоряет загрузку, после — возвращаем WARP, если он был включён.
+            val warpWasConnected = graph.warp.status.value.state == WarpState.CONNECTED
+            if (warpWasConnected) runCatching { graph.warp.stop() }
+            try {
+                val ok = runCatching { UpdateManager.downloadAndInstall() }.getOrDefault(false)
+                if (!ok) {
+                    withContext(Dispatchers.Main) {
+                        toast(UpdateManager.error.value ?: "Не удалось скачать обновление")
+                    }
                 }
+            } finally {
+                if (warpWasConnected) runCatching { StreamingAutoPilot.ensureWarp() }
             }
         }
     }
