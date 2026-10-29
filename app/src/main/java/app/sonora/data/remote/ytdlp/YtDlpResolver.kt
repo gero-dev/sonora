@@ -1,4 +1,4 @@
-package app.sonora.data.remote.ytdlp
+﻿package app.sonora.data.remote.ytdlp
 
 import android.content.Context
 import android.util.Log
@@ -456,10 +456,16 @@ class YtDlpResolver(
         }
     }
 
+    /**
+     * Прокси для yt-dlp: пользовательский, иначе локальный NoHiT-прокси
+     * (DPI-обход без VPN/WARP — Python-рантайм сам фрагментацию не умеет).
+     */
     private fun YoutubeDLRequest.proxyOption() {
-        settings.current.ytDlpProxy.trim().takeIf { it.isNotBlank() }?.let {
-            addOption("--proxy", it)
+        val custom = settings.current.ytDlpProxy.trim()
+        val target = custom.ifBlank {
+            app.sonora.net.nohit.NohitProxy.proxyUrl().orEmpty()
         }
+        if (target.isNotBlank()) addOption("--proxy", target)
     }
 
     private fun mimeOf(ext: String?): String = when (ext?.lowercase()) {

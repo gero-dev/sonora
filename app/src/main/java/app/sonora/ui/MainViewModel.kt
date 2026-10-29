@@ -2988,15 +2988,14 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
         if (enabled) runStreamingAudit(deep = false)
     }
 
-    /** Поднимать WARP автоматически, если прямой путь не работает. */
+    /** Поднять WARP автоматически, если прямой путь не работает. */
     fun setAutoWarpFallback(enabled: Boolean) {
         updateSettings { it.copy(autoWarpFallback = enabled) }
         toast(if (enabled) "WARP-автопилот включён" else "WARP-автопилот выключен")
     }
 
     /** Самостоятельная регистрация свежего WARP-профиля. */
-    fun setWarpAutoRegister(enabled: Boolean) {
-        updateSettings { it.copy(warpAutoRegister = enabled) }
+    fun setWarpAutoRegister(enabled: Boolean) {        updateSettings { it.copy(warpAutoRegister = enabled) }
         toast(if (enabled) "Авто-регистрация WARP включена" else "Авто-регистрация WARP выключена")
     }
 
@@ -3049,6 +3048,63 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
 
     /** Intent системного диалога разрешения VPN; null — уже выдано. */
     fun autoPilotVpnPermissionIntent(): Intent? = graph.warp.vpnPermissionIntent()
+
+    // ---------- DPI-обход NoHiT (вместо WARP) ----------
+
+    private val _nohitTuning = MutableStateFlow(false)
+    val nohitTuning: StateFlow<Boolean> = _nohitTuning.asStateFlow()
+
+    private val _nohitMessage = MutableStateFlow<String?>(null)
+    val nohitMessage: StateFlow<String?> = _nohitMessage.asStateFlow()
+
+    /** Текущая стратегия NoHiT для подписи в настройках. */
+    fun nohitConfigLabel(): String {
+        val cfg = runCatching { dev.nohit.core.NoHiT.currentConfig() }.getOrNull()
+            ?: return "не инициализирован"
+        val split = cfg.split
+        val splitText = if (split.chunks.isEmpty()) {
+            "без фрагментации"
+        } else {
+            split.chunks.joinToString("-") +
+                if (split.delayMs > 0) " +${split.delayMs} мс" else ""
+        }
+        return "${cfg.dns.firstOrNull()?.name ?: "системный DNS"} · $splitText"
+    }
+
+    /** Включить/выключить DPI-обход NoHiT (замена WARP). */
+    fun setNohitEnabled(enabled: Boolean) {
+        updateSettings { it.copy(nohitEnabled = enabled) }
+        if (enabled) {
+            runCatching { dev.nohit.core.NoHiT.init(graph.appContext) }
+            app.sonora.net.nohit.NohitProxy.start()
+            toast("DPI-обход NoHiT включён")
+        } else {
+            app.sonora.net.nohit.NohitProxy.stop()
+            toast("DPI-обход NoHiT выключен")
+        }
+    }
+
+    /** Автоподбор стратегии фрагментации и DNS (может занять до минуты). */
+    fun tuneNohit() {
+        if (_nohitTuning.value) return
+        _nohitTuning.value = true
+        _nohitMessage.value = "Подбираем стратегию…"
+        viewModelScope.launch(Dispatchers.IO) {
+            val report = runCatching {
+                dev.nohit.core.AutoTuner.tune(graph.appContext) { line ->
+                    _nohitMessage.value = line
+                }
+            }.getOrNull()
+            _nohitMessage.value = when {
+                report == null -> "Подбор не удался"
+                report.ok -> "OK · ${report.dns.name} · ${report.latencyMs} мс"
+                else -> "Нет рабочей комбинации на этой сети"
+            }
+            _nohitTuning.value = false
+            updateSettings { it.copy(nohitTunedAtMs = System.currentTimeMillis()) }
+            withContext(Dispatchers.Main) { toast(_nohitMessage.value!!) }
+        }
+    }
 
     // ---------- Обновления из GitHub ----------
 

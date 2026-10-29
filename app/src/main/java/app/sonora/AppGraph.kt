@@ -1,8 +1,9 @@
-package app.sonora
+﻿package app.sonora
 
 import android.content.Context
 import android.net.Uri
 import app.sonora.core.security.SecureStore
+import kotlinx.coroutines.launch
 import app.sonora.core.settings.SettingsStore
 import app.sonora.data.discover.ArchiveDiscoverSource
 import app.sonora.data.discover.DiscoverRepository
@@ -59,6 +60,36 @@ class AppGraph private constructor(context: Context) {
         app.sonora.data.streaming.StreamingAutoPilot.init(appContext, settings, ytDlp, warp)
         // Проверка обновлений из GitHub Releases (добровольная установка).
         app.sonora.data.update.UpdateManager.init(appContext, settings)
+
+        // NoHiT: DPI-обход без VPN/WARP — фрагментация TLS ClientHello и DoH-DNS.
+        // Заменяет WARP для обычного трафика Sonora: OkHttp, Ktor, ExoPlayer, yt-dlp.
+        runCatching { dev.nohit.core.NoHiT.init(appContext) }
+            .onFailure { android.util.Log.w("NoHiT", "init: ${it.message}") }
+        if (settings.current.nohitEnabled) {
+            app.sonora.net.nohit.NohitProxy.start()
+            maybeTuneNohit()
+        }
+    }
+
+    /**
+     * Автоподбор стратегии NoHiT в фоне: раз в неделю и только если включён.
+     * Подбор перебирает DNS и планы фрагментации реальными запросами — не
+     * запускаем его на каждом старте.
+     */
+    private fun maybeTuneNohit() {
+        val stale = System.currentTimeMillis() - settings.current.nohitTunedAtMs >
+            7L * 24 * 60 * 60 * 1000
+        if (!stale) return
+        kotlinx.coroutines.CoroutineScope(
+            kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO,
+        ).launch {
+            val report = runCatching { dev.nohit.core.AutoTuner.tune(appContext) }.getOrNull()
+            android.util.Log.i(
+                "NoHiT",
+                "tune: ok=${report?.ok} dns=${report?.dns?.name} split=${report?.split?.chunks} ${report?.latencyMs}ms",
+            )
+            settings.update { it.copy(nohitTunedAtMs = System.currentTimeMillis()) }
+        }
     }
 
     val scanner = MediaStoreScanner(appContext)

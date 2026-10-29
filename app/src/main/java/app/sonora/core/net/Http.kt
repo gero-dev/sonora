@@ -22,6 +22,11 @@ object Http {
 
     val client: OkHttpClient by lazy {
         OkHttpClient.Builder()
+            .apply {
+                // NoHiT: локальный прокси с фрагментацией TLS ClientHello
+                // (DPI-обход без VPN/WARP). Если прокси не запущен — напрямую.
+                app.sonora.net.nohit.NohitProxy.proxyOrNull()?.let { proxy(it) }
+            }
             .connectTimeout(20, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)

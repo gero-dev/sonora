@@ -1,0 +1,129 @@
+package dev.nohit.core
+
+import android.content.Context
+import okhttp3.ConnectionSpec
+import okhttp3.Dns
+import okhttp3.OkHttpClient
+import okhttp3.Protocol
+import org.json.JSONArray
+import org.json.JSONObject
+import java.util.concurrent.TimeUnit
+
+/**
+ * Фасад модуля.
+ *
+ * Типичная интеграция в приложение:
+ *
+ *   // Application.onCreate()
+ *   NoHiT.init(this)
+ *
+ *   // Там, где создаётся OkHttp:
+ *   val client = NoHiT.client()
+ *
+ *   // Однократно (в фоне) — подобрать рабочую стратегию:
+ *   val report = AutoTuner.tune(context) { line -> Log.d("NoHiT", line) }
+ */
+object NoHiT {
+
+    @Volatile
+    private var config: NoHiTConfig = NoHiTConfig()
+
+    @Volatile
+    private var client: OkHttpClient? = null
+
+    fun init(context: Context) {
+        val app = context.applicationContext
+        config = ConfigStore.load(app)
+        client = buildClient(config)
+    }
+
+    fun configure(context: Context, updated: NoHiTConfig) {
+        val app = context.applicationContext
+        config = updated
+        client = buildClient(updated)
+        ConfigStore.save(app, updated)
+    }
+
+    fun currentConfig(): NoHiTConfig = config
+
+    fun client(): OkHttpClient =
+        client ?: throw IllegalStateException("Вызовите NoHiT.init(context) до NoHiT.client()")
+
+    /**
+     * Собирает клиент с DoH/GeoHide DNS и фрагментацией ClientHello.
+     * Всё, что делает приложение через этот клиент, получает новый резолвер и разбивку TLS.
+     */
+    fun buildClient(cfg: NoHiTConfig, dns: Dns? = null): OkHttpClient {
+        val resolver = dns ?: NohitDns(cfg.dns, cfg.timeoutsMs)
+        val builder = OkHttpClient.Builder()
+            .dns(resolver)
+            .socketFactory(FragSocketFactory.create(cfg.split))
+            .connectTimeout(cfg.timeoutsMs.toLong(), TimeUnit.MILLISECONDS)
+            .readTimeout(cfg.timeoutsMs.toLong(), TimeUnit.MILLISECONDS)
+            .writeTimeout(cfg.timeoutsMs.toLong(), TimeUnit.MILLISECONDS)
+            .retryOnConnectionFailure(true)
+            .connectionSpecs(listOf(ConnectionSpec.MODERN_TLS, ConnectionSpec.CLEARTEXT))
+
+        // HTTP/2 мультиплексирует запросы в одном TLS-соединении;
+        // для части DPI-стратегий выгоднее HTTP/1.1.
+        if (!cfg.http2) {
+            builder.protocols(listOf(Protocol.HTTP_1_1))
+        }
+        return builder.build()
+    }
+}
+
+internal object ConfigStore {
+
+    private const val PREFS = "nohit_settings"
+    private const val KEY = "config_v1"
+
+    fun save(context: Context, cfg: NoHiTConfig) {
+        val json = JSONObject()
+        json.put("dns", JSONArray().apply { cfg.dns.forEach { put(it.id) } })
+        json.put("chunks", JSONArray().apply { cfg.split.chunks.forEach { put(it) } })
+        json.put("delay", cfg.split.delayMs)
+        json.put("head", cfg.split.headBytes)
+        json.put("nodelay", cfg.split.tcpNoDelay)
+        json.put("http2", cfg.http2)
+        json.put("timeout", cfg.timeoutsMs)
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit().putString(KEY, json.toString()).apply()
+    }
+
+    fun load(context: Context): NoHiTConfig {
+        val raw = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getString(KEY, null) ?: return NoHiTConfig()
+        return try {
+            val json = JSONObject(raw)
+            val dnsIds = json.optJSONArray("dns")
+            val dns = if (dnsIds != null) {
+                (0 until dnsIds.length()).mapNotNull { index ->
+                    val id = dnsIds.optString(index)
+                    DnsUpstream.all.firstOrNull { it.id == id }
+                }
+            } else {
+                NoHiTConfig().dns
+            }
+            val chunkArray = json.optJSONArray("chunks")
+            val chunks = if (chunkArray != null) {
+                (0 until chunkArray.length()).map { index -> chunkArray.optInt(index, 1) }
+            } else {
+                NoHiTConfig().split.chunks
+            }
+            NoHiTConfig(
+                dns = dns.ifEmpty { NoHiTConfig().dns },
+                split = SplitPlan(
+                    chunks = chunks,
+                    delayMs = json.optLong("delay", 0L),
+                    headBytes = json.optInt("head", 256),
+                    tcpNoDelay = json.optBoolean("nodelay", true)
+                ),
+                http2 = json.optBoolean("http2", false),
+                timeoutsMs = json.optInt("timeout", 15_000)
+            )
+        } catch (_: Throwable) {
+            NoHiTConfig()
+        }
+    }
+}

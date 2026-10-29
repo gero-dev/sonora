@@ -14,8 +14,8 @@ android {
         applicationId = "app.sonora"
         minSdk = 26
         targetSdk = 34
-        versionCode = 34
-        versionName = "1.9.3"
+        versionCode = 35
+        versionName = "2.0.0"
         vectorDrawables.useSupportLibrary = true
     }
 
@@ -82,6 +82,8 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer:1.3.1")
     implementation("androidx.media3:media3-session:1.3.1")
     implementation("androidx.media3:media3-common:1.3.1")
+    // NoHiT: медиа-поток ExoPlayer через общий OkHttp (фрагментация TLS/DPI-обход).
+    implementation("androidx.media3:media3-datasource-okhttp:1.3.1")
 
     // Р РЋР ВµРЎвЂљРЎРЉ / JSON
     implementation("com.squareup.okhttp3:okhttp:4.12.0")

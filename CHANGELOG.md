@@ -3,6 +3,42 @@
 Все заметные изменения проекта. Формат — [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/),
 версии — [Semantic Versioning](https://semver.org/lang/ru/).
 
+## [2.0.0] - 2026-10-29
+
+### NoHiT вместо WARP: DPI-обход без VPN
+
+- Встроен **[NoHiT](https://github.com/Avedanger/NoHiT)** (Apache-2.0):
+  DoH/GeoHide DNS, фрагментация TLS ClientHello, автоподбор стратегии
+  (S1–S5) — исходники вендорены в pp/src/main/java/dev/nohit/core/.
+- Поднят **локальный HTTP CONNECT-прокси** NohitProxy (только 127.0.0.1):
+  через него идут OkHttp (Http.client), Ktor (InnerTubeX), ExoPlayer
+  (OkHttpDataSource) и yt-dlp (--proxy). Первые байты каждого туннеля
+  режутся по плану NoHiT, DNS резолвится через DoH/GeoHide.
+- В «Настройки → Поток и сеть → DPI-обход (NoHiT)»: переключатель (по умолчанию
+  включён), текущая стратегия и **«Автоподбор»** (AutoTuner, вручную и
+  автоматически раз в неделю).
+- WARP не удалён, а переведён в **резерв**: включается автоматически, если
+  NoHiT не дал результата (на сетях с TSPU reassembly), чтобы стриминг
+  продолжал работать.
+
+### Результаты проверки на сети пользователя (без WARP)
+
+- Прокси NoHiT запускается, AutoTuner находит рабочую стратегию
+  (GeoHide DNS, split [2,2,2,2], 542 мс) для незаблокированных хостов;
+- TLS до music.youtube.com через фрагментацию на этой сети всё равно
+  обрывается (TSPU собирает TCP и читает SNI) — см. docs/NOHIT.md;
+- поэтому WARP остаётся автоматическим резервом; при этом на сетях без
+  reassembly NoHiT справляется сам и WARP не запускается.
+
+### Технически
+
+- **Версия 2.0.0**, versionCode **35**.
+- dev.nohit.core.* (вендоринг NoHiT, Apache-2.0), pp.sonora.net.nohit.NohitProxy,
+  media3-datasource-okhttp, настройки 
+ohitEnabled/
+ohitTunedAtMs,
+  WARP-автопилот по умолчанию включён как резерв.
+- Лицензия NoHiT в pp/src/main/assets/licenses/ и THIRD-PARTY-NOTICES.md.
 ## [1.9.3] - 2026-10-29
 
 ### Исправлено: скачивание после выключения WARP

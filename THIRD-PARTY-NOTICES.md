@@ -1,4 +1,4 @@
-# Сторонние компоненты и лицензии
+﻿# Сторонние компоненты и лицензии
 
 Sonora распространяется под **GPL-3.0** (см. [LICENSE](LICENSE)).
 
@@ -38,3 +38,12 @@ Sonora распространяется под **GPL-3.0** (см. [LICENSE](LICE
 - InnerTube — недокументированный протокол YouTube. Проект не связан с Google/YouTube.
 - MusicBrainz / Cover Art Archive — данные под CC0/CC-BY-NC-SA; LRCLIB — тексты по лицензиям
   правообладателей; Internet Archive и Jamendo — по лицензиям конкретных записей.
+
+---
+
+## NoHiT (Apache-2.0)
+
+Вендоренные исходники: `app/src/main/java/dev/nohit/core/` (`NoHiT`, `NohitDns`, `FragSocketFactory`, `AutoTuner`, `NoHiTConfig`).
+Проект: https://github.com/Avedanger/NoHiT · Лицензия: Apache License 2.0
+Полный текст лицензии: `app/src/main/assets/licenses/NoHiT-APACHE-2.0.txt`.
+Используется для DPI-обхода без VPN: DoH/GeoHide DNS, фрагментация TLS ClientHello, автоподбор стратегии.

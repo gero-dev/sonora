@@ -8,8 +8,8 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.DefaultDataSource
-import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.ResolvingDataSource
+import androidx.media3.datasource.okhttp.OkHttpDataSource
 import app.sonora.core.settings.AudioQuality
 import app.sonora.data.remote.youtube.innertube.InnerTube
 import app.sonora.data.remote.youtube.innertube.InnerTubeStreams
@@ -34,11 +34,10 @@ class InnerTubeDataSourceFactory(
 
     private val appContext = context.applicationContext
 
-    private val httpFactory = DefaultHttpDataSource.Factory()
+    // Медиа-поток тоже идёт через общий OkHttp-клиент Sonora, к которому
+    // подключён NoHiT-прокси: DPI-обход работает и для ExoPlayer.
+    private val httpFactory = OkHttpDataSource.Factory(app.sonora.core.net.Http.client)
         .setUserAgent(InnerTube.USER_AGENT_WEB)
-        .setAllowCrossProtocolRedirects(true)
-        .setConnectTimeoutMs(20_000)
-        .setReadTimeoutMs(30_000)
 
     private val upstreamFactory = DefaultDataSource.Factory(appContext, httpFactory)
 

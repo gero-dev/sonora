@@ -47,6 +47,9 @@ internal object InnerTubeXEngine {
         HttpClient(OkHttp) {
             engine {
                 config {
+                    // NoHiT: трафик InnerTubeX тоже идёт через локальный
+                    // DPI-прокси с фрагментацией TLS ClientHello.
+                    app.sonora.net.nohit.NohitProxy.proxyOrNull()?.let { proxy(it) }
                     connectTimeout(20, TimeUnit.SECONDS)
                     readTimeout(30, TimeUnit.SECONDS)
                     writeTimeout(30, TimeUnit.SECONDS)

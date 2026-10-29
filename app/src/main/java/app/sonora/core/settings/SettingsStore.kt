@@ -186,7 +186,10 @@ data class AppSettings(
     val probeBeforePlay: Boolean = true,
     /** Автопилот: проверять все способы стриминга и выбирать рабочий. */
     val autoTransport: Boolean = true,
-    /** Поднимать WARP автоматически, если без него YouTube не играет. */
+    /**
+     * Резерв, если NoHiT не помог: автоматически поднимать WARP.
+     * На сетях с TSPU (собирает TCP и читает SNI) без него YouTube не играет.
+     */
     val autoWarpFallback: Boolean = true,
     /** При 403/ошибке плеера автоматически переключать источник. */
     val autoFailover: Boolean = true,
@@ -207,6 +210,13 @@ data class AppSettings(
     val updateAutoCheck: Boolean = true,
     /** Версия, которую пользователь отложил («Позже»), чтобы не напоминать. */
     val updateSkippedVersion: String = "",
+    /**
+     * DPI-обход NoHiT: фрагментация TLS ClientHello + DoH/GeoHide DNS.
+     * Заменяет WARP: работает без VPN, только для трафика Sonora.
+     */
+    val nohitEnabled: Boolean = true,
+    /** Время последнего автоподбора стратегии NoHiT (мс). */
+    val nohitTunedAtMs: Long = 0L,
     /** Время последней успешной проверки/обновления yt-dlp (мс). */
     val ytDlpCheckedAtMs: Long = 0L,
     /** Версия установленного yt-dlp (для настроек и диагностики). */

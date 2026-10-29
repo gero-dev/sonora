@@ -170,6 +170,9 @@ fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
     val autoPilotAuditState by vm.autoPilotAudit.collectAsState()
     val autoPilotRunningState by vm.autoPilotRunning.collectAsState()
     val autoPilotMessageState by vm.autoPilotMessage.collectAsState()
+    val nohitTuningState by vm.nohitTuning.collectAsState()
+    val nohitMessageState by vm.nohitMessage.collectAsState()
+    val nohitConfigLabelState = vm.nohitConfigLabel()
     val updateAvailableState by vm.updateAvailable.collectAsState()
     val updateCheckingState by vm.updateChecking.collectAsState()
     val updateDownloadingState by vm.updateDownloading.collectAsState()
@@ -404,6 +407,30 @@ fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
                 title = "Проверить шлюзы",
                 subtitle = relayCheckState ?: "Какие зеркала реально отдают звук",
                 onClick = { vm.checkRelayHealth() },
+            )
+            SettingsLabel("DPI-обход (NoHiT)")
+            SwitchRow(
+                title = "Обход блокировок NoHiT",
+                subtitle = "Фрагментация TLS ClientHello + DoH: без VPN и WARP, только для трафика Sonora",
+                checked = settings.nohitEnabled,
+                onCheckedChange = vm::setNohitEnabled,
+            )
+            ClickRow(
+                title = "Стратегия NoHiT",
+                subtitle = when {
+                    nohitTuningState -> nohitMessageState ?: "Подбираем стратегию…"
+                    nohitMessageState != null -> nohitMessageState!!
+                    else -> nohitConfigLabelState
+                },
+                onClick = { vm.tuneNohit() },
+            )
+            Text(
+                text = "WARP больше не требуется по умолчанию: он оставлен резервом ниже " +
+                    "и запускается, только если включён WARP-автопилот. Переключатель " +
+                    "NoHiT полностью применяется после перезапуска приложения.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(vertical = 4.dp),
             )
             SettingsLabel("Автопилот")
             SwitchRow(
