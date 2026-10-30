@@ -85,6 +85,9 @@ class AppGraph private constructor(context: Context) {
         kotlinx.coroutines.CoroutineScope(
             kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO,
         ).launch {
+            // Не конкурируем с первым кадром и первым скроллом: подбор стратегии
+            // запускаем только после того, как UI уже показан.
+            kotlinx.coroutines.delay(12_000)
             // Пробуем подобрать рабочую стратегию автоматически; повтор — при
             // следующем запуске, если сеть не позволила.
             var report = runCatching { dev.nohit.core.AutoTuner.tune(appContext) }.getOrNull()

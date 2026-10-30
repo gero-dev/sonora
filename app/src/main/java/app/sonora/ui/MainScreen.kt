@@ -1,5 +1,8 @@
 package app.sonora.ui
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -32,6 +35,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -154,6 +158,11 @@ fun MainScreen(graph: AppGraph) {
         }
     }
 
+    // Плотность нужна, чтобы задать сдвиг перехода в dp: 24dp вместо слайда
+    // на весь экран — переходы лёгкие и не «дёргают» кадры на больших экранах.
+    val density = LocalDensity.current
+    val navEnterOffset = with(density) { 24.dp.roundToPx() }
+
     CompositionLocalProvider(
         LocalArtistNavigator provides { name: String ->
             if (name.isNotBlank()) navController.navigate(Routes.artist(name)) {
@@ -165,11 +174,34 @@ fun MainScreen(graph: AppGraph) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
-            if (showChrome) {
-                Column {
-                    // Нижний мини-плеер из предыдущей версии: свайпы влево/вправо
-                    // переключают трек, свайп вверх и тап открывают полный плеер.
-                    if (playerState.current != null) {
+            // Нижний chrome (мини-плеер + навигация) появляется и уезжает плавно,
+            // ~200ms, только transform/alpha — без рывков при открытии плеера.
+            AnimatedVisibility(
+                visible = showChrome,
+                enter = slideInVertically(
+                    animationSpec = tween(durationMillis = 200, easing = FastOutSlowInEasing),
+                ) { it / 2 } + fadeIn(tween(durationMillis = 200, easing = FastOutSlowInEasing)),
+                exit = slideOutVertically(
+                    animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing),
+                ) { it / 2 } + fadeOut(tween(durationMillis = 120, easing = FastOutSlowInEasing)),
+            ) {
+                Column(
+                    Modifier.animateContentSize(
+                        animationSpec = tween(durationMillis = 200, easing = FastOutSlowInEasing),
+                    ),
+                ) {
+                    // Мини-плеер мягко въезжает при старте трека и так же уходит,
+                    // когда трек остановлен. Сам MiniPlayer при null-состоянии
+                    // ничего не рисует, поэтому отдельный if не нужен.
+                    AnimatedVisibility(
+                        visible = playerState.current != null,
+                        enter = slideInVertically(
+                            animationSpec = tween(durationMillis = 200, easing = FastOutSlowInEasing),
+                        ) { it / 2 } + fadeIn(tween(durationMillis = 200, easing = FastOutSlowInEasing)),
+                        exit = slideOutVertically(
+                            animationSpec = tween(durationMillis = 160, easing = FastOutSlowInEasing),
+                        ) { it / 2 } + fadeOut(tween(durationMillis = 160, easing = FastOutSlowInEasing)),
+                    ) {
                         MiniPlayer(
                             state = playerState,
                             progress = viewModel.playerProgress,
@@ -206,6 +238,28 @@ fun MainScreen(graph: AppGraph) {
             navController = navController,
             startDestination = Routes.HOME,
             modifier = Modifier.fillMaxSize(),
+            // Единый спокойный переход для всех экранов: лёгкий fade + подъём
+            // на 24dp. Только alpha/transform — никаких дорогих эффектов.
+            enterTransition = {
+                fadeIn(tween(durationMillis = 180, easing = FastOutSlowInEasing)) +
+                    slideInVertically(
+                        animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
+                        initialOffsetY = { navEnterOffset },
+                    )
+            },
+            exitTransition = {
+                fadeOut(tween(durationMillis = 120, easing = FastOutSlowInEasing))
+            },
+            popEnterTransition = {
+                fadeIn(tween(durationMillis = 180, easing = FastOutSlowInEasing)) +
+                    slideInVertically(
+                        animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
+                        initialOffsetY = { -navEnterOffset },
+                    )
+            },
+            popExitTransition = {
+                fadeOut(tween(durationMillis = 120, easing = FastOutSlowInEasing))
+            },
         ) {
             composable(Routes.HOME) { HomeScreen(viewModel, padding, navigate) }
             composable(Routes.SEARCH) { SearchScreen(viewModel, padding, navigate) }
@@ -216,19 +270,11 @@ fun MainScreen(graph: AppGraph) {
             composable(Routes.CONNECTIONS) { ConnectionsScreen(viewModel, padding, navigate) }
             composable(Routes.QUEUE) { QueueScreen(viewModel, navigate) }
 
-            composable(
-                route = Routes.YOUTUBE_WEB,
-                enterTransition = { slideInVertically(animationSpec = tween(280)) { it } },
-                exitTransition = { slideOutVertically(animationSpec = tween(280)) { it } },
-            ) {
+            composable(Routes.YOUTUBE_WEB) {
                 YouTubeWebScreen(onBack = { navController.popBackStack() })
             }
 
-            composable(
-                route = Routes.GOOGLE_LOGIN,
-                enterTransition = { slideInVertically(animationSpec = tween(280)) { it } },
-                exitTransition = { slideOutVertically(animationSpec = tween(280)) { it } },
-            ) {
+            composable(Routes.GOOGLE_LOGIN) {
                 GoogleLoginScreen(
                     vm = viewModel,
                     onBack = { navController.popBackStack() },
@@ -236,13 +282,7 @@ fun MainScreen(graph: AppGraph) {
                 )
             }
 
-            composable(
-                route = Routes.PLAYER,
-                enterTransition = { slideInVertically(animationSpec = tween(280)) { it } },
-                exitTransition = { slideOutVertically(animationSpec = tween(280)) { it } + fadeOut(tween(200)) },
-                popEnterTransition = { fadeIn(tween(200)) },
-                popExitTransition = { slideOutVertically(animationSpec = tween(280)) { it } },
-            ) {
+            composable(Routes.PLAYER) {
                 PlayerScreen(viewModel, onBack = { navController.popBackStack() }, navigate = navigate)
             }
 

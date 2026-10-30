@@ -29,7 +29,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -39,13 +38,12 @@ import app.sonora.core.model.Album
 import app.sonora.core.model.Artist
 import app.sonora.core.model.Playlist
 import app.sonora.core.model.Source
-import app.sonora.ui.theme.LocalSonoraColors
 import coil.compose.AsyncImage
 
 /**
- * Карточки медиатеки в духе Spotify: обложка 1:1, крупный Play поверх неё,
+ * Карточки медиатеки в духе Spotify: обложка 1:1, круглый Play поверх неё,
  * жирное название и приглушённый счётчик треков. Все карточки прозрачные —
- * их «фоном» служит мягкий градиент шапки экрана, как в Spotify.
+ * их «фоном» служит плоская поверхность экрана.
  */
 
 /**
@@ -107,16 +105,17 @@ private fun CoverCell(url: String, modifier: Modifier = Modifier) {
 
 @Composable
 private fun GradientCoverPlaceholder(modifier: Modifier = Modifier) {
-    val gradient = LocalSonoraColors.current.gradient
-    val brush = remember(gradient) { Brush.linearGradient(gradient) }
+    // Плоская заглушка вместо градиента: акцент только в ноте.
+    val primary = MaterialTheme.colorScheme.primary
     Box(
-        modifier = modifier.background(brush),
+        modifier = modifier
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh),
         contentAlignment = Alignment.Center,
     ) {
         Icon(
             imageVector = Icons.Rounded.MusicNote,
             contentDescription = null,
-            tint = accentContentColor().copy(alpha = 0.92f),
+            tint = primary.copy(alpha = 0.85f),
             modifier = Modifier.fillMaxSize(0.30f),
         )
     }
@@ -156,7 +155,7 @@ fun PlaylistCard(
             CircularPlayButton(
                 onClick = onPlay,
                 contentDescription = "Играть плейлист",
-                size = 44.dp,
+                size = 48.dp,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(8.dp),
@@ -210,7 +209,7 @@ fun AlbumCard(
             CircularPlayButton(
                 onClick = onPlay,
                 contentDescription = "Играть альбом",
-                size = 44.dp,
+                size = 48.dp,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(8.dp),
@@ -266,7 +265,7 @@ fun ArtistCard(
             CircularPlayButton(
                 onClick = onPlay,
                 contentDescription = "Играть исполнителя",
-                size = 40.dp,
+                size = 44.dp,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(4.dp),

@@ -2,6 +2,15 @@ package app.sonora.ui.screens
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -1179,6 +1188,12 @@ private fun SettingsSection(
 ) {
     // Аккордеон: настройки раздела скрыты, пока пользователь не откроет его.
     var expanded by rememberSaveable(title) { mutableStateOf(false) }
+    // Шеврон доворачивается синхронно с раскрытием — дешёвый alpha/rotation.
+    val chevronRotation by animateFloatAsState(
+        targetValue = if (expanded) 180f else 0f,
+        animationSpec = tween(durationMillis = 200, easing = FastOutSlowInEasing),
+        label = "settingsSectionChevron",
+    )
     Column(Modifier.fillMaxWidth().padding(bottom = 10.dp)) {
         Row(
             modifier = Modifier
@@ -1205,10 +1220,22 @@ private fun SettingsSection(
                 imageVector = Icons.Rounded.ExpandMore,
                 contentDescription = if (expanded) "Свернуть" else "Развернуть",
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(22.dp),
+                modifier = Modifier
+                    .size(22.dp)
+                    .rotate(chevronRotation),
             )
         }
-        if (expanded) {
+        // Раскрытие ~200ms: высота через spring, прозрачность через tween.
+        // Анимируются только transform/alpha/размер — без дорогих эффектов.
+        AnimatedVisibility(
+            visible = expanded,
+            enter = expandVertically(
+                animationSpec = spring(dampingRatio = 0.85f, stiffness = 500f),
+            ) + fadeIn(tween(durationMillis = 200, easing = FastOutSlowInEasing)),
+            exit = shrinkVertically(
+                animationSpec = tween(durationMillis = 200, easing = FastOutSlowInEasing),
+            ) + fadeOut(tween(durationMillis = 150, easing = FastOutSlowInEasing)),
+        ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()

@@ -25,10 +25,10 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.animation.animateContentSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Explore
 import androidx.compose.material.icons.rounded.Favorite
@@ -47,11 +47,11 @@ import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.UploadFile
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -67,8 +67,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -88,16 +86,15 @@ import app.sonora.ui.components.EmptyState
 import app.sonora.ui.components.TrackActionSheet
 import app.sonora.ui.components.TrackRow
 import app.sonora.ui.nav.Routes
-import app.sonora.ui.theme.LocalSonoraColors
 import java.time.LocalTime
 
-/** Единый шаг страницы: 16dp по краям и 12dp между блоками. */
-private val PagePadding = 16.dp
-private val SectionGap = 12.dp
+/** Плотный Spotify-ритм: 20dp по краям, 24dp между секциями. */
+private val PagePadding = 20.dp
+private val SectionGap = 24.dp
 private val RailSpacing = 12.dp
 private val CardRadius = 16.dp
-private val TileWidth = 152.dp
-private val ArtworkRadius = 12.dp
+private val TileWidth = 148.dp
+private val ArtworkRadius = 8.dp
 
 /**
  * Главный экран: приветствие, «Моя волна», быстрые карточки действий,
@@ -205,7 +202,7 @@ fun HomeScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) -> 
                 item { HomeSectionHeader(title = "Недавно добавленные") }
                 item {
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(RailSpacing)) {
-                        items(recent, key = { "recent-${it.id}" }) { track ->
+                        items(recent, key = { "recent-${it.id}" }, contentType = { "track" }) { track ->
                             TrackTile(track = track, onClick = { vm.playOrOpen(track) })
                         }
                     }
@@ -216,7 +213,7 @@ fun HomeScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) -> 
             item {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(RailSpacing)) {
                     item { CreatePlaylistTile(onClick = { showCreateDialog = true }) }
-                    items(ownPlaylists, key = { "pl-${it.id}" }) { playlist ->
+                    items(ownPlaylists, key = { "pl-${it.id}" }, contentType = { "playlist" }) { playlist ->
                         PlaylistTile(
                             playlist = playlist,
                             onClick = { navigate(Routes.playlist(playlist.id)) },
@@ -241,7 +238,7 @@ fun HomeScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) -> 
                     )
                 }
             } else {
-                items(favoritePreview, key = { "fav-${it.id}" }) { track ->
+                items(favoritePreview, key = { "fav-${it.id}" }, contentType = { "track" }) { track ->
                     TrackRow(
                         track = track,
                         isFavorite = track.id in favorites,
@@ -356,7 +353,7 @@ fun HomeScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) -> 
 // Заголовки и приветствие
 // ---------------------------------------------------------------------------
 
-/** Заголовок секции: 20sp semibold, отступ 12dp сверху, действие справа. */
+/** Заголовок секции как в Spotify: жирный, 24dp воздуха сверху, действие справа. */
 @Composable
 private fun HomeSectionHeader(
     title: String,
@@ -366,7 +363,7 @@ private fun HomeSectionHeader(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = SectionGap, bottom = 2.dp),
+            .padding(top = SectionGap, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
@@ -408,7 +405,7 @@ private fun HomeGreeting(localCount: Int, onAccount: () -> Unit) {
                 Spacer(Modifier.height(6.dp))
                 Text(
                     text = greetingForNow(),
-                    style = MaterialTheme.typography.headlineLarge,
+                    style = MaterialTheme.typography.headlineMedium,
                 )
             }
             // Вход в Google-аккаунт всегда под рукой — в правом верхнем углу.
@@ -460,58 +457,54 @@ private fun greetingForNow(): String {
 // Карточки действий
 // ---------------------------------------------------------------------------
 
-/** Большая градиентная карточка первичного действия — сканирование фонотеки. */
+/** Плоская карточка первичного действия — сканирование фонотеки. */
 @Composable
 private fun ScanLibraryCard(scanning: Boolean, onScan: () -> Unit) {
-    val gradient = LocalSonoraColors.current.gradient
-    val brush = remember(gradient) { Brush.linearGradient(gradient) }
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(CardRadius))
-            .background(brush)
-            .padding(20.dp),
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .padding(18.dp),
     ) {
-        Box(
-            modifier = Modifier
-                .size(44.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .background(Color.White.copy(alpha = 0.18f)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.MusicNote,
-                contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier.size(24.dp),
-            )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.MusicNote,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = "Своя музыка — в один тап",
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                Text(
+                    text = "Найдём MP3, FLAC, Opus и другие форматы на устройстве.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
         Spacer(Modifier.height(14.dp))
-        Text(
-            text = "Своя музыка — в один тап",
-            style = MaterialTheme.typography.titleLarge,
-            color = Color.White,
-        )
-        Spacer(Modifier.height(6.dp))
-        Text(
-            text = "Найдём аудиофайлы на устройстве: MP3, FLAC, Opus и другие форматы.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = Color.White.copy(alpha = 0.88f),
-        )
-        Spacer(Modifier.height(16.dp))
         Button(
             onClick = onScan,
             enabled = !scanning,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = Color.White,
-                contentColor = Color(0xFF1B1B1F),
-            ),
+            modifier = Modifier.fillMaxWidth(),
         ) {
             if (scanning) {
                 CircularProgressIndicator(
                     modifier = Modifier.size(18.dp),
                     strokeWidth = 2.dp,
-                    color = Color(0xFF1B1B1F),
                 )
                 Spacer(Modifier.width(8.dp))
                 Text("Сканируем…")
@@ -561,10 +554,10 @@ private fun QuickAccessTile(
 ) {
     Row(
         modifier = modifier
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(16.dp))
             .background(
                 if (accent) {
-                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
                 } else {
                     MaterialTheme.colorScheme.surfaceContainerHigh
                 },
@@ -575,11 +568,11 @@ private fun QuickAccessTile(
     ) {
         Box(
             modifier = Modifier
-                .size(36.dp)
-                .clip(RoundedCornerShape(12.dp))
+                .size(34.dp)
+                .clip(RoundedCornerShape(10.dp))
                 .background(
                     if (accent) {
-                        MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
                     } else {
                         MaterialTheme.colorScheme.surfaceContainerHighest
                     },
@@ -633,39 +626,21 @@ private fun WaveCard(
     onRadio: (Track) -> Unit,
 ) {
     var sortMenu by remember { mutableStateOf(false) }
-    // Градиент пересоздаём только при смене палитры, а не на каждой перерисовке.
-    val waveStart = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.85f)
-    val waveEnd = MaterialTheme.colorScheme.surfaceContainerHigh
-    val waveBrush = remember(waveStart, waveEnd) {
-        Brush.linearGradient(listOf(waveStart, waveEnd))
-    }
+    // Плоская карточка без градиента: акцент остаётся только на кнопке Play.
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(CardRadius))
-            .background(waveBrush)
-            .padding(16.dp),
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .animateContentSize()
+            .padding(18.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier
-                    .size(42.dp)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.AutoAwesome,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                )
-            }
-            Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text("Моя волна", style = MaterialTheme.typography.titleLarge)
                 Text(
                     text = state.seedLabel.ifBlank { "Новая подборка каждый раз" },
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -691,16 +666,39 @@ private fun WaveCard(
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+                Spacer(Modifier.width(4.dp))
+                // Одна заметная круглая кнопка Play — как в Spotify.
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary)
+                        .clickable(onClick = onPlay),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.PlayArrow,
+                        contentDescription = "Играть волну",
+                        tint = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.size(28.dp),
+                    )
+                }
             }
         }
 
         Spacer(Modifier.height(12.dp))
+        // Одна компактная строка фильтров — источники, избранное и настроение.
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             items(WaveSourceMode.entries, key = { it.name }) { mode ->
                 FilterChip(
                     selected = state.filters.source == mode,
                     onClick = { onSource(mode) },
                     label = { Text(mode.label) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        selectedContainerColor = MaterialTheme.colorScheme.primary,
+                        selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+                    ),
                 )
             }
             item {
@@ -715,16 +713,24 @@ private fun WaveCard(
                             modifier = Modifier.size(16.dp),
                         )
                     },
+                    colors = FilterChipDefaults.filterChipColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        selectedContainerColor = MaterialTheme.colorScheme.primary,
+                        selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+                        selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimary,
+                    ),
                 )
             }
-        }
-        Spacer(Modifier.height(4.dp))
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             items(WaveMood.entries, key = { it.name }) { mood ->
                 FilterChip(
                     selected = state.filters.mood == mood,
                     onClick = { onMood(mood) },
                     label = { Text(mood.label) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        selectedContainerColor = MaterialTheme.colorScheme.primary,
+                        selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+                    ),
                 )
             }
         }
@@ -812,7 +818,7 @@ private fun WaveCard(
         if (state.tracks.isNotEmpty()) {
             Spacer(Modifier.height(8.dp))
             LazyRow(horizontalArrangement = Arrangement.spacedBy(RailSpacing)) {
-                items(state.tracks, key = { "wave-${it.id}" }) { track ->
+                items(state.tracks, key = { "wave-${it.id}" }, contentType = { "track" }) { track ->
                     TrackTile(
                         track = track,
                         onClick = { onTrackClick(track) },
@@ -821,8 +827,8 @@ private fun WaveCard(
                     )
                 }
             }
-            Spacer(Modifier.height(12.dp))
-            OutlinedButton(
+            Spacer(Modifier.height(8.dp))
+            TextButton(
                 onClick = onLoadMore,
                 enabled = !state.loadingMore && !state.loading,
             ) {
@@ -841,26 +847,18 @@ private fun WaveCard(
                 Spacer(Modifier.width(6.dp))
                 Text("Ещё рекомендации")
             }
-            Spacer(Modifier.height(14.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Button(onClick = onPlay, modifier = Modifier.weight(1f)) {
-                    Icon(
-                        imageVector = Icons.Rounded.PlayArrow,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    Text("Играть волну")
-                }
-                OutlinedButton(onClick = onEnqueue) {
-                    Icon(
-                        imageVector = Icons.Rounded.QueueMusic,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    Text("В очередь")
-                }
+            Spacer(Modifier.height(12.dp))
+            OutlinedButton(
+                onClick = onEnqueue,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.QueueMusic,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(Modifier.width(6.dp))
+                Text("В очередь")
             }
         } else if (!state.loading) {
             Text(
@@ -990,8 +988,8 @@ private fun PlaylistTile(playlist: Playlist, onClick: () -> Unit) {
         )
         Spacer(Modifier.height(2.dp))
         Text(
-            text = "${playlist.trackIds.size} трек(ов)",
-            style = MaterialTheme.typography.bodyMedium,
+            text = tracksLabel(playlist.trackIds.size),
+            style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -1054,7 +1052,7 @@ private fun ImportMusicCard(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(16.dp))
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,

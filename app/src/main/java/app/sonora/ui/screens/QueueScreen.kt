@@ -33,6 +33,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -163,6 +164,7 @@ fun QueueScreen(vm: MainViewModel, navigate: (String) -> Unit) {
                 itemsIndexed(
                     items = queue,
                     key = { index, _ -> queueKeys[index] },
+                    contentType = { _, _ -> "queue-track" },
                 ) { index, track ->
                     QueueRow(
                         track = track,
@@ -311,6 +313,11 @@ private fun QueuePlaybackModeCard(
                         selected = mode == option,
                         onClick = { onModeChange(option) },
                         label = { Text(option.label) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                            selectedContainerColor = MaterialTheme.colorScheme.primary,
+                            selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+                        ),
                     )
                 }
             }
@@ -425,24 +432,24 @@ private fun QueueRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(8.dp))
             .background(
-                if (isCurrent) MaterialTheme.colorScheme.surfaceContainerHighest else Color.Transparent,
+                if (isCurrent) MaterialTheme.colorScheme.surfaceContainerHigh else Color.Transparent,
             )
             .clickable(onClick = onClick)
-            .padding(horizontal = 8.dp, vertical = 4.dp),
+            .padding(horizontal = 8.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
             text = "${index + 1}",
             style = MaterialTheme.typography.labelSmall,
             color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.width(20.dp),
+            modifier = Modifier.width(24.dp),
         )
         CoverArt(
             url = track.artworkUrl ?: track.artworkUri,
-            size = 48.dp,
-            cornerRadius = 12.dp,
+            size = 44.dp,
+            cornerRadius = 8.dp,
         )
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
@@ -455,7 +462,7 @@ private fun QueueRow(
             )
             Text(
                 text = track.artist,
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -482,7 +489,7 @@ private fun QueueRow(
             Icon(
                 imageVector = Icons.Rounded.Delete,
                 contentDescription = "Убрать из очереди",
-                tint = MaterialTheme.colorScheme.error,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(20.dp),
             )
         }

@@ -1,20 +1,22 @@
-package app.sonora.ui.theme
+﻿package app.sonora.ui.theme
 
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Shapes
 import androidx.compose.ui.unit.dp
 
 /**
- * Формы Sonora в духе Spotify: карточки 12dp, строки списков 8dp,
- * компактные кнопки 10dp, крупные листы/баннеры 16dp.
+ * Формы Sonora: крупные, мягкие, «пиксельные» скругления.
  *
- * Material3 берёт отсюда формы кнопок (small), карточек (medium/large) и
- * текстовых полей (extraSmall); нижние листы по умолчанию скругляются на 28dp.
+ * Шкала: 8 / 12 / 18 / 24 / 30 dp. Карточки и hero-блоки берут large (24dp),
+ * плотные строки и чипы — medium (18dp), мелкие элементы — small (12dp).
+ * Кнопки Material3 в актуальной версии уже полностью скруглены (pill), поэтому
+ * отдельная форма для них не нужна; нижняя навигация использует собственный
+ * pill-индикатор.
  */
 val SonoraShapes = Shapes(
     extraSmall = RoundedCornerShape(8.dp),
-    small = RoundedCornerShape(10.dp),
-    medium = RoundedCornerShape(12.dp),
-    large = RoundedCornerShape(16.dp),
-    extraLarge = RoundedCornerShape(24.dp),
+    small = RoundedCornerShape(12.dp),
+    medium = RoundedCornerShape(16.dp),
+    large = RoundedCornerShape(28.dp),
+    extraLarge = RoundedCornerShape(32.dp),
 )

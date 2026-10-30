@@ -79,3 +79,15 @@
   выбрана автоматически. PASS.
 - **Google-аккаунт на Главной**: иконка в правом верхнем углу открывает
   экран «Вход в Google» (личная библиотека YouTube Music). PASS.
+## Sonora 3.2.0 — визуал Pixel × Spotify и плавность
+
+- **Тема**: Material You dynamic color включён по умолчанию (Android 12+),
+  fallback — Spotify-зелёный; проверено на эмуляторе: accent берётся из обоев.
+- **Экраны**: Home/Library/Player/Queue/MiniPlayer пересобраны без градиентов,
+  блюра и теней; плотные строки, круглый Play, тонкий seekbar, floating
+  MiniPlayer. Скриншоты — в `docs/screenshots`.
+- **Анимации**: nav fade+slide 220ms, chrome/MiniPlayer slide+fade 200ms,
+  аккордеон spring, подсветка строки 200ms.
+- **Производительность**: cold start ~2.5 с на эмуляторе; автоподбор NoHiT
+  отложен на 12 с после первого кадра; градиентные шейдеры/тени убраны.
+- Unit-тесты: 122/122, lint без ошибок.

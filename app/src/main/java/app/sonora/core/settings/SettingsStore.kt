@@ -152,8 +152,12 @@ enum class Accent(val label: String) {
 @Serializable
 data class AppSettings(
     val themeMode: ThemeMode = ThemeMode.DARK,
-    val accent: Accent = Accent.VIOLET,
-    val dynamicColor: Boolean = false,
+    val accent: Accent = Accent.GREEN,
+    /** Одноразовая миграция на Spotify-зелёный акцент из старых сборок. */
+    val accentSpotifyMigrated: Boolean = false,
+    /** Одноразовая миграция на Pixel-стиль: dynamic color включён. */
+    val pixelVisualMigrated: Boolean = false,
+    val dynamicColor: Boolean = true,
 
     // Аудио
     val gapless: Boolean = true,
@@ -295,6 +299,20 @@ class SettingsStore(context: Context) {
 
     private fun load(): AppSettings = runCatching {
         prefs.getString(KEY, null)?.let { json.decodeFromString<AppSettings>(it) }
+            ?.let { saved ->
+                // Новый Pixel-стиль: у старых установок включаем Material You
+                // (dynamic color) и один раз переводим акцент на зелёный.
+                if (!saved.pixelVisualMigrated) {
+                    saved.copy(
+                        dynamicColor = true,
+                        pixelVisualMigrated = true,
+                        accent = if (saved.accentSpotifyMigrated) saved.accent else Accent.GREEN,
+                        accentSpotifyMigrated = true,
+                    )
+                } else {
+                    saved
+                }
+            }
     }.getOrNull() ?: AppSettings()
 
     private companion object {

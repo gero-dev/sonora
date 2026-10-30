@@ -72,15 +72,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
@@ -103,18 +99,12 @@ import app.sonora.ui.components.CoverArtBox
 import app.sonora.ui.components.EmptyState
 import app.sonora.ui.components.LyricsSheet
 import app.sonora.ui.nav.Routes
-import app.sonora.ui.theme.LocalSonoraColors
-import coil.compose.AsyncImage
 import kotlin.math.abs
 import kotlinx.coroutines.delay
 
 private const val SPEED_MENU_MIN = 0.75f
 
 private val SPEED_OPTIONS = listOf(0.75f, 1f, 1.25f, 1.5f, 2f)
-
-/** Цвета иконок в панели действий на затемнённом фоне плеера. */
-private val ActionTint = Color.White.copy(alpha = 0.82f)
-private val ActionTintMuted = Color.White.copy(alpha = 0.48f)
 
 /** Сколько живёт всплывающая подсказка на экране плеера. */
 private const val HINT_DURATION_MS = 2_600L
@@ -149,10 +139,10 @@ fun PlayerScreen(vm: MainViewModel, onBack: () -> Unit, navigate: (String) -> Un
     val swipeThreshold = with(LocalDensity.current) { 88.dp.toPx() }
 
     val track = player.current
-    val artwork = track?.artworkUrl ?: track?.artworkUri
-    val gradient = LocalSonoraColors.current.gradient
-    // На затемнённом фоне плеера текст белый; на пустом состоянии — обычный цвет темы.
-    val foreground = if (track != null) Color.White else MaterialTheme.colorScheme.onSurface
+    // Плоский плеер Pixel×Spotify: фон — surface, текст — роли темы.
+    val foreground = MaterialTheme.colorScheme.onSurface
+    val actionTint = MaterialTheme.colorScheme.onSurfaceVariant
+    val actionTintMuted = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
 
     // Подсказка живёт пару секунд и гаснет сама.
     LaunchedEffect(hint) {
@@ -189,38 +179,6 @@ fun PlayerScreen(vm: MainViewModel, onBack: () -> Unit, navigate: (String) -> Un
                 )
             },
     ) {
-        // Фон: размытая обложка или градиент, поверх — затемняющая шторка.
-        if (track != null) {
-            if (!artwork.isNullOrBlank()) {
-                AsyncImage(
-                    model = artwork,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .graphicsLayer { alpha = 0.45f },
-                )
-            } else {
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .background(Brush.linearGradient(gradient)),
-                )
-            }
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(
-                                Color.Black.copy(alpha = 0.55f),
-                                Color.Black.copy(alpha = 0.92f),
-                            ),
-                        ),
-                    ),
-            )
-        }
-
         Column(
             Modifier
                 .fillMaxSize()
@@ -409,10 +367,10 @@ fun PlayerScreen(vm: MainViewModel, onBack: () -> Unit, navigate: (String) -> Un
                             .weight(1f),
                         contentAlignment = Alignment.Center,
                     ) {
-                        val artSize = minOf(maxWidth * 0.92f, maxHeight * 0.94f, 320.dp)
+                        val artSize = minOf(maxWidth * 0.92f, maxHeight * 0.94f, 340.dp)
                         CoverArtBox(
                             url = current.artworkUrl ?: current.artworkUri,
-                            cornerRadius = 24.dp,
+                            cornerRadius = 16.dp,
                             modifier = Modifier
                                 .size(artSize)
                                 .graphicsLayer {
@@ -422,8 +380,7 @@ fun PlayerScreen(vm: MainViewModel, onBack: () -> Unit, navigate: (String) -> Un
                                 }
                                 .pointerInput(Unit) {
                                     detectTapGestures(onDoubleTap = { vm.togglePlayPause() })
-                                }
-                                .shadow(20.dp, RoundedCornerShape(24.dp)),
+                                },
                         )
                     }
                     Spacer(Modifier.height(24.dp))
@@ -431,7 +388,7 @@ fun PlayerScreen(vm: MainViewModel, onBack: () -> Unit, navigate: (String) -> Un
                         text = current.title,
                         style = MaterialTheme.typography.headlineMedium,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White,
+                        color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -453,7 +410,7 @@ fun PlayerScreen(vm: MainViewModel, onBack: () -> Unit, navigate: (String) -> Un
                             color = if (current.artist.isNotBlank()) {
                                 MaterialTheme.colorScheme.primary
                             } else {
-                                Color.White.copy(alpha = 0.7f)
+                                MaterialTheme.colorScheme.onSurfaceVariant
                             },
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -475,7 +432,7 @@ fun PlayerScreen(vm: MainViewModel, onBack: () -> Unit, navigate: (String) -> Un
                             Text(
                                 text = label,
                                 style = MaterialTheme.typography.labelMedium,
-                                color = Color.White.copy(alpha = 0.65f),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                     }
@@ -491,7 +448,7 @@ fun PlayerScreen(vm: MainViewModel, onBack: () -> Unit, navigate: (String) -> Un
                                         .weight(1f)
                                         .height(4.dp),
                                     color = MaterialTheme.colorScheme.primary,
-                                    trackColor = Color.White.copy(alpha = 0.18f),
+                                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
                                 )
                             } else {
                                 LinearProgressIndicator(
@@ -499,14 +456,14 @@ fun PlayerScreen(vm: MainViewModel, onBack: () -> Unit, navigate: (String) -> Un
                                         .weight(1f)
                                         .height(4.dp),
                                     color = MaterialTheme.colorScheme.primary,
-                                    trackColor = Color.White.copy(alpha = 0.18f),
+                                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
                                 )
                             }
                             Spacer(Modifier.width(10.dp))
                             Text(
                                 text = saveState.label,
                                 style = MaterialTheme.typography.labelSmall,
-                                color = Color.White.copy(alpha = 0.78f),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                     }
@@ -548,12 +505,12 @@ fun PlayerScreen(vm: MainViewModel, onBack: () -> Unit, navigate: (String) -> Un
                                 if (dragging) (dragValue * durationMs).toLong() else player.positionMs,
                             ),
                             style = MaterialTheme.typography.labelSmall,
-                            color = Color.White.copy(alpha = 0.7f),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Text(
                             text = Formatters.duration(durationMs),
                             style = MaterialTheme.typography.labelSmall,
-                            color = Color.White.copy(alpha = 0.7f),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                     Spacer(Modifier.height(8.dp))
@@ -587,7 +544,7 @@ fun PlayerScreen(vm: MainViewModel, onBack: () -> Unit, navigate: (String) -> Un
                                     tint = if (player.shuffle) {
                                         MaterialTheme.colorScheme.primary
                                     } else {
-                                        ActionTint
+                                        actionTint
                                     },
                                     modifier = Modifier.size(24.dp),
                                 )
@@ -599,7 +556,7 @@ fun PlayerScreen(vm: MainViewModel, onBack: () -> Unit, navigate: (String) -> Un
                                     },
                                     contentDescription = null,
                                     tint = if (streamingEnabled) {
-                                        ActionTint
+                                        actionTint
                                     } else {
                                         MaterialTheme.colorScheme.error
                                     },
@@ -676,7 +633,7 @@ fun PlayerScreen(vm: MainViewModel, onBack: () -> Unit, navigate: (String) -> Un
                             Icon(
                                 imageVector = Icons.Rounded.SkipPrevious,
                                 contentDescription = "Предыдущий трек",
-                                tint = Color.White,
+                                tint = MaterialTheme.colorScheme.onSurface,
                                 modifier = Modifier.size(30.dp),
                             )
                         }
@@ -685,19 +642,19 @@ fun PlayerScreen(vm: MainViewModel, onBack: () -> Unit, navigate: (String) -> Un
                             modifier = Modifier
                                 .size(56.dp)
                                 .clip(CircleShape)
-                                .background(Brush.linearGradient(gradient)),
+                                .background(MaterialTheme.colorScheme.primary),
                         ) {
                             if (player.isBuffering) {
                                 CircularProgressIndicator(
                                     modifier = Modifier.size(24.dp),
                                     strokeWidth = 2.5.dp,
-                                    color = Color.White,
+                                    color = MaterialTheme.colorScheme.onPrimary,
                                 )
                             } else {
                                 Icon(
                                     imageVector = if (player.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                                     contentDescription = if (player.isPlaying) "Пауза" else "Играть",
-                                    tint = Color.White,
+                                    tint = MaterialTheme.colorScheme.onPrimary,
                                     modifier = Modifier.size(28.dp),
                                 )
                             }
@@ -706,7 +663,7 @@ fun PlayerScreen(vm: MainViewModel, onBack: () -> Unit, navigate: (String) -> Un
                             Icon(
                                 imageVector = Icons.Rounded.SkipNext,
                                 contentDescription = "Следующий трек",
-                                tint = Color.White,
+                                tint = MaterialTheme.colorScheme.onSurface,
                                 modifier = Modifier.size(30.dp),
                             )
                         }
@@ -721,7 +678,7 @@ fun PlayerScreen(vm: MainViewModel, onBack: () -> Unit, navigate: (String) -> Un
                                 tint = if (player.repeatMode != Player.REPEAT_MODE_OFF) {
                                     MaterialTheme.colorScheme.primary
                                 } else {
-                                    ActionTint
+                                    actionTint
                                 },
                                 modifier = Modifier.size(24.dp),
                             )
@@ -748,7 +705,7 @@ fun PlayerScreen(vm: MainViewModel, onBack: () -> Unit, navigate: (String) -> Un
                                     } else {
                                         "В избранное"
                                     },
-                                    tint = if (isFavorite) MaterialTheme.colorScheme.primary else ActionTint,
+                                    tint = if (isFavorite) MaterialTheme.colorScheme.primary else actionTint,
                                     modifier = Modifier.size(24.dp),
                                 )
                             }
@@ -761,7 +718,7 @@ fun PlayerScreen(vm: MainViewModel, onBack: () -> Unit, navigate: (String) -> Un
                                     tint = if (sleepEndsAt != null) {
                                         MaterialTheme.colorScheme.primary
                                     } else {
-                                        ActionTint
+                                        actionTint
                                     },
                                     modifier = Modifier.size(24.dp),
                                 )
@@ -772,7 +729,7 @@ fun PlayerScreen(vm: MainViewModel, onBack: () -> Unit, navigate: (String) -> Un
                                 Icon(
                                     imageVector = Icons.Rounded.QueueMusic,
                                     contentDescription = "Очередь",
-                                    tint = ActionTint,
+                                    tint = actionTint,
                                     modifier = Modifier.size(24.dp),
                                 )
                             }
@@ -782,7 +739,7 @@ fun PlayerScreen(vm: MainViewModel, onBack: () -> Unit, navigate: (String) -> Un
                                 Icon(
                                     imageVector = Icons.Rounded.Lyrics,
                                     contentDescription = "Текст песни",
-                                    tint = if (hasLyrics) ActionTint else ActionTintMuted,
+                                    tint = if (hasLyrics) actionTint else actionTintMuted,
                                     modifier = Modifier.size(24.dp),
                                 )
                             }
@@ -808,7 +765,7 @@ fun PlayerScreen(vm: MainViewModel, onBack: () -> Unit, navigate: (String) -> Un
                                             CircularProgressIndicator(
                                                 modifier = Modifier.size(18.dp),
                                                 strokeWidth = 2.dp,
-                                                color = ActionTint,
+                                                color = actionTint,
                                             )
                                         }
                                     }
@@ -839,7 +796,7 @@ fun PlayerScreen(vm: MainViewModel, onBack: () -> Unit, navigate: (String) -> Un
                                         Icon(
                                             imageVector = Icons.Rounded.Download,
                                             contentDescription = "Сохранить на устройство",
-                                            tint = ActionTint,
+                                            tint = actionTint,
                                             modifier = Modifier.size(24.dp),
                                         )
                                     }
@@ -853,7 +810,7 @@ fun PlayerScreen(vm: MainViewModel, onBack: () -> Unit, navigate: (String) -> Un
                             if (streamingEnabled) "онлайн включён" else "только устройство",
                         style = MaterialTheme.typography.labelSmall,
                         color = if (streamingEnabled) {
-                            Color.White.copy(alpha = 0.45f)
+                            MaterialTheme.colorScheme.onSurfaceVariant
                         } else {
                             MaterialTheme.colorScheme.error.copy(alpha = 0.85f)
                         },
@@ -1015,9 +972,10 @@ private fun SeekBar(
     onScrubFinished: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val gradient = LocalSonoraColors.current.gradient
     var widthPx by remember { mutableStateOf(1f) }
     val clamped = progress.coerceIn(0f, 1f)
+    val activeColor = MaterialTheme.colorScheme.primary
+    val trackColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.28f)
 
     Box(
         modifier = modifier
@@ -1059,21 +1017,22 @@ private fun SeekBar(
                 .fillMaxWidth()
                 .height(24.dp),
         ) {
-            val trackHeight = 6.dp.toPx()
-            val thumbRadius = 8.dp.toPx()
+            // Тонкий Spotify-слайдер: 3dp полоса и небольшой ползунок.
+            val trackHeight = 3.dp.toPx()
+            val thumbRadius = 5.dp.toPx()
             val centerY = size.height / 2f
             val corner = CornerRadius(trackHeight / 2f, trackHeight / 2f)
             val activeWidth = size.width * clamped
 
             drawRoundRect(
-                color = Color.White.copy(alpha = 0.22f),
+                color = trackColor,
                 topLeft = Offset(0f, centerY - trackHeight / 2f),
                 size = Size(size.width, trackHeight),
                 cornerRadius = corner,
             )
             if (clamped > 0f) {
                 drawRoundRect(
-                    brush = Brush.horizontalGradient(gradient),
+                    color = activeColor,
                     topLeft = Offset(0f, centerY - trackHeight / 2f),
                     size = Size(activeWidth, trackHeight),
                     cornerRadius = corner,
@@ -1086,7 +1045,7 @@ private fun SeekBar(
                 activeWidth.coerceIn(thumbRadius, maxThumbX)
             }
             drawCircle(
-                color = Color.White,
+                color = activeColor,
                 radius = thumbRadius,
                 center = Offset(thumbX, centerY),
             )
@@ -1100,14 +1059,14 @@ private fun PlayerHintPill(text: String, modifier: Modifier = Modifier) {
     Row(
         modifier = modifier
             .clip(RoundedCornerShape(50))
-            .background(Color.Black.copy(alpha = 0.62f))
+            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
             text = text,
             style = MaterialTheme.typography.labelLarge,
-            color = Color.White,
+            color = MaterialTheme.colorScheme.onSurface,
         )
     }
 }
@@ -1119,26 +1078,26 @@ private fun NotPlayableBanner(onOpen: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .background(Color.White.copy(alpha = 0.10f))
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
             .padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
             imageVector = Icons.Rounded.OpenInNew,
             contentDescription = null,
-            tint = Color.White,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(18.dp),
         )
         Spacer(Modifier.width(8.dp))
         Text(
             text = "Воспроизведение недоступно в приложении",
             style = MaterialTheme.typography.bodyMedium,
-            color = Color.White,
+            color = MaterialTheme.colorScheme.onSurface,
             maxLines = 2,
             modifier = Modifier.weight(1f),
         )
         TextButton(onClick = onOpen) {
-            Text("Открыть в сервисе", color = Color.White)
+            Text("Открыть в сервисе", color = MaterialTheme.colorScheme.primary)
         }
     }
 }

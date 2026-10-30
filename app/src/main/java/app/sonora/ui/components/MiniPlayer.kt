@@ -1,5 +1,8 @@
 package app.sonora.ui.components
 
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -34,13 +37,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.sonora.playback.PlayerUiState
-import app.sonora.ui.theme.LocalSonoraColors
 import kotlinx.coroutines.flow.StateFlow
 
 /**
@@ -64,17 +65,21 @@ fun MiniPlayer(
     // Грубый прогресс приходит отдельным потоком (шаг ~1 %) и обновляет
     // только сам мини-плеер, не заставляя перерисовываться весь экран.
     val currentProgress by progress.collectAsState()
-    val gradient = LocalSonoraColors.current.gradient
-    val progressBrush = remember(gradient) { Brush.linearGradient(gradient) }
+    // Плавно догоняем грубый поток прогресса — без лишних перерисовок экрана.
+    val animatedProgress by animateFloatAsState(
+        targetValue = currentProgress.coerceIn(0f, 1f),
+        animationSpec = tween(durationMillis = 220, easing = LinearOutSlowInEasing),
+        label = "mini-progress",
+    )
     val density = LocalDensity.current
     val swipeThresholdPx = with(density) { 56.dp.toPx() }
     var horizontalDrag by remember { mutableStateOf(0f) }
     var verticalDrag by remember { mutableStateOf(0f) }
-    val shape = RoundedCornerShape(16.dp)
+    val shape = RoundedCornerShape(18.dp)
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 6.dp)
+            .padding(horizontal = 8.dp, vertical = 6.dp)
             .clip(shape)
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
             .border(
@@ -116,30 +121,30 @@ fun MiniPlayer(
             .clickable(onClick = onOpen)
             .padding(horizontal = 10.dp, vertical = 8.dp),
     ) {
-        // Тонкая полоска прогресса вместо полноценного слайдера.
+        // Тонкая 2dp полоса прогресса вместо полноценного слайдера.
         // Ширину считаем от maxWidth, а не через fillMaxWidth(fraction):
         // при позиции 0 fillMaxWidth(0f) недопустим.
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(3.dp)
+                .height(2.dp)
                 .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.outlineVariant),
+                .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.24f)),
         ) {
             Box(
                 modifier = Modifier
-                    .width(maxWidth * currentProgress.coerceIn(0f, 1f))
+                    .width(maxWidth * animatedProgress)
                     .fillMaxHeight()
                     .clip(CircleShape)
-                    .background(progressBrush),
+                    .background(MaterialTheme.colorScheme.primary),
             )
         }
         Spacer(Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             CoverArt(
                 url = track.artworkUrl ?: track.artworkUri,
-                size = 48.dp,
-                cornerRadius = 10.dp,
+                size = 44.dp,
+                cornerRadius = 8.dp,
             )
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
@@ -168,19 +173,19 @@ fun MiniPlayer(
                 )
             }
             Spacer(Modifier.width(4.dp))
-            // Крупная акцентная play/pause — как главная кнопка Spotify.
+            // Круглая акцентная play/pause — как главная кнопка Spotify.
             Box(
                 modifier = Modifier
                     .size(42.dp)
                     .clip(CircleShape)
-                    .background(progressBrush)
+                    .background(MaterialTheme.colorScheme.primary)
                     .clickable(onClick = onTogglePlay),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
                     imageVector = if (state.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                     contentDescription = if (state.isPlaying) "Пауза" else "Играть",
-                    tint = accentContentColor(),
+                    tint = MaterialTheme.colorScheme.onPrimary,
                     modifier = Modifier.size(22.dp),
                 )
             }

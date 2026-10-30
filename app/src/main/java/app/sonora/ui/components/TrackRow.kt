@@ -2,6 +2,8 @@ package app.sonora.ui.components
 
 import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -123,19 +125,17 @@ fun CoverArtBox(
                 modifier = Modifier.matchParentSize(),
             )
         } else {
-            val gradient = LocalSonoraColors.current.gradient
-            // Brush не пересоздаём при каждой перерисовке строки/карточки.
-            val fallbackBrush = remember(gradient) { Brush.linearGradient(gradient) }
+            // Плоская заглушка: акцент только в ноте, без градиента на весь экран.
             Box(
                 modifier = Modifier
                     .matchParentSize()
-                    .background(fallbackBrush),
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
                     imageVector = Icons.Rounded.MusicNote,
                     contentDescription = null,
-                    tint = Color.White.copy(alpha = 0.9f),
+                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.85f),
                     modifier = Modifier.fillMaxSize(0.32f),
                 )
             }
@@ -204,7 +204,7 @@ fun SectionHeader(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(top = 18.dp, bottom = 6.dp),
+            .padding(top = 22.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
@@ -320,16 +320,24 @@ fun TrackRow(
         saveState?.status == SaveStatus.DOWNLOADING
     var menuOpen by remember { mutableStateOf(false) }
     var lyricsVisible by remember { mutableStateOf(false) }
+    // Мягкая подсветка играющего трека — 200 мс, без перерисовок на каждый тик.
+    val rowBackground by animateColorAsState(
+        targetValue = if (isPlaying) {
+            MaterialTheme.colorScheme.surfaceContainerHigh
+        } else {
+            Color.Transparent
+        },
+        animationSpec = tween(durationMillis = 200),
+        label = "track-row-background",
+    )
 
     Row(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
-            .background(
-                if (isPlaying) MaterialTheme.colorScheme.surfaceContainerHigh else Color.Transparent,
-            )
+            .background(rowBackground)
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-            .padding(horizontal = 8.dp, vertical = 4.dp),
+            .padding(horizontal = 8.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // Плотная строка Spotify: обложка 56dp, крупное название, тишина вокруг.

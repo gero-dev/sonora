@@ -17,9 +17,12 @@ import app.sonora.core.settings.ThemeMode
 /**
  * Дополнительные цвета, которых нет в MaterialTheme.
  *
- * [gradient] — акцентный градиент палитры (кнопки Play, прогресс, hero-карточки).
- * [header] — тот же акцент, растворённый в фоне: мягкая «шапка» экрана в духе
- * Spotify, которая работает и в тёмной, и в светлой теме, и с динамическим цветом.
+ * [gradient] — раньше это был яркий двухцветный градиент; теперь это плоский
+ * акцент (обе точки совпадают), поэтому любые Brush.linearGradient в приложении
+ * автоматически превращаются в ровную заливку primary. Градиенты убраны
+ * осознанно: Pixel Experience — это про чистые плоскости.
+ * [header] — сплошной surface-тон «шапки» экрана: шапки плоские, без цветного
+ * ореола, как в Spotify.
  */
 data class SonoraColors(
     val gradient: List<Color>,
@@ -28,19 +31,18 @@ data class SonoraColors(
 
 val LocalSonoraColors = staticCompositionLocalOf {
     SonoraColors(
-        gradient = listOf(VioletPalette.gradientStart, VioletPalette.gradientEnd),
-        header = listOf(
-            VioletPalette.gradientStart.copy(alpha = 0.30f),
-            VioletPalette.gradientStart.copy(alpha = 0.10f),
-            DarkBackground.copy(alpha = 0f),
-        ),
+        gradient = listOf(VioletPalette.primaryDark, VioletPalette.primaryDark),
+        header = listOf(DarkSurface, DarkSurface, DarkSurface),
     )
 }
 
 /**
- * Тема приложения: 12 акцентных палитр + системный динамический цвет (Android 12+),
- * плотный типографический масштаб и скругления. В динамическом режиме акцентный
- * градиент тоже подстраивается под обои — из primary/tertiary системной схемы.
+ * Тема приложения: 12 акцентных палитр + системный динамический цвет (Android 12+,
+ * по умолчанию выключен). Базовая тема — чистая тёмная схема Spotify-dark с
+ * фирменным зелёным акцентом; светлая — такой же чистый нейтральный вариант.
+ *
+ * Дизайн: Pixel Experience × Spotify — крупная жирная типографика, мягкие
+ * скругления, плоские поверхности, акцент только на действиях.
  */
 @Composable
 fun SonoraTheme(
@@ -63,23 +65,14 @@ fun SonoraTheme(
         else -> palette.lightScheme()
     }
 
-    // В динамическом режиме стараемся не спорить с цветом обоев: градиент берём
-    // из системной палитры, иначе — из выбранного акцента.
-    val gradient = remember(scheme, dynamicAvailable, dark) {
-        if (dynamicAvailable) {
-            listOf(scheme.primary, scheme.tertiary)
-        } else {
-            listOf(palette.gradientStart, palette.gradientEnd)
-        }
+    // Плоский акцент вместо градиента: обе точки совпадают, Brush остаётся Brush,
+    // но рисует ровный primary. Ноль лишних аллокаций на кадр.
+    val gradient = remember(scheme.primary) {
+        listOf(scheme.primary, scheme.primary)
     }
-    // Шапка экрана: акцент, плавно растворяющийся в фоне. Тот же приём, что в
-    // Spotify, но на своём акценте (и на цвете обоев при dynamicColor).
-    val header = remember(scheme.background, gradient) {
-        listOf(
-            gradient.first().copy(alpha = 0.30f),
-            gradient.first().copy(alpha = 0.10f),
-            scheme.background.copy(alpha = 0f),
-        )
+    // Плоская шапка: сплошной surface-тон без цветного ореола.
+    val header = remember(scheme.surface) {
+        listOf(scheme.surface, scheme.surface, scheme.surface)
     }
 
     CompositionLocalProvider(

@@ -10,33 +10,25 @@ import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import app.sonora.ui.theme.LocalSonoraColors
 
 /**
- * Цвет иконки/текста поверх акцентного градиента: тёмный на светлых
- * (жёлтый, лайм) и белый на насыщенных тёмных — как у Spotify Play-кнопки.
+ * Цвет иконки/текста поверх акцентной заливки. Берём onPrimary из темы: он
+ * гарантированно контрастен к primary в обеих темах (для Spotify-зелёного это
+ * почти чёрный, а не белый). Раньше здесь был эвристический luminance-выбор.
  */
 @Composable
-fun accentContentColor(): Color {
-    val accent = LocalSonoraColors.current.gradient.firstOrNull()
-        ?: MaterialTheme.colorScheme.primary
-    return if (accent.luminance() > 0.55f) Color(0xFF16151C) else Color.White
-}
+fun accentContentColor(): Color = MaterialTheme.colorScheme.onPrimary
 
 /**
- * Крупная круглая кнопка Play в духе Spotify: акцентный градиент Sonora,
- * мягкая тень и контрастная иконка. Ставится поверх обложек плейлистов,
- * альбомов и исполнителей, а также в шапках разделов.
+ * Крупная круглая кнопка Play в духе Spotify: ровная акцентная заливка
+ * (primary темы), без градиента и без тени — плоская, как в Pixel.
+ * Ставится поверх обложек плейлистов, альбомов и исполнителей.
  */
 @Composable
 fun CircularPlayButton(
@@ -45,16 +37,11 @@ fun CircularPlayButton(
     size: Dp = 44.dp,
     contentDescription: String = "Играть",
 ) {
-    val gradient = LocalSonoraColors.current.gradient
-    // Кнопка есть в каждой карточке: градиент запоминаем, чтобы не аллоцировать
-    // Brush при каждом проходе списка.
-    val brush = remember(gradient) { Brush.linearGradient(gradient) }
     Box(
         modifier = modifier
             .size(size)
-            .shadow(elevation = 8.dp, shape = CircleShape, clip = false)
             .clip(CircleShape)
-            .background(brush)
+            .background(MaterialTheme.colorScheme.primary)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {

@@ -1,4 +1,4 @@
-﻿package app.sonora.ui.screens
+package app.sonora.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -52,6 +52,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -69,7 +70,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -91,10 +91,8 @@ import app.sonora.ui.components.PlaylistCard
 import app.sonora.ui.components.SectionHeader
 import app.sonora.ui.components.TrackActionSheet
 import app.sonora.ui.components.TrackRow
-import app.sonora.ui.components.accentContentColor
 import app.sonora.ui.components.tracksLabel
 import app.sonora.ui.nav.Routes
-import app.sonora.ui.theme.LocalSonoraColors
 import kotlinx.coroutines.flow.StateFlow
 
 /**
@@ -234,9 +232,6 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
     }
     val bottomPadding = padding.calculateBottomPadding()
     val playlistPlay: (Playlist) -> Unit = { vm.playPlaylist(it) }
-    // Мягкий градиент шапки — один объект Brush на экран, а не на перерисовку.
-    val headerColors = LocalSonoraColors.current.header
-    val headerBrush = remember(headerColors) { Brush.verticalGradient(headerColors) }
 
     Box(Modifier.fillMaxSize()) {
         Column(
@@ -244,34 +239,26 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
                 .fillMaxSize()
                 .padding(top = padding.calculateTopPadding()),
         ) {
-            // Мягкая «шапка»: акцент палитры растворяется в фоне экрана.
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .background(headerBrush),
-            ) {
-                Column {
-                    LibraryHeader(
-                        localCount = localTracks.size,
-                        savedFromStreaming = savedFromStreaming,
-                        playlistCount = playlists.size,
-                        scanning = scanning,
-                        onScan = { vm.scanLibrary() },
-                        onAvatarClick = { navigate(Routes.SETTINGS) },
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    LibraryChips(
-                        selected = section,
-                        onSelect = { sectionName = it.name },
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    LibraryPlayAllRow(
-                        trackCount = localTracks.size,
-                        onPlayAll = { vm.playLibraryShuffled() },
-                    )
-                    Spacer(Modifier.height(8.dp))
-                }
-            }
+            // Плоская шапка: без цветного ореола, как в Spotify.
+            LibraryHeader(
+                localCount = localTracks.size,
+                savedFromStreaming = savedFromStreaming,
+                playlistCount = playlists.size,
+                scanning = scanning,
+                onScan = { vm.scanLibrary() },
+                onAvatarClick = { navigate(Routes.SETTINGS) },
+            )
+            Spacer(Modifier.height(6.dp))
+            LibraryChips(
+                selected = section,
+                onSelect = { sectionName = it.name },
+            )
+            Spacer(Modifier.height(6.dp))
+            LibraryPlayAllRow(
+                trackCount = localTracks.size,
+                onPlayAll = { vm.playLibraryShuffled() },
+            )
+            Spacer(Modifier.height(8.dp))
             when (section) {
                 LibrarySection.ALL -> AllTab(
                     playlists = playlists,
@@ -597,8 +584,6 @@ private fun LibraryHeader(
     onScan: () -> Unit,
     onAvatarClick: () -> Unit,
 ) {
-    val gradient = LocalSonoraColors.current.gradient
-    val avatarBrush = remember(gradient) { Brush.linearGradient(gradient) }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -608,7 +593,7 @@ private fun LibraryHeader(
         Column(Modifier.weight(1f)) {
             Text(
                 text = "Медиатека",
-                style = MaterialTheme.typography.displaySmall,
+                style = MaterialTheme.typography.headlineLarge,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -639,16 +624,16 @@ private fun LibraryHeader(
         }
         Box(
             modifier = Modifier
-                .size(42.dp)
+                .size(40.dp)
                 .clip(CircleShape)
-                .background(avatarBrush)
+                .background(MaterialTheme.colorScheme.primary)
                 .clickable(onClick = onAvatarClick),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
                 imageVector = Icons.Rounded.Person,
                 contentDescription = "Настройки профиля",
-                tint = accentContentColor(),
+                tint = MaterialTheme.colorScheme.onPrimary,
                 modifier = Modifier.size(22.dp),
             )
         }
@@ -665,16 +650,8 @@ private fun LibraryPlayAllRow(
     onPlayAll: () -> Unit,
 ) {
     val enabled = trackCount > 0
-    val gradient = LocalSonoraColors.current.gradient
-    val disabledColor = MaterialTheme.colorScheme.surfaceContainerHigh
-    // Оба варианта Brush помним: кнопка перерисовывается при каждом обновлении
-    // счётчика треков, и градиент не должен пересоздаваться каждый раз.
-    val enabledBrush = remember(gradient) { Brush.linearGradient(gradient) }
-    val disabledBrush = remember(disabledColor) {
-        Brush.linearGradient(listOf(disabledColor, disabledColor))
-    }
     val contentColor = if (enabled) {
-        accentContentColor()
+        MaterialTheme.colorScheme.onPrimary
     } else {
         MaterialTheme.colorScheme.onSurfaceVariant
     }
@@ -682,8 +659,14 @@ private fun LibraryPlayAllRow(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 2.dp)
-            .clip(RoundedCornerShape(14.dp))
-            .background(if (enabled) enabledBrush else disabledBrush)
+            .clip(RoundedCornerShape(16.dp))
+            .background(
+                if (enabled) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.surfaceContainerHigh
+                },
+            )
             .clickable(enabled = enabled, onClick = onPlayAll)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -808,7 +791,7 @@ private fun AllTab(
             top = 2.dp,
             bottom = bottomPadding + 24.dp,
         ),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         item(key = "all-playlists-header") {
             SectionHeader(
@@ -914,7 +897,7 @@ private fun AllTab(
                     onAction = { onSelectSection(LibrarySection.TRACKS) },
                 )
             }
-            items(recentTracks, key = { "all-track-${it.id}" }) { track ->
+            items(recentTracks, key = { "all-track-${it.id}" }, contentType = { "track" }) { track ->
                 TrackRow(
                     track = track,
                     isFavorite = track.id in favorites,
@@ -956,7 +939,7 @@ private fun TracksTab(
             top = 8.dp,
             bottom = bottomPadding + 24.dp,
         ),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         item(key = "tracks-controls") {
             Column {
@@ -977,6 +960,9 @@ private fun TracksTab(
                             selected = false,
                             onClick = { sortMenuOpen = true },
                             label = { Text(sort.label) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            ),
                             leadingIcon = {
                                 Icon(
                                     imageVector = Icons.Rounded.Sort,
@@ -1043,6 +1029,11 @@ private fun TracksTab(
                             selected = filter == option,
                             onClick = { onFilterChange(option) },
                             label = { Text(option.label) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+                            ),
                         )
                     }
                 }
@@ -1069,7 +1060,7 @@ private fun TracksTab(
                 )
             }
         } else {
-            items(tracks, key = { it.id }) { track ->
+            items(tracks, key = { it.id }, contentType = { "track" }) { track ->
                 TrackRow(
                     track = track,
                     isFavorite = track.id in favorites,
@@ -1111,9 +1102,9 @@ private fun AlbumsTab(
             bottom = bottomPadding + 24.dp,
         ),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
-        gridItems(albums, key = { "${it.name}|${it.artist}" }) { album ->
+        gridItems(albums, key = { "${it.name}|${it.artist}" }, contentType = { "album" }) { album ->
             AlbumCard(
                 album = album,
                 onClick = { navigate(Routes.album(album.name, album.artist)) },
@@ -1153,9 +1144,9 @@ private fun ArtistsTab(
             bottom = bottomPadding + 24.dp,
         ),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
-        gridItems(artists, key = { it.name }) { artist ->
+        gridItems(artists, key = { it.name }, contentType = { "artist" }) { artist ->
             ArtistCard(
                 artist = artist,
                 onClick = { navigate(Routes.artist(artist.name)) },
@@ -1191,7 +1182,7 @@ private fun PlaylistsTab(
             bottom = bottomPadding + 24.dp,
         ),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
         item(key = "create-playlist") {
             CreatePlaylistTile(
@@ -1211,7 +1202,7 @@ private fun PlaylistsTab(
                 )
             }
         } else {
-            gridItems(playlists, key = { it.id }) { playlist ->
+            gridItems(playlists, key = { it.id }, contentType = { "playlist" }) { playlist ->
                 PlaylistCard(
                     playlist = playlist,
                     coverUrls = playlistCovers[playlist.id].orEmpty(),
@@ -1245,7 +1236,7 @@ private fun FavoritesTab(
             top = 8.dp,
             bottom = bottomPadding + 24.dp,
         ),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         item(key = "favorites-header") {
             Row(
@@ -1284,7 +1275,7 @@ private fun FavoritesTab(
                 )
             }
         } else {
-            items(tracks, key = { it.id }) { track ->
+            items(tracks, key = { it.id }, contentType = { "track" }) { track ->
                 TrackRow(
                     track = track,
                     isFavorite = track.id in favorites,
@@ -1371,7 +1362,7 @@ private fun YouTubeTab(
                 )
             }
         } else {
-            items(tracks, key = { it.id }) { track ->
+            items(tracks, key = { it.id }, contentType = { "track" }) { track ->
                 TrackRow(
                     track = track,
                     isFavorite = track.id in favorites,

@@ -55,18 +55,23 @@ val BluePalette = AccentPalette(
     tertiary = Color(0xFF8BD5FF),
 )
 
+/**
+ * Основной акцент Sonora — фирменный «Spotify green»: один чистый зелёный без
+ * градиентной растяжки. Контейнерные роли затемнены, чтобы текст на них читался
+ * в обеих темах.
+ */
 val GreenPalette = AccentPalette(
-    primaryDark = Color(0xFF9FE3B0),
-    onPrimaryDark = Color(0xFF00391D),
-    primaryContainerDark = Color(0xFF11512F),
-    onPrimaryContainerDark = Color(0xFFD3F7DC),
-    primaryLight = Color(0xFF2C6B44),
+    primaryDark = Color(0xFF1ED760),
+    onPrimaryDark = Color(0xFF06210F),
+    primaryContainerDark = Color(0xFF0F3D24),
+    onPrimaryContainerDark = Color(0xFFB8F5C9),
+    primaryLight = Color(0xFF0E7A35),
     onPrimaryLight = Color(0xFFFFFFFF),
-    primaryContainerLight = Color(0xFFD3F7DC),
-    onPrimaryContainerLight = Color(0xFF00210F),
-    gradientStart = Color(0xFF1DB954),
-    gradientEnd = Color(0xFF9BE15D),
-    secondary = Color(0xFFBCCBBC),
+    primaryContainerLight = Color(0xFFC8F2D6),
+    onPrimaryContainerLight = Color(0xFF05210F),
+    gradientStart = Color(0xFF1ED760),
+    gradientEnd = Color(0xFF1ED760),
+    secondary = Color(0xFF8FD6A5),
     tertiary = Color(0xFFA5D6C0),
 )
 
@@ -221,46 +226,57 @@ fun paletteFor(accent: Accent): AccentPalette = when (accent) {
 }
 
 // ---------------------------------------------------------------------------
-// Нейтральные роли. Dark-first: мягкий «графитовый» фон и заметно более
-// светлые контейнеры — карточки отделяются тоном, а не тенью. Светлая тема
-// повторяет ту же иерархию в обратную сторону.
+// Нейтральные роли — Pixel Experience × Spotify: почти чёрный «чернильный» фон,
+// на пару тонов более светлые контейнеры и тонкие outline. Карточки отделяются
+// тоном, а не тенью; никаких цветных подмесов в серых поверхностях.
+// Светлая тема — та же иерархия в обратную сторону, без сиреневого оттенка.
 // ---------------------------------------------------------------------------
 
-val DarkBackground = Color(0xFF0A0A0E)
-val DarkSurface = Color(0xFF0F0F14)
-val DarkSurfaceLowest = Color(0xFF08080C)
-val DarkSurfaceLow = Color(0xFF121218)
-val DarkSurfaceContainer = Color(0xFF14141B)
-val DarkSurfaceHigh = Color(0xFF1A1A22)
-val DarkSurfaceHighest = Color(0xFF22222C)
-val DarkSurfaceVariant = Color(0xFF1C1C25)
-val DarkSurfaceBright = Color(0xFF2B2B37)
-val DarkSurfaceDim = Color(0xFF0A0A0E)
-val DarkOnSurface = Color(0xFFE9E6F0)
-val DarkOnSurfaceVariant = Color(0xFFA9A3B5)
-val DarkOutline = Color(0xFF4B4658)
-val DarkOutlineVariant = Color(0xFF2E2A38)
-val DarkInverseSurface = Color(0xFFE9E6F0)
-val DarkInverseOnSurface = Color(0xFF1B1B23)
+val DarkBackground = Color(0xFF0B0B0C)
+val DarkSurface = Color(0xFF121214)
+val DarkSurfaceLowest = Color(0xFF080809)
+val DarkSurfaceLow = Color(0xFF0F0F11)
+val DarkSurfaceContainer = Color(0xFF17171A)
+val DarkSurfaceHigh = Color(0xFF1E1E22)
+val DarkSurfaceHighest = Color(0xFF242428)
+val DarkSurfaceVariant = Color(0xFF17171A)
+val DarkSurfaceBright = Color(0xFF2A2A2F)
+val DarkSurfaceDim = Color(0xFF0B0B0C)
+val DarkOnSurface = Color(0xFFF5F5F7)
+val DarkOnSurfaceVariant = Color(0xFFA8A8AE)
+val DarkOutline = Color(0xFF2C2C31)
+val DarkOutlineVariant = Color(0xFF232327)
+val DarkInverseSurface = Color(0xFFF5F5F7)
+val DarkInverseOnSurface = Color(0xFF121214)
 val DarkScrim = Color(0xFF000000)
 
-val LightBackground = Color(0xFFF9F7FC)
-val LightSurface = Color(0xFFF3F0F8)
+val DarkError = Color(0xFFFF6B6B)
+val DarkOnError = Color(0xFF3A0000)
+val DarkErrorContainer = Color(0xFF4A1010)
+val DarkOnErrorContainer = Color(0xFFFFDAD6)
+
+val LightBackground = Color(0xFFFAFAFA)
+val LightSurface = Color(0xFFFFFFFF)
 val LightSurfaceLowest = Color(0xFFFFFFFF)
-val LightSurfaceLow = Color(0xFFF6F3FB)
-val LightSurfaceContainer = Color(0xFFF0ECF5)
-val LightSurfaceHigh = Color(0xFFEAE5F1)
-val LightSurfaceHighest = Color(0xFFE2DCEB)
-val LightSurfaceVariant = Color(0xFFE7E2EE)
+val LightSurfaceLow = Color(0xFFF7F7FA)
+val LightSurfaceContainer = Color(0xFFF4F4F7)
+val LightSurfaceHigh = Color(0xFFEBEBEF)
+val LightSurfaceHighest = Color(0xFFE3E3E9)
+val LightSurfaceVariant = Color(0xFFF2F2F5)
 val LightSurfaceBright = Color(0xFFFFFFFF)
-val LightSurfaceDim = Color(0xFFDDD8E4)
-val LightOnSurface = Color(0xFF1B1922)
-val LightOnSurfaceVariant = Color(0xFF4D4759)
-val LightOutline = Color(0xFF8A8495)
-val LightOutlineVariant = Color(0xFFD8D2E2)
-val LightInverseSurface = Color(0xFF312F38)
-val LightInverseOnSurface = Color(0xFFF4EFF8)
+val LightSurfaceDim = Color(0xFFECECF1)
+val LightOnSurface = Color(0xFF141416)
+val LightOnSurfaceVariant = Color(0xFF5E5E66)
+val LightOutline = Color(0xFFDADAE0)
+val LightOutlineVariant = Color(0xFFE6E6EC)
+val LightInverseSurface = Color(0xFF1F1F24)
+val LightInverseOnSurface = Color(0xFFF5F5F7)
 val LightScrim = Color(0xFF000000)
+
+val LightError = Color(0xFFB3261E)
+val LightOnError = Color(0xFFFFFFFF)
+val LightErrorContainer = Color(0xFFFFDAD6)
+val LightOnErrorContainer = Color(0xFF410002)
 
 fun AccentPalette.darkScheme() = darkColorScheme(
     primary = primaryDark,
@@ -269,13 +285,13 @@ fun AccentPalette.darkScheme() = darkColorScheme(
     onPrimaryContainer = onPrimaryContainerDark,
     inversePrimary = primaryLight,
     secondary = secondary,
-    onSecondary = Color(0xFF16151C),
-    secondaryContainer = Color(0xFF232230),
-    onSecondaryContainer = Color(0xFFE7E1F0),
+    onSecondary = Color(0xFF101012),
+    secondaryContainer = DarkSurfaceHigh,
+    onSecondaryContainer = DarkOnSurface,
     tertiary = tertiary,
-    onTertiary = Color(0xFF16151C),
-    tertiaryContainer = Color(0xFF3A2430),
-    onTertiaryContainer = Color(0xFFFFD9E4),
+    onTertiary = Color(0xFF101012),
+    tertiaryContainer = DarkSurfaceHighest,
+    onTertiaryContainer = DarkOnSurface,
     background = DarkBackground,
     onBackground = DarkOnSurface,
     surface = DarkSurface,
@@ -285,10 +301,10 @@ fun AccentPalette.darkScheme() = darkColorScheme(
     surfaceTint = primaryDark,
     inverseSurface = DarkInverseSurface,
     inverseOnSurface = DarkInverseOnSurface,
-    error = Color(0xFFFFB4AB),
-    onError = Color(0xFF690005),
-    errorContainer = Color(0xFF93000A),
-    onErrorContainer = Color(0xFFFFDAD6),
+    error = DarkError,
+    onError = DarkOnError,
+    errorContainer = DarkErrorContainer,
+    onErrorContainer = DarkOnErrorContainer,
     outline = DarkOutline,
     outlineVariant = DarkOutlineVariant,
     scrim = DarkScrim,
@@ -308,13 +324,13 @@ fun AccentPalette.lightScheme() = lightColorScheme(
     onPrimaryContainer = onPrimaryContainerLight,
     inversePrimary = primaryDark,
     secondary = secondary,
-    onSecondary = Color(0xFF16151C),
-    secondaryContainer = Color(0xFFE7E1F0),
-    onSecondaryContainer = Color(0xFF1C1B22),
+    onSecondary = Color(0xFF101012),
+    secondaryContainer = LightSurfaceHigh,
+    onSecondaryContainer = LightOnSurface,
     tertiary = tertiary,
-    onTertiary = Color(0xFF16151C),
-    tertiaryContainer = Color(0xFFF5DDE7),
-    onTertiaryContainer = Color(0xFF33111F),
+    onTertiary = Color(0xFF101012),
+    tertiaryContainer = LightSurfaceHighest,
+    onTertiaryContainer = LightOnSurface,
     background = LightBackground,
     onBackground = LightOnSurface,
     surface = LightSurface,
@@ -324,10 +340,10 @@ fun AccentPalette.lightScheme() = lightColorScheme(
     surfaceTint = primaryLight,
     inverseSurface = LightInverseSurface,
     inverseOnSurface = LightInverseOnSurface,
-    error = Color(0xFFBA1A1A),
-    onError = Color(0xFFFFFFFF),
-    errorContainer = Color(0xFFFFDAD6),
-    onErrorContainer = Color(0xFF410002),
+    error = LightError,
+    onError = LightOnError,
+    errorContainer = LightErrorContainer,
+    onErrorContainer = LightOnErrorContainer,
     outline = LightOutline,
     outlineVariant = LightOutlineVariant,
     scrim = LightScrim,
