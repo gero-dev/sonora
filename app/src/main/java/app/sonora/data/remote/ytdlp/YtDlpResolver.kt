@@ -398,8 +398,18 @@ class YtDlpResolver(
             addOption("--no-playlist")
             addOption("--no-warnings")
             addOption("--no-part")
+            addOption("--no-mtime")
             addOption("--socket-timeout", "15")
             addOption("--retries", "2")
+            // Максимальная скорость: IPv4 (на мобильных IPv6 часто блокируется),
+            // параллельные фрагменты и крупный HTTP-буфер.
+            addOption("--force-ipv4")
+            addOption("--concurrent-fragments", "4")
+            addOption("--http-chunk-size", "1048576")
+            addOption("--buffer-size", "1048576")
+            settings.current.ytDlpLastClient.trim()
+                .takeIf { it.startsWith("youtube:") }
+                ?.let { addOption("--extractor-args", it) }
             proxyOption()
         }
         val response = withTimeoutOrNull(150_000) {
@@ -425,7 +435,8 @@ class YtDlpResolver(
             app.sonora.core.settings.YoutubeIpMode.IPV4 -> listOf("--force-ipv4")
             app.sonora.core.settings.YoutubeIpMode.IPV6 -> listOf("--force-ipv6")
             app.sonora.core.settings.YoutubeIpMode.AUTO ->
-                listOf(null, "--force-ipv4", "--force-ipv6")
+                // На мобильных сетях IPv6 часто блокируется — IPv4 первым.
+                listOf("--force-ipv4", null, "--force-ipv6")
         }
         // Клиент, который дал ссылку в прошлый раз, пробуем первым.
         val orderedClients = buildList {

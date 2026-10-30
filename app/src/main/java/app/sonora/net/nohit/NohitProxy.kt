@@ -168,10 +168,15 @@ object NohitProxy {
             .ifEmpty {
                 runCatching { InetAddress.getAllByName(host).toList() }.getOrDefault(emptyList())
             }
-        for (address in addresses) {
+        // На мобильных сетях IPv6 часто «чёрная дыра»: сначала пробуем IPv4
+        // и не ждём полный таймаут на каждый адрес — иначе старт yt-dlp/Ktor
+        // залипает на десятки секунд.
+        val ordered = addresses.sortedBy { if (it is java.net.Inet4Address) 0 else 1 }
+        val perAddressTimeout = minOf(timeoutMs, 4_000)
+        for (address in ordered) {
             val socket = Socket()
             if (runCatching {
-                    socket.connect(InetSocketAddress(address, port), timeoutMs)
+                    socket.connect(InetSocketAddress(address, port), perAddressTimeout)
                     true
                 }.getOrDefault(false)
             ) {

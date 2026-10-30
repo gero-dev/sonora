@@ -76,6 +76,25 @@ class YouTubeSource(
 
     override suspend fun search(query: String, limit: Int): List<Track> {
         if (query.isBlank()) return emptyList()
+        // При активном NoHiT InnerTube может висеть на DNS/DPI-таймауте, а
+        // withTimeoutOrNull не всегда прерывает блокирующий OkHttp-DNS.
+        // yt-dlp-поиск идёт через тот же прокси, но со своими таймаутами —
+        // в этом режиме пробуем его первым.
+        if (app.sonora.net.nohit.NohitProxy.proxyOrNull() != null) {
+            val searchStarted = System.currentTimeMillis()
+            val viaYtDlp = YtDlpBridge.search(query, limit)
+            android.util.Log.i("SearchSpeed", "yt-dlp search '$query': ${System.currentTimeMillis() - searchStarted} ms, ${viaYtDlp.size} tracks")
+            if (viaYtDlp.isNotEmpty()) {
+                cached = viaYtDlp
+                lastError = null
+                // Пока пользователь смотрит выдачу, качаем первый трек в фоне.
+                // Только разумная длительность: не тянем часовые видео целиком.
+                viaYtDlp.firstOrNull { it.durationMs in 1..15 * 60 * 1000 }?.let { track ->
+                    YtDlpBridge.prefetch(track.id.removePrefix("ytdlp:"))
+                }
+                return viaYtDlp
+            }
+        }
         val direct = runCatching {
             kotlinx.coroutines.withTimeoutOrNull(15_000) {
                 api.search(query, limit).filterNot { it.isVideoContent }

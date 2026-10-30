@@ -52,17 +52,16 @@ class InnerTubeDataSourceFactory(
                 throw IOException("Пустой yt-dlp id")
             }
             android.util.Log.i("MediaDebug", "resolve ytdlp $videoId")
-            // Сначала пробуем локальный кэш/скачивание через yt-dlp: в режиме
-            // NoHiT это единственный стабильный путь для медиапотока
-            // (googlevideo TLS через OkHttp/ExoPlayer не всегда проходит DPI).
+            // Сначала локальный кэш: повторный трек играет мгновенно. Если
+            // файла нет — yt-dlp скачивает через NoHiT (надёжнее прямого TLS
+            // медиапотока, который на мобильных сетях рвётся).
             val local = YtDlpBridge.downloadAudioBlocking(videoId)
             if (local != null && local.length() > 0L) {
-                android.util.Log.i("MediaDebug", "local ytdlp $local")
                 return@Resolver dataSpec.withUri(Uri.fromFile(local))
             }
+            // Резерв: прямой URL, если скачивание не удалось.
             val handle = YtDlpBridge.resolveBlocking(videoId)
                 ?: throw IOException("yt-dlp не смог получить поток для $videoId")
-            android.util.Log.i("MediaDebug", "resolved ytdlp ${handle.url.take(100)}")
             return@Resolver dataSpec
                 .withUri(Uri.parse(handle.url))
                 .withRequestHeaders(dataSpec.httpRequestHeaders + handle.headers)

@@ -11,6 +11,8 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import android.widget.Toast
+import app.sonora.core.display.ColorOsHighRefresh
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -240,6 +242,28 @@ fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
                 checked = settings.dynamicColor,
                 onCheckedChange = vm::setDynamicColor,
             )
+            if (ColorOsHighRefresh.isSupported(context)) {
+                ClickRow(
+                    title = "120 Гц на ColorOS",
+                    subtitle = ColorOsHighRefresh.statusLabel(context),
+                    onClick = {
+                        when {
+                            !ColorOsHighRefresh.isShizukuInstalled(context) -> Toast.makeText(
+                                context,
+                                "Установите Shizuku и запустите его сервис",
+                                Toast.LENGTH_LONG,
+                            ).show()
+                            !ColorOsHighRefresh.isShizukuRunning() -> Toast.makeText(
+                                context,
+                                "Сначала запустите Shizuku (через ADB или Wi-Fi отладку)",
+                                Toast.LENGTH_LONG,
+                            ).show()
+                            !ColorOsHighRefresh.hasPermission() -> ColorOsHighRefresh.requestPermission()
+                            else -> ColorOsHighRefresh.onForeground(context)
+                        }
+                    },
+                )
+            }
         }
 
         // ---------- Руководство ----------

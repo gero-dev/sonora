@@ -57,4 +57,4 @@
 - Сборка: `./gradlew :app:assembleDebug` (JDK 21, Android SDK 37).
 - APK: `app/build/outputs/apk/debug/app-debug.apk`.
 - Проверка: `./gradlew :app:testDebugUnitTest :app:lintDebug`.
-- Версия: `3.3.1`, `versionCode 43`.
+- Версия: `3.4.0`, `versionCode 44`.

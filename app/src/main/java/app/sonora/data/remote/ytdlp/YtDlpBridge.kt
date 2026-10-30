@@ -5,6 +5,7 @@ import app.sonora.core.model.Track
 import app.sonora.core.settings.SettingsStore
 import app.sonora.core.settings.StreamSource
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import java.util.concurrent.ConcurrentHashMap
 
@@ -94,6 +95,18 @@ object YtDlpBridge {
     fun resolveBlocking(videoId: String): StreamHandle? =
         runBlocking(Dispatchers.IO) { resolve(videoId) }
 
+    /** Фоновый prefetch первого результата поиска: тап по нему — сразу играет. */
+    private val prefetched = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+    private val prefetchScope = kotlinx.coroutines.CoroutineScope(
+        kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO,
+    )
+
+    fun prefetch(videoId: String) {
+        if (videoId.isBlank()) return
+        prefetchScope.launch {
+            runCatching { downloadAudio(videoId) }
+        }
+    }
     /** Сбросить ссылку (например, после 403). */
     fun invalidate(videoId: String) {
         cache.remove(videoId)
