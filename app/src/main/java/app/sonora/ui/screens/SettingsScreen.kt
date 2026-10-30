@@ -1,4 +1,4 @@
-﻿package app.sonora.ui.screens
+package app.sonora.ui.screens
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -44,12 +44,10 @@ import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material.icons.rounded.UploadFile
-import androidx.compose.material.icons.rounded.VpnKey
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -87,7 +85,6 @@ import app.sonora.core.settings.PlaybackMode
 import app.sonora.core.settings.StreamSource
 import app.sonora.core.settings.ThemeMode
 import app.sonora.core.settings.YoutubeIpMode
-import app.sonora.net.warp.WarpState
 import app.sonora.ui.MainViewModel
 import app.sonora.ui.nav.Routes
 import app.sonora.ui.theme.paletteFor
@@ -129,7 +126,6 @@ fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
     var showPlaylistImportHelp by rememberSaveable { mutableStateOf(false) }
     var showWaveSettings by remember { mutableStateOf(false) }
     var showProxyDialog by remember { mutableStateOf(false) }
-    var showRelayServersDialog by remember { mutableStateOf(false) }
     var showStreamDetails by remember { mutableStateOf(false) }
     var showAutoPilotDialog by remember { mutableStateOf(false) }
     var jamendoClientId by rememberSaveable(settings.jamendoClientId) {
@@ -143,30 +139,10 @@ fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
     }
     val takeout by vm.takeout.collectAsState()
     val metadataCacheSize by vm.metadataCacheSize.collectAsState()
-    val warpStatus by vm.warpStatus.collectAsState()
-    val warpConfigs by vm.warpConfigs.collectAsState()
-    val warpAutoRotate by vm.warpAutoRotate.collectAsState()
-    val warpExternalVpn by vm.warpExternalVpn.collectAsState()
-    val warpKeepAlive by vm.warpKeepAlive.collectAsState()
-    val warpImportLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenMultipleDocuments(),
-    ) { uris ->
-        if (uris.isNotEmpty()) vm.importWarpConfigs(uris)
-    }
-    val vpnPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult(),
-    ) {
-        vm.startWarp()
-        // После выдачи разрешения сразу проверяем, помогает ли WARP стримингу.
-        vm.runStreamingAudit(deep = true)
-    }
-    LaunchedEffect(Unit) { vm.refreshWarp() }
     // Версия yt-dlp нужна в карточке «Поток и сеть».
     LaunchedEffect(Unit) { vm.refreshYtDlpStatus() }
     val streamCheckDetails by vm.streamCheckDetails.collectAsState()
-    val relayCheckState by vm.relayCheck.collectAsState()
     val ytDlpStatusState by vm.ytDlpStatus.collectAsState()
-    val relayHealthState by vm.relayHealth.collectAsState()
     val autoPilotAuditState by vm.autoPilotAudit.collectAsState()
     val autoPilotRunningState by vm.autoPilotRunning.collectAsState()
     val autoPilotMessageState by vm.autoPilotMessage.collectAsState()
@@ -389,29 +365,10 @@ fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
                 modifier = Modifier.padding(top = 4.dp),
             )
             Spacer(Modifier.height(4.dp))
-            SwitchRow(
-                title = "Медиашлюз без VPN",
-                subtitle = "Если YouTube блокирует IP, звук идёт через публичные зеркала — " +
-                    "без WARP и VPN",
-                checked = settings.relayEnabled,
-                onCheckedChange = vm::setRelayEnabled,
-            )
-            ClickRow(
-                title = "Серверы шлюза",
-                subtitle = settings.relayInstances.ifBlank {
-                    "Встроенный список зеркал (Invidious/Piped)"
-                },
-                onClick = { showRelayServersDialog = true },
-            )
-            ClickRow(
-                title = "Проверить шлюзы",
-                subtitle = relayCheckState ?: "Какие зеркала реально отдают звук",
-                onClick = { vm.checkRelayHealth() },
-            )
             SettingsLabel("DPI-обход (NoHiT)")
             SwitchRow(
                 title = "Обход блокировок NoHiT",
-                subtitle = "Фрагментация TLS ClientHello + DoH: без VPN и WARP, только для трафика Sonora",
+                subtitle = "Фрагментация TLS ClientHello + DoH: единственный обход, без VPN и только для трафика Sonora",
                 checked = settings.nohitEnabled,
                 onCheckedChange = vm::setNohitEnabled,
             )
@@ -425,9 +382,9 @@ fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
                 onClick = { vm.tuneNohit() },
             )
             Text(
-                text = "Автопилот больше не включает WARP: только ручная кнопка в разделе " +
-                    "«Туннель WARP» ниже. Переключатель NoHiT полностью применяется " +
-                    "после перезапуска приложения.",
+                text = "NoHiT — единственный сетевой обход: фрагментация TLS ClientHello " +
+                    "и DoH применяются только к трафику Sonora. Переключатель полностью " +
+                    "применяется после перезапуска приложения.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(vertical = 4.dp),
@@ -435,7 +392,7 @@ fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
             SettingsLabel("Автопилот")
             SwitchRow(
                 title = "Автопилот стриминга",
-                subtitle = "Автоматически перебирает способы и стратегии без WARP",
+                subtitle = "Автоматически перебирает прямой путь и yt-dlp",
                 checked = settings.autoTransport,
                 onCheckedChange = vm::setAutoTransport,
             )
@@ -447,21 +404,12 @@ fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
             )
             ClickRow(
                 title = "Проверить все способы",
-                subtitle = autoPilotMessageState ?: "Прямой YouTube · yt-dlp · медиашлюз · WARP",
+                subtitle = autoPilotMessageState ?: "Прямой YouTube · yt-dlp",
                 onClick = {
                     vm.runStreamingAudit(deep = true)
                     showAutoPilotDialog = true
                 },
             )
-            if (vm.autoPilotNeedsVpnPermission()) {
-                ClickRow(
-                    title = "Разрешить VPN для WARP",
-                    subtitle = "Android спросит один раз; туннель работает только для трафика Sonora",
-                    onClick = {
-                        vm.autoPilotVpnPermissionIntent()?.let { vpnPermissionLauncher.launch(it) }
-                    },
-                )
-            }
             SettingsLabel("Сеть YouTube")
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(YoutubeIpMode.values().size) { index ->
@@ -511,7 +459,7 @@ fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
             val streamCheckState by vm.streamCheck.collectAsState()
             ClickRow(
                 title = "Проверить поток",
-                subtitle = streamCheckState ?: "Прямой YouTube · yt-dlp · медиашлюз",
+                subtitle = streamCheckState ?: "Прямой YouTube · yt-dlp",
                 onClick = {
                     vm.checkStreamAccess()
                     showStreamDetails = true
@@ -519,8 +467,8 @@ fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
             )
             Text(
                 text = "Прямой YouTube в РФ обычно отдаёт 403 на медиа. Порядок: InnerTube → " +
-                    "yt-dlp (свежий рантайм, перебор клиентов и IPv4/IPv6) → медиашлюз без VPN. " +
-                    "Если ничего не работает — добавьте своё зеркало или включите WARP.",
+                    "yt-dlp (свежий рантайм, перебор клиентов и IPv4/IPv6). Оба пути идут " +
+                    "через NoHiT — VPN и сторонние шлюзы не нужны.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -961,150 +909,6 @@ fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
             )
         }
 
-        // ---------- Туннель WARP ----------
-        SettingsSection(title = "Туннель WARP (AmneziaWG)", icon = Icons.Rounded.VpnKey) {
-            Text(
-                text = "Необязательный WireGuard-туннель Cloudflare WARP: через него идёт " +
-                    "только трафик Sonora, остальные приложения ходят напрямую. Если один " +
-                    "конфиг не подключается, приложение само пробует следующий.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(8.dp))
-            InfoRow(
-                title = "Состояние",
-                value = when (warpStatus.state) {
-                    WarpState.NOT_CONFIGURED -> "Конфигурация не импортирована"
-                    WarpState.DISCONNECTED -> "Выключен"
-                    WarpState.CONNECTING -> "Подключение…"
-                    WarpState.CONNECTED -> "Подключён"
-                    WarpState.DISCONNECTING -> "Отключение…"
-                    WarpState.ERROR -> "Ошибка"
-                },
-            )
-            if (warpStatus.totalAttempts > 0) {
-                InfoRow(
-                    title = "Попытка",
-                    value = "${warpStatus.attempt} из ${warpStatus.totalAttempts}" +
-                        if (warpStatus.triedConfigIds.isNotEmpty()) {
-                            " · использовано ${warpStatus.triedConfigIds.size}"
-                        } else {
-                            ""
-                        },
-                )
-            }
-            warpStatus.endpoint?.let { InfoRow(title = "Сервер", value = it) }
-            if (warpExternalVpn) {
-                Text(
-                    text = "На устройстве уже активен другой VPN/WARP — туннель Sonora " +
-                        "не включён, чтобы не мешать.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
-            }
-            vm.warpError.collectAsState().value?.let { message ->
-                Text(
-                    text = message,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
-            }
-            warpStatus.error?.let { message ->
-                Text(
-                    text = message,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
-            }
-            Spacer(Modifier.height(6.dp))
-            ActionRow(
-                title = "Восстановить встроенные конфиги",
-                subtitle = "7 конфигов (WARP + AmneziaWG) уже в комплекте; импорт дополнительных — ниже",
-                onClick = { vm.restoreBundledWarpConfigs() },
-            )
-            Button(
-                onClick = { warpImportLauncher.launch(arrayOf("*/*")) },
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text("Импортировать .conf (можно несколько)")
-            }
-            if (warpConfigs.isNotEmpty()) {
-                Spacer(Modifier.height(8.dp))
-                SettingsLabel("Конфигурации · выбрана одна")
-                warpConfigs.forEach { entry ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(MaterialTheme.shapes.medium)
-                            .clickable { vm.selectWarpConfig(entry.id) }
-                            .padding(vertical = 2.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        RadioButton(
-                            selected = entry.selected,
-                            onClick = { vm.selectWarpConfig(entry.id) },
-                        )
-                        Column(Modifier.weight(1f)) {
-                            Text(entry.name, style = MaterialTheme.typography.titleSmall)
-                            Text(
-                                text = entry.endpoint ?: "endpoint неизвестен",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        IconButton(onClick = { vm.removeWarpConfig(entry.id) }) {
-                            Icon(
-                                imageVector = Icons.Rounded.Delete,
-                                contentDescription = "Удалить конфигурацию",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(20.dp),
-                            )
-                        }
-                    }
-                }
-                Spacer(Modifier.height(4.dp))
-                val running = warpStatus.state == WarpState.CONNECTED ||
-                    warpStatus.state == WarpState.CONNECTING
-                SwitchRow(
-                    title = "Включить туннель",
-                    subtitle = "Только трафик приложения Sonora",
-                    checked = running,
-                    onCheckedChange = { enable ->
-                        if (enable) {
-                            if (warpExternalVpn) {
-                                vm.startWarp()
-                            } else {
-                                val permission = vm.warpVpnPermissionIntent()
-                                if (permission != null) {
-                                    vpnPermissionLauncher.launch(permission)
-                                } else {
-                                    vm.startWarp()
-                                }
-                            }
-                        } else {
-                            vm.stopWarp()
-                        }
-                    },
-                )
-                SwitchRow(
-                    title = "Автоматически перебирать конфиги",
-                    subtitle = "Если конфиг не поднялся за 12 секунд — пробовать следующий (после ручного подключения)",
-                    checked = warpAutoRotate,
-                    onCheckedChange = { vm.setWarpAutoRotate(it) },
-                )
-                Text(
-                    text = "WARP включается только этой кнопкой: автозапуска, автовосстановления " +
-                        "и подъёма из автопилота больше нет.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(vertical = 4.dp),
-                )
-                TextButton(onClick = { vm.clearWarpConfig() }) {
-                    Text("Удалить все конфигурации")
-                }
-            }
-        }
-
         // ---------- Открытые каталоги ----------
         SettingsSection(title = "Открытые каталоги", icon = Icons.Rounded.Public) {
             Text(
@@ -1312,74 +1116,6 @@ fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
             )
         }
 
-        if (showRelayServersDialog) {
-            var draft by remember(settings.relayInstances) {
-                mutableStateOf(settings.relayInstances)
-            }
-            AlertDialog(
-                onDismissRequest = { showRelayServersDialog = false },
-                title = { Text("Серверы шлюза") },
-                text = {
-                    Column(
-                        Modifier
-                            .height(380.dp)
-                            .verticalScroll(rememberScrollState()),
-                    ) {
-                        Text(
-                            text = "Публичные зеркала Invidious/Piped: по одному адресу в " +
-                                "строке. Пустое поле — встроенный список. Тип зеркала " +
-                                "определяется по имени: `piped` — Piped, иначе Invidious.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        OutlinedTextField(
-                            value = draft,
-                            onValueChange = { draft = it },
-                            minLines = 4,
-                            label = { Text("Зеркала") },
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                        if (relayHealthState.isNotEmpty()) {
-                            Spacer(Modifier.height(10.dp))
-                            Text(
-                                text = "Последняя проверка",
-                                style = MaterialTheme.typography.labelLarge,
-                            )
-                            relayHealthState.take(12).forEach { health ->
-                                Text(
-                                    text = if (health.ok) {
-                                        "✓ ${health.instance.label} · ${health.latencyMs} мс"
-                                    } else {
-                                        "✕ ${health.instance.label} · ${health.detail}"
-                                    },
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = if (health.ok) {
-                                        MaterialTheme.colorScheme.onSurface
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurfaceVariant
-                                    },
-                                    modifier = Modifier.padding(top = 2.dp),
-                                )
-                            }
-                        }
-                    }
-                },
-                confirmButton = {
-                    TextButton(
-                        onClick = {
-                            showRelayServersDialog = false
-                            vm.setRelayInstances(draft)
-                        },
-                    ) { Text("Сохранить") }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showRelayServersDialog = false }) { Text("Отмена") }
-                },
-                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-            )
-        }
-
         if (showStreamDetails && streamCheckDetails != null) {
             AlertDialog(
                 onDismissRequest = {
@@ -1427,15 +1163,6 @@ fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
                                     ?: "Пока нет данных — нажмите «Проверить все способы».",
                                 style = MaterialTheme.typography.bodyMedium,
                             )
-                            if (vm.autoPilotNeedsVpnPermission()) {
-                                Spacer(Modifier.height(10.dp))
-                                Text(
-                                    text = "Для WARP нужно разрешение VPN — включите пункт " +
-                                        "«Разрешить VPN для WARP» в разделе «Поток и сеть».",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
                         }
                     }
                 },

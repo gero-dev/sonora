@@ -21,18 +21,25 @@ object Http {
     const val USER_AGENT = "Sonora/0.1 (Android)"
 
     val client: OkHttpClient by lazy {
-        OkHttpClient.Builder()
-            .apply {
-                // NoHiT: локальный прокси с фрагментацией TLS ClientHello
-                // (DPI-обход без VPN/WARP). Если прокси не запущен — напрямую.
-                app.sonora.net.nohit.NohitProxy.proxyOrNull()?.let { proxy(it) }
-            }
-            .connectTimeout(20, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS)
-            .writeTimeout(30, TimeUnit.SECONDS)
-            .followRedirects(true)
-            .retryOnConnectionFailure(true)
-            .build()
+        // NoHiT правильнее применять его собственным OkHttp-клиентом
+        // (FragSocketFactory + HostPolicy), а не через локальный HTTP-прокси:
+        // прокси ломает часть TLS-соединений (медиапоток ExoPlayer).
+        runCatching {
+            dev.nohit.core.NoHiT.client().newBuilder()
+                .connectTimeout(20, TimeUnit.SECONDS)
+                .readTimeout(30, TimeUnit.SECONDS)
+                .writeTimeout(30, TimeUnit.SECONDS)
+                .retryOnConnectionFailure(true)
+                .build()
+        }.getOrElse {
+            OkHttpClient.Builder()
+                .connectTimeout(20, TimeUnit.SECONDS)
+                .readTimeout(30, TimeUnit.SECONDS)
+                .writeTimeout(30, TimeUnit.SECONDS)
+                .followRedirects(true)
+                .retryOnConnectionFailure(true)
+                .build()
+        }
     }
 
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }

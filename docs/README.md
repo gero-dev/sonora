@@ -15,7 +15,6 @@
 | [TAKEOUT.md](TAKEOUT.md) | импорт библиотеки YouTube Music из Google Takeout |
 | [LYRICS.md](LYRICS.md) | синхронизированные тексты, LRC и караоке-режим |
 | [WIDGET.md](WIDGET.md) | виджеты рабочего стола: размеры, обложка, обновление |
-| [WARP.md](WARP.md) | WARP-туннель: конфиги, перебор, только трафик Sonora |
 | [WAVE.md](WAVE.md) | «Моя волна»: только музыка, история, новизна, разнообразие, доля устройства |
 | [PLAYBACK.md](PLAYBACK.md) | режимы проигрывания: онлайн + устройство или только загруженное, стриминг в очереди |
 | [HISTORY.md](HISTORY.md) | вкладка «История»: треки, исполнители, статистика и приватность |
@@ -28,8 +27,8 @@
 |---|---|
 | [ARCHITECTURE.md](ARCHITECTURE.md) | слои, потоки данных, InnerTube, воспроизведение, загрузка, импорт |
 | [INTEGRATIONS.md](INTEGRATIONS.md) | устройство интеграций: Spotify, YouTube Music, SoundCloud, DownloadManager |
-| [STREAMING-RF.md](STREAMING-RF.md) | стриминг без VPN/WARP: автопилот, собственный WARP, авто-обновление yt-dlp, медиашлюз, диагностика |
-| [PC-STREAMING-AUDIT.md](PC-STREAMING-AUDIT.md) | замеры на реальной сети: DPI-блокировка TLS, yt-dlp/шлюзы без WARP, WARP как рабочий egress |
+| [STREAMING-RF.md](STREAMING-RF.md) | история стриминга без VPN и ограничения (WARP удалён в 3.0.0) |
+| [PC-STREAMING-AUDIT.md](PC-STREAMING-AUDIT.md) | замеры: DPI-блокировка TLS и что работало с WARP (история) |
 | [UPDATE.md](UPDATE.md) | обновления из GitHub: автопроверка, кэш, добровольное скачивание, SHA-256, установка |
 | [NOHIT.md](NOHIT.md) | DPI-обход NoHiT вместо WARP: компоненты, локальный прокси, проверка на сети, ограничения |
 | [RECOGNITION.md](RECOGNITION.md) | поиск песни по аудиофрагменту: AudD, локальный отпечаток, ограничения |
@@ -57,4 +56,4 @@
 - Сборка: `./gradlew :app:assembleDebug` (JDK 21, Android SDK 37).
 - APK: `app/build/outputs/apk/debug/app-debug.apk`.
 - Проверка: `./gradlew :app:testDebugUnitTest :app:lintDebug`.
-- Версия: `2.3.0`, `versionCode 38`.
+- Версия: `3.0.0`, `versionCode 39`.

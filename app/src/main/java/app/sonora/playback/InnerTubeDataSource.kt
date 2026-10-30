@@ -1,4 +1,4 @@
-package app.sonora.playback
+﻿package app.sonora.playback
 
 import android.content.Context
 import android.net.Uri
@@ -51,8 +51,18 @@ class InnerTubeDataSourceFactory(
             if (videoId.isBlank()) {
                 throw IOException("Пустой yt-dlp id")
             }
+            android.util.Log.i("MediaDebug", "resolve ytdlp $videoId")
+            // Сначала пробуем локальный кэш/скачивание через yt-dlp: в режиме
+            // NoHiT это единственный стабильный путь для медиапотока
+            // (googlevideo TLS через OkHttp/ExoPlayer не всегда проходит DPI).
+            val local = YtDlpBridge.downloadAudioBlocking(videoId)
+            if (local != null && local.length() > 0L) {
+                android.util.Log.i("MediaDebug", "local ytdlp $local")
+                return@Resolver dataSpec.withUri(Uri.fromFile(local))
+            }
             val handle = YtDlpBridge.resolveBlocking(videoId)
                 ?: throw IOException("yt-dlp не смог получить поток для $videoId")
+            android.util.Log.i("MediaDebug", "resolved ytdlp ${handle.url.take(100)}")
             return@Resolver dataSpec
                 .withUri(Uri.parse(handle.url))
                 .withRequestHeaders(dataSpec.httpRequestHeaders + handle.headers)

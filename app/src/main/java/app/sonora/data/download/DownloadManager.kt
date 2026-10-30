@@ -72,7 +72,7 @@ class DownloadManager(
 
     /**
      * Скачивает прямой URL в папку загрузок (OkHttp-поток, прогресс в [items]).
-     * Работает при любом типе подключения: Wi-Fi, мобильная сеть, VPN/WARP.
+     * Работает при любом типе подключения: Wi-Fi, мобильная сеть, VPN.
      *
      * [contentLengthHint], [rangeChunkSizeBytes] и [requireBoundedRange] нужны
      * для потоков InnerTubeX, которые отдают файл только кусками с `Range`.
@@ -470,7 +470,7 @@ class DownloadManager(
 
     /**
      * Активное подключение — мобильное (нет Wi-Fi/Ethernet, но есть сотовая сеть)?
-     * VPN/WARP не мешает: проверяются underlying-сети, а не только activeNetwork.
+     * VPN не мешает: проверяются underlying-сети, а не только activeNetwork.
      */
     fun isOnMobileData(): Boolean = runCatching {
         val manager = appContext.getSystemService(Context.CONNECTIVITY_SERVICE)

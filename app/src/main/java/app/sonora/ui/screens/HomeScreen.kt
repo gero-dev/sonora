@@ -44,7 +44,6 @@ import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Sort
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.UploadFile
-import androidx.compose.material.icons.rounded.VpnKey
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -56,11 +55,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -77,8 +74,6 @@ import androidx.compose.ui.unit.sp
 import app.sonora.core.model.Playlist
 import app.sonora.core.model.Source
 import app.sonora.core.model.Track
-import app.sonora.net.warp.WarpState
-import app.sonora.net.warp.WarpStatus
 import app.sonora.ui.MainViewModel
 import app.sonora.ui.WaveMood
 import app.sonora.ui.WaveSort
@@ -94,8 +89,6 @@ import app.sonora.ui.components.TrackRow
 import app.sonora.ui.nav.Routes
 import app.sonora.ui.theme.LocalSonoraColors
 import java.time.LocalTime
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 /** Единый шаг страницы: 16dp по краям и 12dp между блоками. */
 private val PagePadding = 16.dp
@@ -120,11 +113,6 @@ fun HomeScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) -> 
     val player by vm.playerChrome.collectAsState()
     val scanning by vm.scanning.collectAsState()
     val wave by vm.wave.collectAsState()
-    val warpStatus by vm.warpStatus.collectAsState()
-    val warpConfigs by vm.warpConfigs.collectAsState()
-    val warpExternal by vm.warpExternalVpn.collectAsState()
-    val warpError by vm.warpError.collectAsState()
-    val warpKeepAlive by vm.warpKeepAlive.collectAsState()
     val fileImport by vm.fileImport.collectAsState()
     val settings by vm.settings.collectAsState()
     val waveHistorySize by vm.waveHistorySize.collectAsState()
@@ -137,12 +125,6 @@ fun HomeScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) -> 
     ) { uris ->
         if (uris.isNotEmpty()) vm.importMusicFiles(uris)
     }
-    val vpnPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult(),
-    ) { vm.startWarp() }
-    // refreshWarp() читает JSON-индекс конфигов с диска и перебирает сетевые
-    // интерфейсы — уводим это с главного потока, чтобы вход на Главную не подвисал.
-    LaunchedEffect(Unit) { withContext(Dispatchers.IO) { vm.refreshWarp() } }
 
     val localTracks = remember(tracks) { tracks.filter { it.source == Source.LOCAL } }
     val recent = remember(localTracks) { localTracks.take(15) }
@@ -204,34 +186,6 @@ fun HomeScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) -> 
                 QuickAccessRow(
                     onCatalog = { navigate(Routes.DISCOVER) },
                     onSearch = { navigate(Routes.SEARCH) },
-                )
-            }
-
-            // WARP всегда на виду на Главной: включить/выключить и автоподхват.
-            item {
-                WarpHomeCard(
-                    status = warpStatus,
-                    configsCount = warpConfigs.size,
-                    externalVpn = warpExternal,
-                    keepAlive = warpKeepAlive,
-                    error = warpError,
-                    onKeepAliveChange = vm::setWarpKeepAlive,
-                    onOpenSettings = { navigate(Routes.SETTINGS) },
-                    onDisable = { vm.stopWarp() },
-                    onEnable = {
-                        if (warpStatus.state == WarpState.CONNECTED ||
-                            warpStatus.state == WarpState.CONNECTING
-                        ) {
-                            vm.stopWarp()
-                        } else {
-                            val permission = vm.warpVpnPermissionIntent()
-                            if (permission != null) {
-                                vpnPermissionLauncher.launch(permission)
-                            } else {
-                                vm.startWarp()
-                            }
-                        }
-                    },
                 )
             }
 
@@ -1065,130 +1019,10 @@ private fun CreatePlaylistTile(onClick: () -> Unit) {
         }
     }
 }
-
 // ---------------------------------------------------------------------------
-// WARP и импорт музыки на главном экране
+// Импорт музыки на главном экране
 // ---------------------------------------------------------------------------
 
-/** Быстрое подключение WARP прямо с главного экрана. */
-@Composable
-private fun WarpHomeCard(
-    status: WarpStatus,
-    configsCount: Int,
-    externalVpn: Boolean,
-    keepAlive: Boolean,
-    error: String?,
-    onKeepAliveChange: (Boolean) -> Unit,
-    onOpenSettings: () -> Unit,
-    onEnable: () -> Unit,
-    onDisable: () -> Unit,
-) {
-    val connected = status.state == WarpState.CONNECTED ||
-        status.state == WarpState.CONNECTING
-    val stateText = when {
-        configsCount == 0 -> "Конфигурация не импортирована"
-        externalVpn && keepAlive -> "Другой VPN активен — подхватим после отключения"
-        externalVpn -> "Активен другой VPN — туннель не включён"
-        status.state == WarpState.CONNECTED -> "Подключён"
-        status.state == WarpState.CONNECTING -> "Подключение…"
-        status.state == WarpState.DISCONNECTING -> "Отключение…"
-        status.state == WarpState.ERROR -> "Ошибка подключения"
-        else -> "Выключен"
-    }
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(CardRadius))
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-            .padding(horizontal = 14.dp, vertical = 10.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(RoundedCornerShape(13.dp))
-                    .background(
-                        if (connected) {
-                            MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
-                        } else {
-                            MaterialTheme.colorScheme.surfaceContainerHighest
-                        },
-                    ),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.VpnKey,
-                    contentDescription = null,
-                    tint = if (connected) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                    modifier = Modifier.size(20.dp),
-                )
-            }
-            Spacer(Modifier.width(10.dp))
-            Column(Modifier.weight(1f)) {
-                Text("WARP", style = MaterialTheme.typography.titleSmall)
-                Text(
-                    text = stateText,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = if (connected) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                error?.let {
-                    Text(
-                        text = it,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.error,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
-            if (configsCount == 0) {
-                TextButton(onClick = onOpenSettings) { Text("Настроить") }
-            } else if (externalVpn) {
-                TextButton(onClick = if (keepAlive) onEnable else onOpenSettings) {
-                    Text(if (keepAlive) "Подхватить" else "Подробнее")
-                }
-            } else {
-                TextButton(onClick = if (connected) onDisable else onEnable) {
-                    Text(if (connected) "Выключить" else "Подключить")
-                }
-            }
-        }
-        if (configsCount > 0) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 2.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        text = "Автовосстановление",
-                        style = MaterialTheme.typography.labelMedium,
-                    )
-                    Text(
-                        text = "Поднять WARP, если вы выключили свой VPN",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Switch(
-                    checked = keepAlive,
-                    onCheckedChange = onKeepAliveChange,
-                )
-            }
-        }
-    }
-}
 
 /** Импорт своей музыки файлами + короткая инструкция. */
 @Composable

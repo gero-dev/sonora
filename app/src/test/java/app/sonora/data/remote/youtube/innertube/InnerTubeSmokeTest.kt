@@ -2,6 +2,8 @@ package app.sonora.data.remote.youtube.innertube
 
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertTrue
+import org.junit.Assume
+import org.junit.Before
 import org.junit.Test
 
 /**
@@ -11,6 +13,25 @@ import org.junit.Test
 class InnerTubeSmokeTest {
 
     private val api = InnerTubeApi()
+
+    /**
+     * Тесты ходят в реальный YouTube. В сетях, где TLS режется DPI (РФ без
+     * NoHiT), они не должны валить сборку — просто пропускаем.
+     */
+    @Before
+    fun requireNetwork() {
+        val reachable = runCatching {
+            java.net.Socket().use { raw ->
+                raw.connect(java.net.InetSocketAddress("music.youtube.com", 443), 5_000)
+                val tls = javax.net.ssl.SSLContext.getDefault().socketFactory
+                    .createSocket(raw, "music.youtube.com", 443, true) as javax.net.ssl.SSLSocket
+                tls.startHandshake()
+                tls.close()
+                true
+            }
+        }.getOrDefault(false)
+        Assume.assumeTrue("YouTube TLS недоступен в этой сети — smoke-тест пропущен", reachable)
+    }
 
     @Test
     fun searchReturnsPlayableTracks() = runBlocking {

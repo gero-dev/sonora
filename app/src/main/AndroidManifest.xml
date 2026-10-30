@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
@@ -6,7 +6,6 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- Поиск песни по фрагменту: запись 6–10 секунд с микрофона -->
@@ -74,23 +73,6 @@
             <intent-filter>
                 <action android:name="androidx.media3.session.MediaSessionService" />
             </intent-filter>
-        </service>
-
-        <!--
-            WARP: foreground-координатор встроенного per-app WireGuard-туннеля.
-            Сам VPN-интерфейс создаёт com.wireguard.android.backend.GoBackend$VpnService
-            из AAR-библиотеки WireGuard — его <service> и нативные .so приходят в итоговый
-            манифест/APK из зависимости автоматически, дублировать их вручную не нужно.
-            Тип specialUse выбран потому, что отдельного foregroundServiceType для VPN нет
-            (targetSdk 34 требует именно specialUse + FOREGROUND_SERVICE_SPECIAL_USE).
-        -->
-        <service
-            android:name=".net.warp.WarpVpnService"
-            android:exported="false"
-            android:foregroundServiceType="specialUse">
-            <property
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="per_app_wireguard_tunnel" />
         </service>
 
         <receiver

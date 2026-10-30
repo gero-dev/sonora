@@ -29,8 +29,8 @@ import kotlinx.serialization.json.Json
  *     IPv6 — в режиме «Авто» протоколы чередуются.
  *
  * Если ни один прямой вариант не прошёл, вызывающий слой (YtDlpBridge /
- * InnerTubeStreams) идёт в [app.sonora.net.relay.RelayGateway] — медиашлюз
- * без VPN и WARP.
+ * InnerTubeStreams) сообщает об ошибке: VPN-туннелей и публичных медиашлюзов
+ * в приложении нет, единственный обход блокировок — NoHiT.
  */
 class YtDlpResolver(
     private val context: Context,
@@ -49,7 +49,7 @@ class YtDlpResolver(
 
     /**
      * Наборы `--extractor-args youtube:player_client=…`. Порядок проверен
-     * замерами 29.10.2026 на реальной сети РФ через WARP: лучше всех отдают
+     * замерами 29.10.2026 на реальной сети РФ: лучше всех отдают
      * ссылки `default`/`tv_simply`, затем `web_safari`; `tv` и `ios` часто
      * отвечают «page needs to be reloaded»/«format not available».
      */
@@ -377,6 +377,44 @@ class YtDlpResolver(
                 ?.maxByOrNull { it.lastModified() }
         }
 
+    /**
+     * Скачать полный аудиотрек yt-dlp в кэш и вернуть локальный файл.
+     *
+     * Нужен как надёжный путь в режиме NoHiT: yt-dlp сам качает через
+     * локальный прокси (проверено), а ExoPlayer потом читает обычный файл —
+     * без TLS/DPI-проблем медиапотока.
+     */
+    suspend fun downloadTrack(idOrUrl: String): java.io.File? = withContext(Dispatchers.IO) {
+        ensureInit()
+        val safeId = idOrUrl.substringBefore('?').replace(Regex("[^A-Za-z0-9_-]"), "_")
+        val dir = java.io.File(context.cacheDir, "ytdlp_audio").apply { mkdirs() }
+        dir.listFiles()?.firstOrNull {
+            it.name.startsWith("$safeId.") && it.length() > 100_000L
+        }?.let { return@withContext it }
+        val template = java.io.File(dir, "$safeId.%(ext)s").absolutePath
+        val request = YoutubeDLRequest(watchUrl(idOrUrl)).apply {
+            addOption("-f", "bestaudio[ext=m4a]/bestaudio/best")
+            addOption("-o", template)
+            addOption("--no-playlist")
+            addOption("--no-warnings")
+            addOption("--no-part")
+            addOption("--socket-timeout", "15")
+            addOption("--retries", "2")
+            proxyOption()
+        }
+        val response = withTimeoutOrNull(150_000) {
+            runCatching { YoutubeDL.getInstance().execute(request) }
+                .onFailure { Log.w(TAG, "download failed: ${it.message}") }
+                .getOrNull()
+        } ?: return@withContext null
+        if (response.exitCode != 0) {
+            Log.w(TAG, "download exit=${response.exitCode} err=${response.err.takeLast(200)}")
+            return@withContext null
+        }
+        dir.listFiles()
+            ?.filter { it.name.startsWith("$safeId.") && it.length() > 100_000L }
+            ?.maxByOrNull { it.lastModified() }
+    }
     // --------------------------------------------------------------- attempts
 
     private data class Attempt(val extractorArgs: String, val forceIp: String?)
@@ -458,7 +496,7 @@ class YtDlpResolver(
 
     /**
      * Прокси для yt-dlp: пользовательский, иначе локальный NoHiT-прокси
-     * (DPI-обход без VPN/WARP — Python-рантайм сам фрагментацию не умеет).
+     * (DPI-обход без VPN — Python-рантайм сам фрагментацию не умеет).
      */
     private fun YoutubeDLRequest.proxyOption() {
         val custom = settings.current.ytDlpProxy.trim()

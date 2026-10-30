@@ -200,7 +200,7 @@ object UpdateManager {
      */
     private suspend fun downloadWithResume(info: UpdateInfo, target: File): Boolean {
         val expected = info.sizeBytes?.takeIf { it > 0 }
-        // Свежий пул соединений на каждую загрузку: после выключения WARP в пуле
+        // Свежий пул соединений на каждую загрузку: после смены сети в пуле
         // остаются сокеты мёртвой сети, из-за которых запросы висят до таймаута.
         val downloader = client.newBuilder()
             .readTimeout(2, TimeUnit.MINUTES)

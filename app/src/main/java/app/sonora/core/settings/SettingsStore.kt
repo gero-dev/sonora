@@ -64,18 +64,18 @@ enum class AudioQuality(
 /**
  * Откуда брать прямой аудио-поток YouTube.
  *
- * AUTO — сначала InnerTube/InnerTubeX, при ошибке yt-dlp, затем встроенный
- * медиашлюз (публичные зеркала) — работает без VPN и WARP.
+ * AUTO — сначала InnerTube/InnerTubeX, при ошибке yt-dlp.
  * YTDLP — всегда yt-dlp: медленнее, но умеет видео, которые встроенный
  * резолвер не открывает (возраст, регион, SABR-only).
- * RELAY — только медиашлюз: когда прямой YouTube недоступен по IP.
+ *
+ * VPN-туннелей и публичных медиашлюзов в приложении нет: единственный обход
+ * блокировок — NoHiT (DPI-обход без VPN).
  */
 @Serializable
 enum class StreamSource(val label: String, val hint: String) {
-    AUTO("Авто", "InnerTube → yt-dlp → медиашлюз без VPN"),
+    AUTO("Авто", "InnerTube → yt-dlp, оба через NoHiT"),
     YTDLP("yt-dlp", "Всегда yt-dlp: медленнее, но обходит ограничения InnerTube"),
-    INNERTUBE("InnerTube", "Быстрый встроенный резолвер, без Python и шлюза"),
-    RELAY("Шлюз", "Только медиашлюз: без прямого YouTube, VPN и WARP"),
+    INNERTUBE("InnerTube", "Быстрый встроенный резолвер, без Python"),
 }
 
 /**
@@ -174,45 +174,23 @@ data class AppSettings(
     val streamSource: StreamSource = StreamSource.AUTO,
     /** HTTP/SOCKS-прокси только для yt-dlp; пусто — напрямую. */
     val ytDlpProxy: String = "",
-    /**
-     * Медиашлюз без VPN: если прямой YouTube отдаёт 403, звук берётся через
-     * публичные Invidious/Piped-зеркала. Включён по умолчанию — именно это
-     * даёт стриминг в РФ без VPN и WARP.
-     */
-    val relayEnabled: Boolean = true,
-    /** Свой список зеркал (по одному в строке). Пусто — встроенный список. */
-    val relayInstances: String = "",
     /** Проверять ссылку настоящим Range-запросом перед отдачей в плеер. */
     val probeBeforePlay: Boolean = true,
-    /** Автопилот: проверять все способы стриминга и выбирать рабочий. */
+    /** Автопилот: проверять способы стриминга и выбирать рабочий. */
     val autoTransport: Boolean = true,
-    /**
-     * Резерв, если NoHiT не помог: автоматически поднимать WARP.
-     * На сетях с TSPU (собирает TCP и читает SNI) без него YouTube не играет.
-     */
-    val autoWarpFallback: Boolean = true,
     /** При 403/ошибке плеера автоматически переключать источник. */
     val autoFailover: Boolean = true,
     /** Предпочтительный IP-протокол для YouTube. */
     val youtubeIpMode: YoutubeIpMode = YoutubeIpMode.AUTO,
     /** Автоматически обновлять yt-dlp из GitHub: встроенная версия быстро устаревает. */
     val ytDlpAutoUpdate: Boolean = true,
-    /**
-     * Самостоятельно регистрировать свежий WARP-профиль: встроенные конфиги
-     * со временем перестают поднимать handshake. Работает без VPN-клиента.
-     */
-    val warpAutoRegister: Boolean = true,
-    /** Время последней авторегистрации WARP (мс). */
-    val warpAutoConfigAtMs: Long = 0L,
-    /** id WARP-конфига, который последним реально поднял handshake. */
-    val warpLastGoodConfigId: String = "",
     /** Автоматически проверять обновления на GitHub (раз в сутки). */
     val updateAutoCheck: Boolean = true,
     /** Версия, которую пользователь отложил («Позже»), чтобы не напоминать. */
     val updateSkippedVersion: String = "",
     /**
      * DPI-обход NoHiT: фрагментация TLS ClientHello + DoH/GeoHide DNS.
-     * Заменяет WARP: работает без VPN, только для трафика Sonora.
+     * Единственный сетевой обход: работает без VPN, только для трафика Sonora.
      */
     val nohitEnabled: Boolean = true,
     /** Время последнего автоподбора стратегии NoHiT (мс). */
@@ -261,15 +239,6 @@ data class AppSettings(
     val readSidecarMetadata: Boolean = true,
     /** Доставать встроенную обложку из аудиофайла (ID3/FLAC/MP4). */
     val useEmbeddedArtwork: Boolean = true,
-    /** Автоматически поднимать WARP-туннель при старте приложения (если есть конфиги). */
-    val warpAutoConnect: Boolean = false,
-    /**
-     * Автовосстановление: если пользователь выключил свой WARP/VPN во время
-     * активной сессии, Sonora снова поднимает свой туннель, когда внешний VPN исчез.
-     */
-    val warpKeepAlive: Boolean = true,
-    /** Пользователь включал WARP; переживает перезапуск процесса для автоподхвата. */
-    val warpUserEnabled: Boolean = false,
     /** Версия схемы метаданных: после апгрейда сбрасываем устаревшие отметки «проверено». */
     val metadataSchemaVersion: Int = 0,
 

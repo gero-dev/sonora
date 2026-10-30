@@ -1,4 +1,4 @@
-package dev.nohit.core
+﻿package dev.nohit.core
 
 /**
  * DNS-апстрим: DoH (JSON API) и/или обычный UDP:53.
@@ -142,6 +142,8 @@ data class SplitPlan(
         val TCP_4 = SplitPlan(chunks = listOf(4, 4, 4, 4))
 
         // Only TLS-record fragmentation: DPI видит N корректных записей.
+        val TLS_16 = SplitPlan(tlsRecordChunk = 16)
+        val TLS_32 = SplitPlan(tlsRecordChunk = 32)
         val TLS_64 = SplitPlan(tlsRecordChunk = 64)
         val TLS_128 = SplitPlan(tlsRecordChunk = 128)
         val TLS_256 = SplitPlan(tlsRecordChunk = 256)
@@ -152,7 +154,7 @@ data class SplitPlan(
 
         val all = listOf(
             SNI_MID, SNI_START, SNI_END, SNI_MID_TCP_2,
-            TLS_64, TLS_128, TLS_256,
+            TLS_16, TLS_32, TLS_64, TLS_128, TLS_256,
             TLS_128_TCP_2, TLS_64_TCP_1,
             TCP_1, TCP_2, TCP_4
         )

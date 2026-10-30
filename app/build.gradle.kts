@@ -14,8 +14,8 @@ android {
         applicationId = "app.sonora"
         minSdk = 26
         targetSdk = 34
-        versionCode = 38
-        versionName = "2.3.0"
+        versionCode = 39
+        versionName = "3.0.0"
         vectorDrawables.useSupportLibrary = true
     }
 
@@ -109,7 +109,6 @@ dependencies {
 
     // WARP: Р С•РЎвЂћР С‘РЎвЂ Р С‘Р В°Р В»РЎРЉР Р…Р В°РЎРЏ Р В±Р С‘Р В±Р В»Р С‘Р С•РЎвЂљР ВµР С”Р В° WireGuard (userspace wireguard-go).
     // Р ВРЎРѓР С—Р С•Р В»РЎРЉР В·РЎС“Р ВµРЎвЂљРЎРѓРЎРЏ РЎвЂљР С•Р В»РЎРЉР С”Р С• Р Т‘Р В»РЎРЏ per-app РЎвЂљРЎС“Р Р…Р Р…Р ВµР В»РЎРЏ Sonora, РЎРѓР С. app.sonora.net.warp.
-    implementation("com.zaneschepke:amneziawg-android:2.3.7")
 
     // Material Components Р Р…РЎС“Р В¶Р ВµР Р… РЎвЂљР С•Р В»РЎРЉР С”Р С• РЎР‚Р В°Р Т‘Р С‘ XML-РЎвЂљР ВµР СРЎвЂ№ Р С•Р С”Р Р…Р В° (Theme.Material3.*)
     implementation("com.google.android.material:material:1.12.0")

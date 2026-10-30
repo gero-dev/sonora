@@ -1,4 +1,4 @@
-﻿package app.sonora
+package app.sonora
 
 import android.content.Context
 import android.net.Uri
@@ -34,9 +34,6 @@ class AppGraph private constructor(context: Context) {
     val settings = SettingsStore(appContext)
     val secure = SecureStore(appContext)
 
-    /** Необязательный per-app WireGuard-туннель (Cloudflare WARP) для трафика приложения. */
-    val warp = app.sonora.net.warp.WarpTunnel(appContext, secure)
-
     /** yt-dlp: поиск/поток/фрагменты; настройки читает на каждый вызов. */
     val ytDlp = app.sonora.data.remote.ytdlp.YtDlpResolver(appContext, settings)
 
@@ -54,15 +51,14 @@ class AppGraph private constructor(context: Context) {
         app.sonora.data.remote.youtube.innertube.InnerTubeSession.restore(secure)
         // yt-dlp — источник потока и резерв для ограниченных видео.
         app.sonora.data.remote.ytdlp.YtDlpBridge.init(ytDlp, settings)
-        // Медиашлюз без VPN/WARP: публичные зеркала на случай блокировки IP.
-        app.sonora.net.relay.RelayGateway.init(settings)
-        // Автопилот стриминга: проверяет все способы и выбирает рабочий.
-        app.sonora.data.streaming.StreamingAutoPilot.init(appContext, settings, ytDlp, warp)
+        // Автопилот стриминга: проверяет прямой путь и yt-dlp через NoHiT.
+        app.sonora.data.streaming.StreamingAutoPilot.init(appContext, settings, ytDlp)
         // Проверка обновлений из GitHub Releases (добровольная установка).
         app.sonora.data.update.UpdateManager.init(appContext, settings)
 
-        // NoHiT: DPI-обход без VPN/WARP — фрагментация TLS ClientHello и DoH-DNS.
-        // Заменяет WARP для обычного трафика Sonora: OkHttp, Ktor, ExoPlayer, yt-dlp.
+        // NoHiT: единственный DPI-обход — фрагментация TLS ClientHello и DoH-DNS.
+        // Работает без VPN и применяется ко всему трафику Sonora: OkHttp, Ktor,
+        // ExoPlayer, yt-dlp.
         runCatching { dev.nohit.core.NoHiT.init(appContext) }
             .onFailure { android.util.Log.w("NoHiT", "init: ${it.message}") }
         if (settings.current.nohitEnabled) {

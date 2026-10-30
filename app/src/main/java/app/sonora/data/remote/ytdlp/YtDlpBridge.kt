@@ -1,9 +1,9 @@
-package app.sonora.data.remote.ytdlp
+﻿package app.sonora.data.remote.ytdlp
 
 import android.content.Context
+import app.sonora.core.model.Track
 import app.sonora.core.settings.SettingsStore
 import app.sonora.core.settings.StreamSource
-import app.sonora.net.relay.RelayGateway
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import java.util.concurrent.ConcurrentHashMap
@@ -15,8 +15,8 @@ import java.util.concurrent.ConcurrentHashMap
  * привязаны к IP и клиенту, поэтому живут в кэше не дольше [TTL_MS] и никогда
  * не попадают в очередь.
  *
- * Если yt-dlp не смог отдать играющую ссылку (РФ: медиа-сервер блокирует IP),
- * мост автоматически уходит в [RelayGateway] — медиашлюз без VPN и WARP.
+ * yt-dlp ходит через локальный прокси NoHiT (см. [YtDlpResolver]); VPN и
+ * публичных медиашлюзов в приложении нет.
  */
 object YtDlpBridge {
 
@@ -46,11 +46,11 @@ object YtDlpBridge {
     /** Пользователь выбрал yt-dlp основным источником. */
     fun isPrimary(): Boolean = source() == StreamSource.YTDLP
 
-    /** Только медиашлюз: прямой YouTube и yt-dlp не трогаем. */
-    fun isRelayOnly(): Boolean = source() == StreamSource.RELAY
-
     /** yt-dlp разрешён как источник или резерв. */
     fun isEnabled(): Boolean = source() != StreamSource.INNERTUBE
+
+    /** Проверять ссылку Range-запросом перед отдачей в плеер. */
+    fun probeBeforePlay(): Boolean = settings?.current?.probeBeforePlay ?: true
 
     /** Прогрев Python-рантайма: первый реальный вызов будет быстрее. */
     suspend fun warmUp() {
@@ -63,6 +63,13 @@ object YtDlpBridge {
     /** Текущая версия yt-dlp для настроек. */
     fun runtimeVersion(): String? = resolver?.versionLabel()
 
+    /** Поиск через yt-dlp (`ytsearch`): нужен, когда InnerTube не отвечает через NoHiT. */
+    suspend fun search(query: String, limit: Int = 10): List<Track> {
+        val r = resolver ?: return emptyList()
+        return runCatching { r.search(query, limit).map { it.toSonoraTrack() } }
+            .getOrDefault(emptyList())
+    }
+
     suspend fun resolve(videoId: String): StreamHandle? {
         val now = System.currentTimeMillis()
         cache[videoId]?.let { cached ->
@@ -74,22 +81,15 @@ object YtDlpBridge {
             cache[videoId] = Cached(handle, now)
             return handle
         }
-
-        // Прямой путь не сработал — пробуем медиашлюз (без VPN/WARP).
-        if (!isRelayOnly() && RelayGateway.isEnabled()) {
-            RelayGateway.resolve(videoId, targetKbps = null)?.let { relay ->
-                val relayed = StreamHandle(
-                    url = relay.url,
-                    headers = relay.headers,
-                    mimeType = relay.mimeType,
-                )
-                cache[videoId] = Cached(relayed, now)
-                return relayed
-            }
-        }
         return null
     }
 
+    /** Скачать полный трек в кэш (надёжный путь для ExoPlayer в режиме NoHiT). */
+    suspend fun downloadAudio(videoId: String): java.io.File? =
+        resolver?.downloadTrack(videoId)
+
+    fun downloadAudioBlocking(videoId: String): java.io.File? =
+        runBlocking(Dispatchers.IO) { downloadAudio(videoId) }
     /** Синхронная версия для `ResolvingDataSource.Resolver`. */
     fun resolveBlocking(videoId: String): StreamHandle? =
         runBlocking(Dispatchers.IO) { resolve(videoId) }

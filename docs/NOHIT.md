@@ -1,6 +1,6 @@
 ﻿# NoHiT: DPI-обход в Sonora вместо WARP
 
-> Статус: **2.3.0**. Обновлено до **NoHiT 0.3.0-alpha.5** (`nohit-core` вендорен из тега).
+> Статус: **3.0.0**. NoHiT — единственный DPI-обход, обновлён до **0.3.0-alpha.5** (`nohit-core` вендорен из тега).
 >. Встроен [NoHiT](https://github.com/Avedanger/NoHiT)
 > (Apache-2.0): DoH/GeoHide DNS + фрагментация TLS ClientHello + автоподбор
 > стратегии. Исходники лежат в `app/src/main/java/dev/nohit/core/` (вендоринг,

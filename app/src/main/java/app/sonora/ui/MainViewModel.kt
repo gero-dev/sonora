@@ -47,12 +47,6 @@ import app.sonora.data.wave.WaveHistoryEntry
 import app.sonora.data.wave.WaveRankContext
 import app.sonora.data.wave.WaveRanker
 import app.sonora.data.wave.WaveSorter
-import app.sonora.net.relay.RelayGateway
-import app.sonora.net.relay.RelayHealth
-import app.sonora.net.warp.WarpConfigEntry
-import app.sonora.net.warp.WarpConfigSummary
-import app.sonora.net.warp.WarpState
-import app.sonora.net.warp.WarpStatus
 import app.sonora.data.import.ImportedTrackEntry
 import app.sonora.playback.PlayerUiState
 import kotlinx.coroutines.CancellationException
@@ -303,8 +297,6 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
                 enrichLibrary()
             }
             refreshWave()
-            // WARP не включается автоматически: только кнопкой в интерфейсе.
-
         }
         observeInfiniteQueue()
         observeCurrentYouTubeTrack()
@@ -312,7 +304,6 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
         observeRadio()
         observeAudioFeatures()
         observeShufflePreference()
-        // observeWarpKeepAlive() — WARP не поднимается сам, только кнопкой.
         // Автопилот: при ошибке источника подбираем другой способ и переоткрываем трек.
         graph.playback.onStreamError = { error -> onPlaybackStreamError(error) }
         // Фоновая проверка способов стриминга: не блокирует старт приложения.
@@ -323,7 +314,7 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
                 _autoPilotAudit.value = StreamingAutoPilot.lastAudit()
                 _autoPilotMessage.value = StreamingAutoPilot.lastAudit()?.summaryLine()
             }
-            // Периодическая перепроверка (сеть могла смениться, WARP — отвалиться).
+            // Периодическая перепроверка (сеть могла смениться).
             viewModelScope.launch(Dispatchers.IO) {
                 while (isActive) {
                     delay(10 * 60_000L)
@@ -3050,12 +3041,6 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
     private val _streamCheckDetails = MutableStateFlow<String?>(null)
     val streamCheckDetails: StateFlow<String?> = _streamCheckDetails.asStateFlow()
 
-    private val _relayCheck = MutableStateFlow<String?>(null)
-    val relayCheck: StateFlow<String?> = _relayCheck.asStateFlow()
-
-    private val _relayHealth = MutableStateFlow<List<RelayHealth>>(emptyList())
-    val relayHealth: StateFlow<List<RelayHealth>> = _relayHealth.asStateFlow()
-
     private val _ytDlpStatus = MutableStateFlow<String?>(null)
     val ytDlpStatus: StateFlow<String?> = _ytDlpStatus.asStateFlow()
 
@@ -3063,22 +3048,7 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
         _streamCheckDetails.value = null
     }
 
-    /** Медиашлюз без VPN и WARP: резервный путь через публичные зеркала. */
-    fun setRelayEnabled(enabled: Boolean) {
-        updateSettings { it.copy(relayEnabled = enabled) }
-        RelayGateway.clear()
-        toast(if (enabled) "Медиашлюз без VPN включён" else "Медиашлюз выключен")
-    }
-
-    /** Свой список зеркал: по одному в строке, пусто — встроенный список. */
-    fun setRelayInstances(value: String) {
-        updateSettings { it.copy(relayInstances = value.trim()) }
-        RelayGateway.clear()
-        _relayCheck.value = null
-        toast(if (value.isBlank()) "Зеркала: встроенный список" else "Список зеркал сохранён")
-    }
-
-    /** Предпочтительный IP-протокол YouTube (IPv6 иногда работает без WARP). */
+    /** Предпочтительный IP-протокол YouTube (IPv6 иногда работает лучше). */
     fun setYoutubeIpMode(mode: YoutubeIpMode) {
         updateSettings { it.copy(youtubeIpMode = mode) }
         toast("YouTube: ${mode.label}")
@@ -3111,38 +3081,6 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
         if (enabled) runStreamingAudit(deep = false)
     }
 
-    /** Поднять WARP автоматически, если прямой путь не работает. */
-    fun setAutoWarpFallback(enabled: Boolean) {
-        updateSettings { it.copy(autoWarpFallback = enabled) }
-        toast(if (enabled) "WARP-автопилот включён" else "WARP-автопилот выключен")
-    }
-
-    /** Самостоятельная регистрация свежего WARP-профиля. */
-    fun setWarpAutoRegister(enabled: Boolean) {        updateSettings { it.copy(warpAutoRegister = enabled) }
-        toast(if (enabled) "Авто-регистрация WARP включена" else "Авто-регистрация WARP выключена")
-    }
-
-    /** Получить свежий WARP-профиль по кнопке (старые конфиги устаревают). */
-    fun autoRegisterWarp() {
-        viewModelScope.launch(Dispatchers.IO) {
-            toast("Регистрируем свежий WARP-профиль…")
-            val ok = runCatching { StreamingAutoPilot.registerFreshWarp() }.getOrDefault(false)
-            withContext(Dispatchers.Main) {
-                toast(
-                    if (ok) {
-                        "WARP-профиль обновлён — подключаемся"
-                    } else {
-                        "Не удалось зарегистрировать WARP-профиль (нет сети?)"
-                    },
-                )
-            }
-            if (ok) {
-                runCatching { StreamingAutoPilot.ensureWarp() }
-                runStreamingAudit(deep = false)
-            }
-        }
-    }
-
     /** Переключать источник при 403/ошибке воспроизведения. */
     fun setAutoFailover(enabled: Boolean) {
         updateSettings { it.copy(autoFailover = enabled) }
@@ -3150,8 +3088,8 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
     }
 
     /**
-     * Проверить все способы стриминга. deep=true — включая WARP-конфиги
-     * (медленно, зато показывает реальный результат через туннель).
+     * Проверить способы стриминга: прямой InnerTube и yt-dlp.
+     * deep=true дополнительно проверяет yt-dlp, даже если прямой путь работает.
      */
     fun runStreamingAudit(deep: Boolean = true) {
         if (_autoPilotRunning.value) return
@@ -3166,13 +3104,7 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
         }
     }
 
-    /** Нужно ли разрешение Android на VPN для WARP-автопилота. */
-    fun autoPilotNeedsVpnPermission(): Boolean = StreamingAutoPilot.needsVpnPermission()
-
-    /** Intent системного диалога разрешения VPN; null — уже выдано. */
-    fun autoPilotVpnPermissionIntent(): Intent? = graph.warp.vpnPermissionIntent()
-
-    // ---------- DPI-обход NoHiT (вместо WARP) ----------
+    // ---------- DPI-обход NoHiT ----------
 
     private val _nohitTuning = MutableStateFlow(false)
     val nohitTuning: StateFlow<Boolean> = _nohitTuning.asStateFlow()
@@ -3190,7 +3122,7 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
         return "${cfg.dns.firstOrNull()?.name ?: "системный DNS"} · $splitText"
     }
 
-    /** Включить/выключить DPI-обход NoHiT (замена WARP). */
+    /** Включить/выключить DPI-обход NoHiT (единственный сетевой обход). */
     fun setNohitEnabled(enabled: Boolean) {
         updateSettings { it.copy(nohitEnabled = enabled) }
         if (enabled) {
@@ -3264,38 +3196,11 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
     fun downloadUpdate() {
         viewModelScope.launch(Dispatchers.IO) {
             toast("Скачиваем обновление…")
-            // GitHub доступен напрямую: туннель WARP нужен для YouTube, а
-            // большое APK через него качается медленно и рвётся. Пауза туннеля
-            // ускоряет загрузку, после — возвращаем WARP, если он был включён.
-            val warpWasConnected = graph.warp.status.value.state == WarpState.CONNECTED
-            if (warpWasConnected) {
-                runCatching { graph.warp.stop() }
-                // Даём Android убрать VPN-интерфейс и вернуть обычную сеть:
-                // иначе первые запросы уходят в уже мёртвый туннель.
-                val deadline = System.currentTimeMillis() + 5_000
-                while (System.currentTimeMillis() < deadline &&
-                    graph.warp.status.value.state != WarpState.DISCONNECTED &&
-                    graph.warp.status.value.state != WarpState.NOT_CONFIGURED
-                ) {
-                    delay(150)
+            val ok = runCatching { UpdateManager.downloadAndInstall() }.getOrDefault(false)
+            if (!ok) {
+                withContext(Dispatchers.Main) {
+                    toast(UpdateManager.error.value ?: "Не удалось скачать обновление")
                 }
-                delay(400)
-            }
-            try {
-                var ok = runCatching { UpdateManager.downloadAndInstall() }.getOrDefault(false)
-                if (!ok && warpWasConnected) {
-                    // Резерв: если без туннеля скачать не вышло — возвращаем WARP
-                    // и пробуем ещё раз (медленнее, но работает).
-                    runCatching { StreamingAutoPilot.ensureWarp() }
-                    ok = runCatching { UpdateManager.downloadAndInstall() }.getOrDefault(false)
-                }
-                if (!ok) {
-                    withContext(Dispatchers.Main) {
-                        toast(UpdateManager.error.value ?: "Не удалось скачать обновление")
-                    }
-                }
-            } finally {
-                if (warpWasConnected) runCatching { StreamingAutoPilot.ensureWarp() }
             }
         }
     }
@@ -3377,25 +3282,9 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
         }
     }
 
-    /** Проверка зеркал медиашлюза: какие реально отдают звук. */
-    fun checkRelayHealth() {
-        viewModelScope.launch(Dispatchers.IO) {
-            _relayCheck.value = "Проверяем зеркала…"
-            val list = runCatching { RelayGateway.healthCheck() }.getOrDefault(emptyList())
-            _relayHealth.value = list
-            val working = list.count { it.ok }
-            _relayCheck.value = when {
-                list.isEmpty() -> "Зеркала не настроены"
-                working == 0 -> "Ни одно из ${list.size} зеркал не ответило"
-                else -> "Работают $working из ${list.size}"
-            }
-            toast(_relayCheck.value!!)
-        }
-    }
-
     /**
-     * Диагностика потока: прямой YouTube, yt-dlp и медиашлюз по очереди.
-     * Показывает, что именно блокируется и какой путь работает без VPN/WARP.
+     * Диагностика потока: прямой YouTube и yt-dlp.
+     * Показывает, что именно блокируется и какой путь работает через NoHiT.
      */
     fun checkStreamAccess() {
         viewModelScope.launch(Dispatchers.IO) {
@@ -3419,18 +3308,10 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
                 "yt-dlp ${ytDlpVersion ?: ""} → нет играющей ссылки"
             }
 
-            val relay = runCatching { RelayGateway.resolve(videoId, null) }.getOrNull()
-            lines += if (relay != null) {
-                "Медиашлюз → OK · ${relay.instance} · ${relay.bitrate / 1000} кбит/с"
-            } else {
-                "Медиашлюз → ни одно зеркало не ответило"
-            }
-
             val summary = when {
                 directOk -> "OK: прямой поток доступен"
                 ytDlpHandle != null -> "OK: yt-dlp получил играющую ссылку"
-                relay != null -> "OK: играет через медиашлюз, без VPN и WARP"
-                else -> "Поток недоступен: добавьте зеркало или включите WARP"
+                else -> "Поток недоступен: проверьте NoHiT и соединение"
             }
             _streamCheck.value = summary
             _streamCheckDetails.value = buildString {
@@ -3439,14 +3320,14 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
                 appendLine(lines.joinToString("\n"))
                 appendLine()
                 when {
-                    directOk -> append("Прямой доступ работает: VPN и WARP не нужны.")
-                    relay != null -> append(
-                        "Прямой YouTube блокируется с вашего IP, но медиашлюз отдаёт звук — " +
-                            "стриминг работает без VPN и WARP.",
+                    directOk -> append("Прямой доступ работает: VPN не нужен.")
+                    ytDlpHandle != null -> append(
+                        "Прямой YouTube блокируется с вашего IP, но yt-dlp через NoHiT " +
+                            "получил играющую ссылку.",
                     )
                     else -> append(
-                        "Ни один путь не дал звук. Проверьте интернет, добавьте своё зеркало " +
-                            "в «Серверы шлюза» или включите WARP.",
+                        "Ни один путь не дал звук. Проверьте интернет и включите " +
+                            "«Обход блокировок NoHiT» в «Поток и сеть».",
                     )
                 }
             }
@@ -3721,173 +3602,6 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
             }
         return "${sanitizeFileName(ArtistNames.clean(track.artist))} - " +
             "${sanitizeFileName(track.title)}.$extension"
-    }
-
-    // ---------- WARP-туннель ----------
-
-    /** Состояние встроенного per-app WireGuard-туннеля (WARP). */
-    val warpStatus: StateFlow<WarpStatus> = graph.warp.status
-
-    private val _warpConfigs = MutableStateFlow(graph.warp.configs())
-    val warpConfigs: StateFlow<List<WarpConfigEntry>> = _warpConfigs.asStateFlow()
-
-    private val _warpAutoRotate = MutableStateFlow(graph.warp.isAutoRotate())
-    val warpAutoRotate: StateFlow<Boolean> = _warpAutoRotate.asStateFlow()
-
-    private val _warpExternalVpn = MutableStateFlow(graph.warp.externalVpnActive())
-    val warpExternalVpn: StateFlow<Boolean> = _warpExternalVpn.asStateFlow()
-
-    private val _warpError = MutableStateFlow<String?>(null)
-    val warpError: StateFlow<String?> = _warpError.asStateFlow()
-
-    private val _warpKeepAlive = MutableStateFlow(graph.settings.current.warpKeepAlive)
-    val warpKeepAlive: StateFlow<Boolean> = _warpKeepAlive.asStateFlow()
-
-    /** Пользователь включал WARP: держим туннель включённым, в том числе после
-     *  перезапуска процесса (но только пока не нажал «Выключить»). */
-    private val _warpDesired = MutableStateFlow(
-        graph.settings.current.warpAutoConnect || graph.settings.current.warpUserEnabled,
-    )
-
-    /**
-     * Автовосстановление WARP. Если пользователь выключил свой VPN/WARP
-     * во время активной сессии, Sonora поднимает собственный туннель, как
-     * только внешний VPN исчезает. Явное «Выключить» в Sonora снимает флаг.
-     */
-    private fun observeWarpKeepAlive() {
-        viewModelScope.launch {
-            var lastAttemptAt = 0L
-            while (isActive) {
-                delay(3_000)
-                _warpExternalVpn.value = graph.warp.externalVpnActive()
-                if (!_warpKeepAlive.value || !_warpDesired.value) continue
-                val status = graph.warp.status.value
-                if (status.state == WarpState.CONNECTED ||
-                    status.state == WarpState.CONNECTING ||
-                    status.state == WarpState.DISCONNECTING
-                ) {
-                    continue
-                }
-                if (graph.warp.externalVpnActive()) continue
-                if (_warpConfigs.value.isEmpty()) continue
-                if (!graph.warp.hasVpnPermission()) continue
-                val now = System.currentTimeMillis()
-                // После ошибки не долбим сервер каждые 3 секунды.
-                if (status.state == WarpState.ERROR && now - lastAttemptAt < 15_000L) continue
-                lastAttemptAt = now
-                val result = graph.warp.startIfNoExternalVpn()
-                if (result.isFailure) {
-                    _warpError.value = result.exceptionOrNull()?.message
-                } else {
-                    _warpError.value = null
-                }
-                refreshWarp()
-            }
-        }
-    }
-
-    fun clearWarpError() {
-        _warpError.value = null
-    }
-
-    /** Перечитать список конфигов/настройки (после импорта, выбора, удаления). */
-    fun refreshWarp() {
-        // Чтение JSON-индекса и перебор сетевых интерфейсов — не на главном потоке.
-        viewModelScope.launch(Dispatchers.IO) {
-            _warpConfigs.value = graph.warp.configs()
-            _warpAutoRotate.value = graph.warp.isAutoRotate()
-            _warpExternalVpn.value = graph.warp.externalVpnActive()
-        }
-    }
-
-    /** Intent системного запроса разрешения VPN; null, если разрешение уже выдано. */
-    fun warpVpnPermissionIntent(): Intent? = graph.warp.vpnPermissionIntent()
-
-    fun hasWarpConfig(): Boolean = graph.warp.configs().isNotEmpty()
-
-    fun warpConfigSummary(): WarpConfigSummary? = graph.warp.configSummary()
-
-    fun importWarpConfig(uri: Uri) = importWarpConfigs(listOf(uri))
-
-    fun importWarpConfigs(uris: List<Uri>) {
-        viewModelScope.launch {
-            val results = graph.warp.importConfigs(uris)
-            val failure = results.firstOrNull { it.isFailure }?.exceptionOrNull()
-            _warpError.value = failure?.let {
-                "Не удалось импортировать конфигурацию: " +
-                    (it.message ?: it.javaClass.simpleName)
-            }
-            refreshWarp()
-        }
-    }
-
-    fun selectWarpConfig(id: String) {
-        runCatching { graph.warp.selectConfig(id) }
-        refreshWarp()
-    }
-
-    fun removeWarpConfig(id: String) {
-        graph.warp.removeConfig(id)
-        refreshWarp()
-    }
-
-    fun setWarpAutoRotate(enabled: Boolean) {
-        graph.warp.setAutoRotate(enabled)
-        _warpAutoRotate.value = enabled
-    }
-
-    fun setWarpAutoConnect(enabled: Boolean) {
-        graph.settings.update { it.copy(warpAutoConnect = enabled) }
-    }
-
-    /**
-     * Включает туннель, только если на устройстве нет чужого VPN/WARP.
-     * Разрешение VPN должно быть уже выдано (иначе использовать [warpVpnPermissionIntent]).
-     */
-    fun startWarp(): Boolean {
-        // Запоминаем намерение: если сейчас активен чужой VPN, автоподхват
-        // включит Sonora WARP, как только пользователь его выключит.
-        _warpDesired.value = true
-        graph.settings.update { it.copy(warpUserEnabled = true) }
-        val result = graph.warp.startIfNoExternalVpn()
-        if (result.isFailure) {
-            _warpError.value = result.exceptionOrNull()?.message
-        } else {
-            _warpError.value = null
-        }
-        refreshWarp()
-        return result.isSuccess
-    }
-
-    fun stopWarp() {
-        // Явное выключение в Sonora отключает автоподхват до следующего включения.
-        _warpDesired.value = false
-        graph.settings.update { it.copy(warpUserEnabled = false) }
-        graph.warp.stop()
-        refreshWarp()
-    }
-
-    fun setWarpKeepAlive(enabled: Boolean) {
-        _warpKeepAlive.value = enabled
-        graph.settings.update { it.copy(warpKeepAlive = enabled) }
-    }
-
-    fun clearWarpConfig() {
-        graph.warp.clearConfig()
-        refreshWarp()
-    }
-
-    /** Возвращает в список встроенные WARP-конфиги, если пользователь их удалил. */
-    fun restoreBundledWarpConfigs() {
-        val added = runCatching { graph.warp.restoreBundled() }.getOrDefault(0)
-        refreshWarp()
-        toast(
-            if (added > 0) {
-                "Добавлено встроенных конфигов: $added"
-            } else {
-                "Встроенные конфиги уже в списке"
-            },
-        )
     }
 
     override fun onCleared() {

@@ -1,4 +1,4 @@
-package app.sonora.data.remote.youtube
+﻿package app.sonora.data.remote.youtube
 
 import app.sonora.core.model.ArtistRelease
 import app.sonora.core.model.Playlist
@@ -7,6 +7,7 @@ import app.sonora.core.model.Track
 import app.sonora.core.net.HttpException
 import app.sonora.data.remote.ConnectableSource
 import app.sonora.data.remote.youtube.innertube.InnerTubeApi
+import app.sonora.data.remote.ytdlp.YtDlpBridge
 import app.sonora.data.remote.youtube.innertube.StreamInfo
 
 /**
@@ -75,13 +76,28 @@ class YouTubeSource(
 
     override suspend fun search(query: String, limit: Int): List<Track> {
         if (query.isBlank()) return emptyList()
-        return runCatching { api.search(query, limit).filterNot { it.isVideoContent } }
+        val direct = runCatching {
+            kotlinx.coroutines.withTimeoutOrNull(15_000) {
+                api.search(query, limit).filterNot { it.isVideoContent }
+            }.orEmpty()
+        }
             .onSuccess {
                 cached = it
                 lastError = null
             }
             .onFailure { error -> lastError = describe(error) }
             .getOrDefault(emptyList())
+        if (direct.isNotEmpty()) return direct
+        // NoHiT-режим: InnerTube может не отвечать из-за DPI, а yt-dlp через
+        // тот же локальный NoHiT-прокси уже проверен автопилотом. Поиск не
+        // должен оставаться пустым, если играть через yt-dlp можно.
+        val viaYtDlp = YtDlpBridge.search(query, limit)
+        if (viaYtDlp.isNotEmpty()) {
+            cached = viaYtDlp
+            lastError = null
+            return viaYtDlp
+        }
+        return direct
     }
 
     override suspend fun playlistTracks(remotePlaylistId: String): List<Track> {

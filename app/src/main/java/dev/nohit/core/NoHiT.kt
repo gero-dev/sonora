@@ -48,7 +48,20 @@ object NoHiT {
     fun init(context: Context) {
         val app = context.applicationContext
         val loaded = GeoHideUpdater.applyTo(ConfigStore.load(app), app)
-        install(app, loaded)
+        // Миграция старых конфигов: чистые TCP-чанки (S1–S5 из 0.1) на современных
+        // ТСПУ бесполезны — они собирают поток. Переводим на SNI/TLS-стратегию
+        // по умолчанию; иначе пользователь останется с нерабочим обходом.
+        val normalized = if (
+            loaded.split.chunks.isNotEmpty() &&
+            loaded.split.sniSplit == SniMode.NONE &&
+            loaded.split.tlsRecordChunk == 0
+        ) {
+            loaded.copy(split = NoHiTConfig().split)
+        } else {
+            loaded
+        }
+        install(app, normalized)
+        if (normalized != loaded) ConfigStore.save(app, normalized)
         startNetworkWatcher(app)
         GeoHideUpdater.refreshInBackground(app) { servers -> onGeoHideUpdated(app, servers) }
     }
