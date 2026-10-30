@@ -1,4 +1,4 @@
-package app.sonora.widget
+﻿package app.sonora.widget
 
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
@@ -65,9 +65,8 @@ open class BaseSonoraWidgetProvider : AppWidgetProvider() {
         }
 
         runCatching {
-            // Запускаем музыку через сервис, а не через AppGraph: виджет должен
-            // работать, когда приложение убито. startForegroundService нужен,
-            // чтобы Android не убил сервис, поднятый из виджета.
+            // Резервный путь для старых PendingIntent (broadcast). Реальные
+            // кнопки виджета теперь идут через PendingIntent.getForegroundService.
             val serviceIntent = app.sonora.playback.PlaybackService.widgetAction(context, action)
             androidx.core.content.ContextCompat.startForegroundService(context, serviceIntent)
         }.onFailure { t ->

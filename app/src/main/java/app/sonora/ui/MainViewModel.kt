@@ -39,7 +39,14 @@ import app.sonora.data.streaming.TransportKind
 import app.sonora.data.update.UpdateInfo
 import app.sonora.data.update.UpdateManager
 import app.sonora.data.wave.WaveEngine
+import app.sonora.data.wave.WaveFeatureEnricher
+import app.sonora.data.wave.WaveFeatureIndex
+import app.sonora.data.wave.WaveFilterEngine
+import app.sonora.data.wave.WaveFilterRequest
 import app.sonora.data.wave.WaveHistoryEntry
+import app.sonora.data.wave.WaveRankContext
+import app.sonora.data.wave.WaveRanker
+import app.sonora.data.wave.WaveSorter
 import app.sonora.net.relay.RelayGateway
 import app.sonora.net.relay.RelayHealth
 import app.sonora.net.warp.WarpConfigEntry
@@ -216,33 +223,6 @@ private const val RADIO_BATCH = 20
 /** Порог остатка очереди, после которого радио догружает следующую пачку. */
 private const val RADIO_REFILL_THRESHOLD = 6
 
-/** Сколько локальных треков должно совпасть с настроением, чтобы фильтровать. */
-private const val MIN_MOOD_MATCHES = 6
-
-/** Подсказки настроения для локальной фонотеки (жанр/название/альбом). */
-private val MOOD_KEYWORDS: Map<WaveMood, List<String>> = mapOf(
-    WaveMood.CALM to listOf(
-        "chill", "acoustic", "ambient", "piano", "lofi", "lo-fi", "soft", "calm",
-        "sleep", "relax", "спокой", "акуст", "эмбиент", "пианино",
-    ),
-    WaveMood.FOCUS to listOf(
-        "instrumental", "focus", "study", "ambient", "piano", "beat", "concentration",
-        "инструмент", "фокус", "концентрац",
-    ),
-    WaveMood.ENERGY to listOf(
-        "dance", "workout", "rock", "metal", "drum", "bass", "edm", "party", "energy",
-        "танц", "энергич", "рок", "метал",
-    ),
-    WaveMood.NIGHT to listOf(
-        "night", "drive", "synth", "dark", "midnight", "noir",
-        "ноч", "драйв", "синт",
-    ),
-    WaveMood.HAPPY to listOf(
-        "happy", "pop", "upbeat", "sunny", "funk", "disco", "smile",
-        "весел", "поп", "солнечн",
-    ),
-)
-
 /** Максимум треков за один импорт списка: каждый неизвестный ищется в InnerTube. */
 private const val MAX_PLAYLIST_IMPORT = 150
 
@@ -331,6 +311,7 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
         observePlaybackHistory()
         observeRadio()
         observeAudioFeatures()
+        observeShufflePreference()
         // observeWarpKeepAlive() — WARP не поднимается сам, только кнопкой.
         // Автопилот: при ошибке источника подбираем другой способ и переоткрываем трек.
         graph.playback.onStreamError = { error -> onPlaybackStreamError(error) }
@@ -996,6 +977,35 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
     val audioFeatures: StateFlow<Map<String, AudioFeature>> = _audioFeatures.asStateFlow()
 
     fun audioFeature(trackId: String): AudioFeature? = _audioFeatures.value[trackId]
+
+    /**
+     * Перемешивание запоминается между запусками: применяем сохранённое
+     * значение при подключении плеера и сохраняем каждое изменение.
+     */
+    private fun observeShufflePreference() {
+        viewModelScope.launch {
+            graph.playback.state
+                .map { it.connected }
+                .distinctUntilChanged()
+                .collect { connected ->
+                    if (!connected) return@collect
+                    val saved = graph.settings.current.shuffleEnabled
+                    if (graph.playback.state.value.shuffle != saved) {
+                        graph.playback.setShuffle(saved)
+                    }
+                }
+        }
+        viewModelScope.launch {
+            graph.playback.state
+                .map { it.shuffle }
+                .distinctUntilChanged()
+                .collect { shuffle ->
+                    if (graph.settings.current.shuffleEnabled != shuffle) {
+                        graph.settings.update { it.copy(shuffleEnabled = shuffle) }
+                    }
+                }
+        }
+    }
 
     /**
      * Считает фичи для каждого нового трека в фоне. Ошибки/таймауты полностью
@@ -1790,6 +1800,18 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
     val wave: StateFlow<WaveUiState> = _wave.asStateFlow()
     private var waveJob: Job? = null
 
+    /**
+     * Фоновое досчитывание фич ReccoBeats: сеть не блокирует ни волну,
+     * ни плеер, а предыдущая задача отменяется при каждом обновлении.
+     */
+    private val waveEnricher by lazy {
+        WaveFeatureEnricher(graph.audioFeatures, viewModelScope)
+    }
+
+    /** Контекст последнего ранжирования: нужен, когда в фоне догрузились фичи. */
+    @Volatile
+    private var waveRankContext: WaveRankContext? = null
+
     fun setWaveSource(mode: WaveSourceMode) {
         _wave.update { it.copy(filters = it.filters.copy(source = mode)) }
         resetWaveCursor()
@@ -1809,6 +1831,15 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
         refreshWave()
     }
 
+    /** Сброс жёстких фильтров: настроение и «только избранное», источник остаётся. */
+    fun resetWaveFilters() {
+        _wave.update {
+            it.copy(filters = it.filters.copy(mood = WaveMood.ANY, favoritesOnly = false))
+        }
+        resetWaveCursor()
+        refreshWave()
+    }
+
     /** Смена фильтра начинает подборку с первого запроса, а не с середины. */
     private fun resetWaveCursor() {
         waveQueryCursor = 0
@@ -1817,9 +1848,14 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
     }
 
     fun setWaveSort(sort: WaveSort) {
-        _wave.update { it.copy(sort = sort) }
         // Сортировка не требует сети: переставляем уже собранную волну.
-        _wave.update { state -> state.copy(tracks = sortWave(state.tracks, state.sort)) }
+        // Сид фиксирован по времени сборки, поэтому SHUFFLE не «дёргается».
+        _wave.update { state ->
+            state.copy(
+                sort = sort,
+                tracks = WaveSorter.sort(state.tracks, sort, state.generatedAt),
+            )
+        }
     }
 
     private var waveGeneration = 0
@@ -1829,9 +1865,11 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
         waveJob?.cancel()
         loadMoreJob?.cancel()
         loadMoreJob = null
+        waveEnricher.cancel()
         waveGeneration++
         waveSeenIds.clear()
         waveSeenKeys.clear()
+        waveRankContext = null
         _wave.update { it.copy(loading = true, loadingMore = false, error = null) }
         waveJob = viewModelScope.launch {
             delay(250)
@@ -1847,28 +1885,26 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
             // Пока волна собиралась, пользователь мог нажать «Обновить» ещё раз:
             // устаревший результат не должен перезаписывать новую подборку.
             if (generation != waveGeneration) return@launch
+            val data = result.getOrNull()
             _wave.update { current ->
-                val data = result.getOrNull()
                 current.copy(
-                    tracks = data?.first?.distinctBy { it.id } ?: current.tracks,
-                    seedLabel = data?.second ?: current.seedLabel,
+                    tracks = data?.tracks?.distinctBy { it.id } ?: current.tracks,
+                    seedLabel = data?.label?.takeIf { it.isNotBlank() } ?: current.seedLabel,
                     loading = false,
-                    error = result.exceptionOrNull()?.message
-                        ?: if (data == null || data.first.isEmpty()) emptyWaveHint() else null,
+                    // Сетевая/дисковая ошибка — это не то же самое, что пустой фильтр.
+                    error = result.exceptionOrNull()?.message,
+                    status = data?.status ?: WaveStatus.ERROR,
+                    hint = data?.hint,
+                    featuresUsed = data?.featuresUsed ?: 0,
+                    filterSummary = data?.filterSummary.orEmpty(),
                     generatedAt = System.currentTimeMillis(),
                 )
             }
-            result.getOrNull()?.first?.let { markWaveSeen(it) }
+            if (data == null) return@launch
+            markWaveSeen(data.tracks)
+            // Фичи ReccoBeats досчитываем уже после отрисовки волны.
+            if (data.tracks.isNotEmpty()) enrichWaveFeatures(generation, data.tracks)
         }
-    }
-
-    /** Почему волна может быть пустой — подсказка вместо общей ошибки. */
-    private fun emptyWaveHint(): String = when {
-        !modeAllowsStreaming() ->
-            "Стриминг выключен: включите его в плеере или добавьте музыку на устройство."
-        !streamingAllowed() ->
-            "Стриминг в очереди выключен — волна собирается только из музыки на устройстве."
-        else -> "Не удалось собрать волну"
     }
 
     /**
@@ -1899,12 +1935,26 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
                 Result.failure(error)
             }
             if (generation != waveGeneration) return@launch
-            val more = result.getOrNull()?.first.orEmpty()
+            val data = result.getOrNull()
+            val more = data?.tracks.orEmpty()
             _wave.update { latest ->
+                val exhausted = more.isEmpty() && data != null
                 latest.copy(
                     tracks = (latest.tracks + more).distinctBy { it.id },
                     loadingMore = false,
                     error = result.exceptionOrNull()?.message,
+                    status = if (exhausted) WaveStatus.EMPTY_EXHAUSTED else latest.status,
+                    hint = if (exhausted) {
+                        data?.hint ?: WaveFilterEngine.hintFor(
+                            WaveStatus.EMPTY_EXHAUSTED,
+                            WaveFilterRequest(
+                                filters = latest.filters,
+                                tuning = graph.settings.current.wave,
+                            ),
+                        )
+                    } else {
+                        latest.hint
+                    },
                 )
             }
             markWaveSeen(more)
@@ -2100,31 +2150,39 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
     }
 
     /**
-     * Собирает «Мою волну»: локальные треки + онлайн (если режим проигрывания разрешает
-     * стриминг), только музыка, с учётом истории прослушиваний и настроек волны.
+     * Собирает «Мою волну».
+     *
+     * Порядок: пулы → жёсткие фильтры ([WaveFilterEngine]) → ранжирование
+     * ([WaveRanker], с аудио-фичами ReccoBeats) → микс локального и онлайна →
+     * диверсификация по артистам → сортировка.
+     *
+     * Фильтры не «снимаются» при пустой выдаче: вместо этого возвращается
+     * [WaveStatus] и понятная причина, которую показывает экран.
      */
     private suspend fun buildWave(
         state: WaveUiState,
         excludeIds: Set<String> = emptySet(),
         excludeKeys: Set<String> = emptySet(),
         limit: Int = WAVE_LIMIT,
-    ): Pair<List<Track>, String> = withContext(Dispatchers.Default) {
+    ): WaveBuildResult = withContext(Dispatchers.Default) {
         val tuning = graph.settings.current.wave
-        val sourceMode = state.filters.source
+        val filters = state.filters
+        val sourceMode = filters.source
         val history = graph.playHistory.entries.value
         val now = System.currentTimeMillis()
-        val useHistory = tuning.useHistory
-        val recent = if (useHistory) WaveEngine.recentKeys(history, now) else emptySet()
-        val affinity = if (useHistory) WaveEngine.artistAffinity(history, now) else emptyMap()
         val disliked = graph.playHistory.disliked.value
+        val onlineAllowed = sourceMode != WaveSourceMode.LOCAL && streamingAllowed()
 
         val allTracks = graph.library.tracks.value
-        val localCandidates = allTracks.filter { track ->
-            track.source == Source.LOCAL && track.playable && !track.uri.isNullOrBlank() &&
-                WaveEngine.isMusic(track, tuning)
+        val localLibrary = allTracks.filter { it.source == Source.LOCAL }
+        // «Только избранное» — явный фильтр пользователя, он сильнее настройки
+        // includeFavorites: иначе включённый фильтр молча дал бы пустую волну.
+        val favorites = if (tuning.includeFavorites || filters.favoritesOnly) {
+            favoriteTracks()
+        } else {
+            emptyList()
         }
-        val favorites = if (tuning.includeFavorites) favoriteTracks() else emptyList()
-        val favoriteIds = favorites.map { it.id }.toSet()
+        val favoriteIds = favorites.mapTo(HashSet()) { it.id }
         val favoriteArtists = favorites.map { it.artist.trim().lowercase() }
             .filter { it.isNotBlank() }
             .distinct()
@@ -2134,49 +2192,28 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
             .filter { it.isNotBlank() }
             .groupingBy { it }
             .eachCount()
-
-        val localPool = if (sourceMode == WaveSourceMode.ONLINE) {
-            emptyList()
+        val affinity = if (tuning.useHistory) {
+            WaveEngine.artistAffinity(history, now)
         } else {
-            // Фильтры должны влиять на локальную часть, а не только на онлайн:
-            // настроение — по жанру/названию, «только избранное» — по id.
-            val scoped = if (state.filters.favoritesOnly) {
-                val onlyFavorites = localCandidates.filter { it.id in favoriteIds }
-                // Пустое избранное не должно давать пустую волну.
-                onlyFavorites.ifEmpty { localCandidates }
-            } else {
-                localCandidates
-            }
-            val moodScoped = if (state.filters.mood == WaveMood.ANY) {
-                scoped
-            } else {
-                val matched = scoped.filter { matchesMood(it, state.filters.mood) }
-                // Если совпадений мало, не обрезаем фонотеку до нуля.
-                if (matched.size >= MIN_MOOD_MATCHES) matched else scoped
-            }
-            WaveEngine.rank(
-                candidates = moodScoped,
-                favoriteIds = favoriteIds,
-                favoriteArtists = favoriteArtists,
-                artistCounts = artistCounts,
-                history = history,
-                tuning = tuning,
-                localBias = true,
-                nowMs = now,
-                dislikedKeys = disliked,
-                recentTrackKeys = recent,
-            )
+            emptyMap()
         }
 
-        val onlineAllowed = sourceMode != WaveSourceMode.LOCAL && streamingAllowed()
-        val online = if (!onlineAllowed) {
+        // Локальная часть: в режиме «только онлайн» её не собираем вообще.
+        val localRaw: List<Track> = when {
+            sourceMode == WaveSourceMode.ONLINE -> emptyList()
+            filters.favoritesOnly -> favorites.filter { it.source == Source.LOCAL }
+            else -> localLibrary
+        }
+
+        // Онлайн-часть. При «только избранное» не ищем новое, а берём избранное
+        // из стриминга: искать и потом выкидывать — значит нарушать фильтр.
+        val onlineRaw: List<Track> = if (!onlineAllowed) {
             emptyList()
+        } else if (filters.favoritesOnly) {
+            favorites.filter { it.source != Source.LOCAL }
         } else {
-            // Берём сразу несколько запросов: один даёт узкую выдачу и слишком
-            // часто возвращает уже знакомые треки. Любимые артисты, частые
-            // артисты и настроение идут параллельно.
             val queries = WaveEngine.queries(
-                moodQuery = state.filters.mood.takeIf { it != WaveMood.ANY }?.query,
+                moodQuery = filters.mood.takeIf { it != WaveMood.ANY }?.query,
                 favoriteArtists = favoriteArtists.toList(),
                 popularArtists = artistCounts.entries
                     .sortedByDescending { it.value }
@@ -2206,69 +2243,145 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
                     }.awaitAll()
                 }
             }
-            val candidates = responses.flatten()
+            responses.flatten()
                 .filter { it.playable && !it.uri.isNullOrBlank() }
-                .filter { WaveEngine.isMusic(it, tuning) }
-            WaveEngine.rank(
-                candidates = candidates,
-                favoriteIds = favoriteIds,
-                favoriteArtists = favoriteArtists,
-                artistCounts = artistCounts,
-                history = history,
-                tuning = tuning,
-                localBias = false,
-                nowMs = now,
-                dislikedKeys = disliked,
-                recentTrackKeys = recent,
-            )
         }
 
-        val merged = WaveEngine.mix(localPool, online, tuning, limit * 2)
-        // Исключаем только показанное в прошлых порциях и явные дизлайки.
-        // Недавно игравшее больше не вырезается подчистую — за него отвечает
-        // штраф в rank, иначе у небольшой фонотеки волна остаётся пустой.
-        val filtered = WaveEngine.dedupe(merged).filter { track ->
-            val key = WaveEngine.waveKey(track)
+        // Аудио-фичи ReccoBeats: только кэш, сеть здесь не ждём.
+        val featurePool = WaveEngine.dedupe(localRaw + onlineRaw + favorites)
+        val cachedFeatures = withContext(Dispatchers.IO) {
+            runCatching { graph.audioFeatures.cachedFeatures(featurePool) }
+                .getOrDefault(emptyMap())
+        }
+        val featureIndex = WaveFeatureIndex.of(featurePool, cachedFeatures, history)
+
+        val request = WaveFilterRequest(
+            filters = filters,
+            tuning = tuning,
+            favoriteIds = favoriteIds,
+            dislikedKeys = disliked,
+            featureIndex = featureIndex,
+            history = history,
+            nowMs = now,
+            excludeIds = excludeIds,
+            excludeKeys = excludeKeys,
+            onlineAllowed = onlineAllowed,
+        )
+        val localOutcome = WaveFilterEngine.apply(localRaw, request)
+        val onlineOutcome = WaveFilterEngine.apply(onlineRaw, request)
+
+        val recent = if (tuning.useHistory) WaveEngine.recentKeys(history, now) else emptySet()
+        // Сид один на подборку: одинаковый сид даёт воспроизводимый порядок.
+        val seed = now / 1000L + waveGeneration
+        val rankContext = WaveRankContext(
+            tuning = tuning,
+            favoriteIds = favoriteIds,
+            favoriteArtists = favoriteArtists,
+            artistCounts = artistCounts,
+            history = history,
+            featureIndex = featureIndex,
+            mood = filters.mood,
+            localBias = true,
+            nowMs = now,
+            recentTrackKeys = recent,
+            seed = seed,
+        )
+        val localRanked = WaveRanker.rank(localOutcome.accepted, rankContext)
+        val onlineRanked = WaveRanker.rank(
+            onlineOutcome.accepted,
+            rankContext.copy(localBias = false),
+        )
+        waveRankContext = rankContext
+
+        val merged = WaveEngine.mix(localRanked, onlineRanked, tuning, limit * 2)
+        // Страховка после микса: уже показанное и дизлайки не возвращаем.
+        val exact = WaveEngine.dedupe(merged).filter { track ->
             track.id !in excludeIds &&
-                key !in excludeKeys &&
+                WaveEngine.waveKey(track) !in excludeKeys &&
                 !WaveEngine.isDisliked(track, disliked)
         }
-        val diversified = WaveEngine.diversify(filtered, limit, tuning.artistDiversity.coerceIn(1, 5))
-        val sorted = sortWave(diversified, state.sort)
+        val diversified = WaveEngine.diversify(
+            exact,
+            limit,
+            tuning.artistDiversity.coerceIn(1, 5),
+        )
+        val sorted = WaveSorter.sort(diversified, state.sort, seed)
+
+        val status = when {
+            sorted.isNotEmpty() -> WaveStatus.READY
+            localLibrary.isEmpty() && !onlineAllowed && allTracks.isEmpty() ->
+                WaveStatus.EMPTY_LIBRARY
+            sourceMode == WaveSourceMode.ONLINE -> onlineOutcome.status
+            localOutcome.status != WaveStatus.READY -> localOutcome.status
+            else -> WaveStatus.EMPTY_FILTERED
+        }
+        val hint = when {
+            sorted.isNotEmpty() -> null
+            status == WaveStatus.EMPTY_LIBRARY -> WaveFilterEngine.hintFor(status, request)
+            status == localOutcome.status ->
+                localOutcome.hint ?: WaveFilterEngine.hintFor(status, request)
+            status == onlineOutcome.status ->
+                onlineOutcome.hint ?: WaveFilterEngine.hintFor(status, request)
+            else -> WaveFilterEngine.hintFor(status, request)
+        }
         // Подписи — про подборку, а не про «ваши N прослушиваний»: волна
         // должна ощущаться как открытие нового, а не как отчёт о себе.
         val label = when {
-            state.filters.mood != WaveMood.ANY -> "Настроение: ${state.filters.mood.label}"
-            !streamingAllowed() -> "Только устройство: стриминг выключен"
+            filters.mood != WaveMood.ANY -> "Настроение: ${filters.mood.label}"
+            filters.favoritesOnly -> "Только избранное"
+            !onlineAllowed -> "Только устройство: стриминг выключен"
             sourceMode == WaveSourceMode.LOCAL -> "Только музыка с устройства"
             sourceMode == WaveSourceMode.ONLINE -> "Новые исполнители и знакомые треки"
             tuning.novelty >= 65 -> "Больше новых исполнителей"
             else -> "Новая подборка каждый раз"
         }
-        return@withContext sorted to label
+
+        WaveBuildResult(
+            tracks = sorted,
+            label = label,
+            status = status,
+            hint = hint,
+            featuresUsed = featureIndex.size,
+            filterSummary = filters.summary(),
+        )
     }
 
     /**
-     * Совпадает ли трек с настроением. Жанр берём из `extra["genre"]` (его
-     * заполняют метаданные), плюс подсказки в названии и альбоме. Для треков
-     * без жанра настроение работает мягко: если совпадений мало, волна не
-     * обрезается (см. [MIN_MOOD_MATCHES]).
+     * Фоновое обогащение ReccoBeats: считаем фичи для первых треков волны,
+     * затем переставляем уже показанный список по уточнённому счёту.
+     * Офлайн/выключенная телеметрия просто оставляют волну как есть.
      */
-    private fun matchesMood(track: Track, mood: WaveMood): Boolean {
-        val keywords = MOOD_KEYWORDS[mood] ?: return true
-        val haystack = buildString {
-            append(track.title).append(' ')
-            append(track.album.orEmpty()).append(' ')
-            append(track.extra["genre"].orEmpty())
-        }.lowercase().replace('ё', 'е')
-        return keywords.any { haystack.contains(it) }
+    private fun enrichWaveFeatures(generation: Int, tracks: List<Track>) {
+        waveEnricher.enrich(tracks) { fetched ->
+            viewModelScope.launch {
+                if (generation != waveGeneration) return@launch
+                applyWaveFeatures(fetched)
+            }
+        }
     }
 
-    private fun sortWave(tracks: List<Track>, sort: WaveSort): List<Track> = when (sort) {        WaveSort.FOR_YOU -> tracks
-        WaveSort.TITLE -> tracks.sortedBy { it.title.lowercase() }
-        WaveSort.ARTIST -> tracks.sortedBy { it.artist.lowercase() }
-        WaveSort.DURATION -> tracks.sortedBy { it.durationMs }
-        WaveSort.SHUFFLE -> tracks.shuffled()
+    /** Уточняет порядок волны, когда догрузились фичи; набор треков не меняется. */
+    private fun applyWaveFeatures(fetched: Map<String, AudioFeature>) {
+        if (fetched.isEmpty()) return
+        val context = waveRankContext ?: return
+        val byKey = HashMap<String, AudioFeature>(fetched.size)
+        _wave.value.tracks.forEach { track ->
+            fetched[track.id]?.let { byKey[WaveEngine.waveKey(track)] = it }
+        }
+        val enriched = context.copy(
+            featureIndex = context.featureIndex.withFeatures(fetched, byKey),
+        )
+        waveRankContext = enriched
+        _wave.update { state ->
+            state.copy(
+                tracks = if (state.sort == WaveSort.FOR_YOU && state.tracks.size > 1) {
+                    WaveRanker.rankByScore(state.tracks, enriched)
+                } else {
+                    state.tracks
+                },
+                featuresUsed = enriched.featureIndex.size,
+            )
+        }
     }
 
     // ---------- Моя волна: служебное ----------
@@ -3071,13 +3184,9 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
     fun nohitConfigLabel(): String {
         val cfg = runCatching { dev.nohit.core.NoHiT.currentConfig() }.getOrNull()
             ?: return "не инициализирован"
-        val split = cfg.split
-        val splitText = if (split.chunks.isEmpty()) {
-            "без фрагментации"
-        } else {
-            split.chunks.joinToString("-") +
-                if (split.delayMs > 0) " +${split.delayMs} мс" else ""
-        }
+        // NoHiT 0.3: стратегия может быть TLS-фрагментацией или SNI-разрезом,
+        // поэтому берём готовую подпись стратегии.
+        val splitText = runCatching { cfg.split.label() }.getOrDefault("без фрагментации")
         return "${cfg.dns.firstOrNull()?.name ?: "системный DNS"} · $splitText"
     }
 

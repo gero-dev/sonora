@@ -131,7 +131,12 @@ object NohitProxy {
                         write(response.toByteArray())
                         flush()
                     }
-                    val clientToUpstream = FragOutputStream(up.getOutputStream(), cfg.split)
+                    val clientToUpstream = if (cfg.hostPolicy.shouldFragment(host)) {
+                        FragOutputStream(up.getOutputStream(), cfg.split)
+                    } else {
+                        // Банки/госуслуги и прочие skipHosts: без вмешательства.
+                        up.getOutputStream()
+                    }
                     val t1 = Thread {
                         runCatching { copy(input, clientToUpstream) }
                         runCatching { up.shutdownOutput() }

@@ -81,6 +81,16 @@ private val TABS = listOf(
 )
 
 /**
+ * Экраны, на которых виден «хром» плеера (мини-плеер + нижнее меню).
+ * Кроме пяти вкладок это «Обзор» ([Routes.DISCOVER]) и «Подключения»
+ * ([Routes.CONNECTIONS]): их открывают с Главной, и раньше они оставались без
+ * нижнего меню, поэтому вернуться на Главную можно было только системным
+ * «назад».
+ */
+private val CHROME_ROUTES: Set<String> =
+    TABS.map { it.route }.toSet() + setOf(Routes.DISCOVER, Routes.CONNECTIONS)
+
+/**
  * Каркас приложения: нижняя навигация, мини-плеер и маршруты.
  * Экраны лежат в пакете [app.sonora.ui.screens].
  */
@@ -99,7 +109,40 @@ fun MainScreen(graph: AppGraph) {
     val playerState by viewModel.playerChrome.collectAsState()
     val mobilePending by viewModel.pendingMobileDownloads.collectAsState()
 
-    val showChrome = currentRoute != null && TABS.any { it.route == currentRoute }
+    val showChrome = currentRoute != null && currentRoute in CHROME_ROUTES
+    // Какая вкладка подсвечивается. «Обзор» и «Подключения» — вложенные экраны
+    // Главной, поэтому подсвечиваем «Главную».
+    val selectedTabRoute: String? = when {
+        currentRoute != null && TABS.any { it.route == currentRoute } -> currentRoute
+        currentRoute == Routes.DISCOVER || currentRoute == Routes.CONNECTIONS -> Routes.HOME
+        else -> null
+    }
+    // Тап по нижнему меню ВСЕГДА переключает раздел, даже если открыт вложенный
+    // экран («Обзор», «Подключения»). Лямбда стабильная: экраны не пересобираются
+    // на каждый тик позиции плеера.
+    val onTabClick: (String) -> Unit = androidx.compose.runtime.remember(navController) {
+        { route ->
+            val current = navController.currentBackStackEntry?.destination?.route
+            if (current != route) {
+                // С «Обзора»/«Подключений» на Главную возвращаемся именно
+                // popBackStack: обычный navigate(HOME) с restoreState может
+                // вернуть вложенный экран и оставить пользователя на месте.
+                val nestedHome = route == Routes.HOME &&
+                    (current == Routes.DISCOVER || current == Routes.CONNECTIONS)
+                val returnedByPop = nestedHome &&
+                    navController.popBackStack(Routes.HOME, inclusive = false)
+                if (!returnedByPop) {
+                    navController.navigate(route) {
+                        // Снимаем всё, что открыто поверх Главной («Обзор»,
+                        // «Подключения» и т.п.), сохраняя состояние вкладок.
+                        popUpTo(Routes.HOME) { saveState = true }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                }
+            }
+        }
+    }
     // Стабильная лямбда: иначе экраны пересобираются на каждый тик позиции плеера.
     val navigate: (String) -> Unit = androidx.compose.runtime.remember(navController) {
         { route ->
@@ -138,16 +181,8 @@ fun MainScreen(graph: AppGraph) {
                     NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
                         TABS.forEach { tab ->
                             NavigationBarItem(
-                                selected = currentRoute == tab.route,
-                                onClick = {
-                                    if (currentRoute != tab.route) {
-                                        navController.navigate(tab.route) {
-                                            popUpTo(Routes.HOME) { saveState = true }
-                                            launchSingleTop = true
-                                            restoreState = true
-                                        }
-                                    }
-                                },
+                                selected = selectedTabRoute == tab.route,
+                                onClick = { onTabClick(tab.route) },
                                 icon = { Icon(tab.icon, contentDescription = tab.label) },
                                 label = { Text(tab.label) },
                                 colors = NavigationBarItemDefaults.colors(

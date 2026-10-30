@@ -47,6 +47,7 @@ import app.sonora.core.model.Source
 import app.sonora.core.model.Track
 import app.sonora.core.util.Formatters
 import app.sonora.ui.MainViewModel
+import app.sonora.ui.components.BackIconButton
 import app.sonora.ui.components.CoverArt
 import app.sonora.ui.components.EmptyState
 import app.sonora.ui.components.SourceChip
@@ -81,7 +82,13 @@ fun DiscoverScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
     ) {
         item(key = "header") {
             Column {
-                Text("Обзор", style = MaterialTheme.typography.headlineLarge)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // «Обзор» открывается с Главной: стрелка возвращает туда же,
+                    // даже если нижнее меню почему-то недоступно.
+                    BackIconButton()
+                    Spacer(Modifier.width(4.dp))
+                    Text("Обзор", style = MaterialTheme.typography.headlineLarge)
+                }
                 Spacer(Modifier.height(4.dp))
                 Text(
                     text = "Свободная музыка из открытых каталогов",

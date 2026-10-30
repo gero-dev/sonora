@@ -23,7 +23,7 @@ class AudioFeatureRepository(
     context: Context,
     private val ytDlp: YtDlpResolver,
     private val settings: SettingsStore,
-) {
+) : AudioFeatureProvider {
 
     private val cache = AudioFeatureCache(context)
     private val client = ReccoBeatsClient()
@@ -33,6 +33,9 @@ class AudioFeatureRepository(
 
     val enabled: Boolean
         get() = settings.current.audioTelemetry
+
+    override val available: Boolean
+        get() = enabled
 
     /** Найти/посчитать фичи. Возвращает null, если телеметрия выключена или не удалась. */
     suspend fun featuresFor(track: Track): AudioFeature? {
@@ -64,6 +67,23 @@ class AudioFeatureRepository(
         if (!enabled) return
         scope.launch { runCatching { featuresFor(track) } }
     }
+
+    /**
+     * Только кэш: «Моя волна» спрашивает фичи у всех кандидатов, и это должно
+     * быть бесплатно (никаких загрузок). Ключ — id трека в модели.
+     */
+    override suspend fun cachedFeatures(tracks: List<Track>): Map<String, AudioFeature> {
+        if (!enabled || tracks.isEmpty()) return emptyMap()
+        val result = HashMap<String, AudioFeature>(tracks.size)
+        for (track in tracks) {
+            val feature = runCatching { cache.get(cacheKey(track)) }.getOrNull() ?: continue
+            result[track.id] = feature
+        }
+        return result
+    }
+
+    /** Посчитать фичи конкретного трека (сеть + кэш) для фонового обогащения волны. */
+    override suspend fun fetchFeature(track: Track): AudioFeature? = featuresFor(track)
 
     private fun cacheKey(track: Track): String {
         val videoId = videoIdOf(track)

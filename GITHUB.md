@@ -1,6 +1,6 @@
 ﻿# Sonora — данные для публикации на GitHub
 
-Актуальная версия: **2.2.0** (`versionCode 37`), APK ≈ **223 МБ**.
+Актуальная версия: **2.3.0** (`versionCode 38`), APK ≈ **244 МБ**.
 Предыдущие релизы, заметки и контрольные суммы — в разделе Releases репозитория.
 
 ---
@@ -29,9 +29,9 @@ in-app-update github-releases open-source gpl-3-0 android-app
 
 ---
 
-## 2. Релиз **v2.2.0**
+## 2. Релиз **v2.3.0**
 
-**Тег:** `v2.2.0` · **Заголовок:** `Sonora 1.9.2 — быстрые и надёжные обновления (пауза WARP при скачивании)`
+**Тег:** `v2.3.0` · **Заголовок:** `Sonora 1.9.2 — быстрые и надёжные обновления (пауза WARP при скачивании)`
 
 ### Release notes
 
@@ -55,7 +55,7 @@ in-app-update github-releases open-source gpl-3-0 android-app
 
 ### Технически
 
-- versionCode **32**, versionName **1.9.1**, targetSdk 34, minSdk 26.
+- versionCode **38**, versionName **2.3.0**, targetSdk 34, minSdk 26.
 - `UpdateManager`, `UpdateModels`, FileProvider `app.sonora.updates`,
   `REQUEST_INSTALL_PACKAGES`, `buildConfig` включён.
 - 59 unit-тестов, lint без ошибок.

@@ -90,6 +90,9 @@ object WaveEngine {
     /** Ключ дедупликации: «исполнитель|название» без скобочных пометок. */
     fun waveKey(track: Track): String = keyOf(track.artist, track.title)
 
+    /** Тот же ключ для записи истории: там исполнитель и название хранятся отдельно. */
+    fun waveKeyOf(artist: String, title: String): String = keyOf(artist, title)
+
     /** Трек принадлежит демо-контенту самого приложения, а не пользователю. */
     fun isSelfReference(track: Track): Boolean {
         val artist = track.artist.trim().lowercase()

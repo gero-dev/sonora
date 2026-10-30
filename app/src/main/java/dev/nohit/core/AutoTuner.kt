@@ -6,10 +6,10 @@ import okhttp3.Request
 import java.util.concurrent.TimeUnit
 
 /**
- * Автоподбор: перебирает DNS-апстримы и планы фрагментации, измеряет
+ * Автоподбор: перебирает DNS-апстримы и стратегии против DPI, измеряет
  * реальный HTTPS-ответ и сохраняет лучшую комбинацию.
  *
- * Запускать в фоновом потоке (сеть + sleep), например:
+ * Запускать в фоновом потоке (сеть + ожидание), например:
  *   Thread { AutoTuner.tune(context) { Log.d("NoHiT", it) } }.start()
  */
 object AutoTuner {
@@ -19,7 +19,9 @@ object AutoTuner {
         val dns: DnsUpstream,
         val split: SplitPlan,
         val latencyMs: Long,
-        val log: List<String>
+        val log: List<String>,
+        /** Человекочитаемое имя выбранной стратегии, например "sni-mid+tcp2". */
+        val strategyName: String = split.label()
     )
 
     fun tune(
@@ -28,16 +30,15 @@ object AutoTuner {
         progress: ((String) -> Unit)? = null
     ): Report {
         val log = ArrayList<String>()
+        val probeTimeout = base.timeoutsMs.coerceAtMost(6_000).toLong()
 
+        // Фаза 1: какой DNS вообще отвечает и насколько быстро (без вмешательства в TLS).
         var bestDns = base.dns.firstOrNull() ?: DnsUpstream.SYSTEM
         var bestDnsMs = Long.MAX_VALUE
-
         for (upstream in base.dns) {
-            val probeClient = NoHiT.buildClient(
-                base.copy(dns = listOf(upstream), split = SplitPlan.NONE)
-            )
-            val ms = measure(probeClient, base)
-            log += "DNS ${upstream.name}: ${if (ms == null) "fail" else "$ms ms"}"
+            val client = NoHiT.buildClient(base.copy(dns = listOf(upstream), split = SplitPlan.NONE))
+            val ms = measure(client, base, probeTimeout)
+            log += "DNS ${upstream.name}: ${ms?.let { "$it ms" } ?: "fail"}"
             progress?.invoke(log.last())
             if (ms != null && ms < bestDnsMs) {
                 bestDnsMs = ms
@@ -45,22 +46,27 @@ object AutoTuner {
             }
         }
 
+        // Фаза 2: стратегии. Для скорости — только первый тестовый URL.
+        val primaryUrl = base.testUrls.firstOrNull()
         var bestSplit = base.split
-        var bestSplitMs = Long.MAX_VALUE
+        var bestMs = Long.MAX_VALUE
         for (split in listOf(SplitPlan.NONE) + SplitPlan.all) {
-            val probeClient = NoHiT.buildClient(
-                base.copy(dns = listOf(bestDns), split = split)
-            )
-            val ms = measure(probeClient, base)
-            log += "Split ${describe(split)}: ${if (ms == null) "fail" else "$ms ms"}"
+            val client = NoHiT.buildClient(base.copy(dns = listOf(bestDns), split = split))
+            val ms = if (primaryUrl != null) probe(client, primaryUrl, probeTimeout) else null
+            log += "Стратегия ${split.label()}: ${ms?.let { "$it ms" } ?: "fail"}"
             progress?.invoke(log.last())
-            if (ms != null && ms < bestSplitMs) {
-                bestSplitMs = ms
+            if (ms != null && ms < bestMs) {
+                bestMs = ms
                 bestSplit = split
             }
         }
 
-        val ok = bestSplitMs != Long.MAX_VALUE
+        // Проверка победителя на всех тестовых URL.
+        val winnerClient = NoHiT.buildClient(base.copy(dns = listOf(bestDns), split = bestSplit))
+        val verified = measure(winnerClient, base, base.timeoutsMs.toLong())
+        val ok = verified != null
+        log += "Проверка: ${verified?.let { "ok, $it ms" } ?: "fail"}"
+
         val updated = base.copy(
             dns = listOf(bestDns) + base.dns.filter { it.id != bestDns.id },
             split = if (ok) bestSplit else base.split
@@ -71,19 +77,20 @@ object AutoTuner {
             ok = ok,
             dns = bestDns,
             split = updated.split,
-            latencyMs = if (ok) bestSplitMs else -1,
-            log = log
+            latencyMs = verified ?: -1,
+            log = log,
+            strategyName = updated.split.label()
         )
     }
 
     /** Быстрая проверка текущей конфигурации без изменения настроек. */
     fun check(context: Context, cfg: NoHiTConfig = NoHiT.currentConfig()): Long? =
-        measure(NoHiT.buildClient(cfg), cfg)
+        measure(NoHiT.buildClient(cfg), cfg, cfg.timeoutsMs.toLong())
 
-    private fun measure(client: OkHttpClient, cfg: NoHiTConfig): Long? {
+    private fun measure(client: OkHttpClient, cfg: NoHiTConfig, timeoutMs: Long): Long? {
         var best: Long? = null
         for (url in cfg.testUrls) {
-            val value = probe(client, url, cfg.timeoutsMs.toLong())
+            val value = probe(client, url, timeoutMs)
             if (value != null && (best == null || value < best)) best = value
         }
         return best
@@ -114,11 +121,5 @@ object AutoTuner {
         }
     }
 
-    private fun describe(split: SplitPlan): String {
-        if (split.chunks.isEmpty()) return "none"
-        val base = split.chunks.joinToString("-")
-        return if (split.delayMs > 0) "$base+${split.delayMs}ms" else base
-    }
-
-    private const val USER_AGENT = "Mozilla/5.0 (Linux; Android 14) NoHiT/0.1"
+    private const val USER_AGENT = "Mozilla/5.0 (Linux; Android 14) NoHiT/0.2"
 }

@@ -67,6 +67,12 @@ class PlaybackController(context: Context) {
     private var restoredSession = false
     /** Пока идёт пакетное удаление из очереди, снимок состояния не пересчитываем. */
     private var suppressingRefresh = false
+    /** Защита от рекурсии, пока авто-переключение в конце очереди двигает плеер. */
+    private var autoAdvancing = false
+    /** Метка времени последнего «в начало трека»: второе нажатие «назад» уже листает. */
+    private var lastRestartAtMs = 0L
+    /** Версия очереди: защищает отложенное пополнение от гонки с новым запуском. */
+    private var queueVersion = 0
 
     private val _state = MutableStateFlow(PlayerUiState())
     val state: StateFlow<PlayerUiState> = _state.asStateFlow()
@@ -83,6 +89,18 @@ class PlaybackController(context: Context) {
         }
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            refresh()
+        }
+
+        override fun onPlaybackStateChanged(playbackState: Int) {
+            // Конец очереди. Раньше здесь ничего не происходило: если в очереди
+            // оставался один item (типичный случай для трека из «Моей волны»,
+            // запущенного кликом, а не кнопкой «Играть волну»), ExoPlayer
+            // оставался в STATE_ENDED — трек заканчивался в тишину, а «вперёд»
+            // не работал. Теперь докупаем пачку и стартуем следующий трек.
+            if (playbackState == Player.STATE_ENDED) {
+                onQueueEnded()
+            }
             refresh()
         }
 
@@ -257,6 +275,7 @@ class PlaybackController(context: Context) {
         }
         val index = playable.indexOfFirst { it.id == startTrack?.id }.coerceAtLeast(0)
         val items = playable.map { toMediaItem(it) }
+        queueVersion++
         c.setMediaItems(items, index, 0L)
         c.prepare()
         c.play()
@@ -269,6 +288,9 @@ class PlaybackController(context: Context) {
             )
         }
         refresh()
+        // Короткая очередь (в частности, одиночный трек) сама себя не продолжит:
+        // просим автоматическую очередь сразу, а не после конца трека.
+        if (playable.size <= SHORT_QUEUE_MAX) extendShortQueue()
     }
 
     fun playSingle(track: Track) = playQueue(listOf(track), 0)
@@ -294,7 +316,9 @@ class PlaybackController(context: Context) {
             connect()
             return
         }
-        val wasPlaying = mediaController.isPlaying
+        ensureControllerHasQueue(mediaController)
+        val wasPlaying = mediaController.isPlaying ||
+            mediaController.playbackState == Player.STATE_ENDED
         val beforeIndex = mediaController.currentMediaItemIndex
 
         if (mediaController.hasNextMediaItem()) {
@@ -303,8 +327,7 @@ class PlaybackController(context: Context) {
             return
         }
         // Очередь кончилась: сначала докупаем треки, потом переключаем.
-        val batch = runCatching { queueExtender?.invoke() ?: emptyList() }
-            .getOrDefault(emptyList())
+        val batch = requestQueueExtension()
         if (batch.isNotEmpty()) appendToQueue(batch)
         if (mediaController.hasNextMediaItem()) {
             mediaController.seekToNextMediaItem()
@@ -326,10 +349,103 @@ class PlaybackController(context: Context) {
     var queueExtender: (() -> List<Track>)? = null
 
     fun previous() {
-        controller?.let {
-            if (it.currentPosition > 3_000L) it.seekTo(0L)
-            else if (it.hasPreviousMediaItem()) it.seekToPreviousMediaItem()
-            else it.seekTo(0L)
+        val c = controller ?: return
+        ensureControllerHasQueue(c)
+        val now = android.os.SystemClock.elapsedRealtime()
+        val position = runCatching { c.currentPosition }.getOrDefault(0L)
+        // «Как в Spotify»: далеко от начала — только в начало текущего трека.
+        // Повторное нажатие (позиция уже около нуля) листает на предыдущий.
+        // Окно PREVIOUS_TAP_WINDOW_MS страхует от гонки, когда seek ещё не
+        // применился на MediaController.
+        val justRestarted = lastRestartAtMs != 0L && now - lastRestartAtMs <= PREVIOUS_TAP_WINDOW_MS
+        when {
+            position > PREVIOUS_RESTART_MS && !justRestarted -> {
+                lastRestartAtMs = now
+                c.seekTo(0L)
+                _state.update { it.copy(positionMs = 0L, positionSampledAtMs = now) }
+            }
+            c.hasPreviousMediaItem() -> {
+                lastRestartAtMs = 0L
+                c.seekToPreviousMediaItem()
+            }
+            else -> {
+                // Предыдущего нет: остаёмся «в начале» текущего трека.
+                lastRestartAtMs = 0L
+                c.seekTo(0L)
+                _state.update { it.copy(positionMs = 0L, positionSampledAtMs = now) }
+            }
+        }
+    }
+
+    /**
+     * Авто-переход в конце очереди: докупает пачку треков через [queueExtender]
+     * и явно запускает следующий. Нужен для коротких очередей («Моя волна»
+     * по клику на отдельный трек, одиночный трек) — без этого ExoPlayer
+     * замирал в STATE_ENDED и «вперёд» ничего не делал.
+     */
+    private fun onQueueEnded() {
+        val c = controller ?: return
+        if (autoAdvancing) return
+        autoAdvancing = true
+        try {
+            ensureControllerHasQueue(c)
+            if (c.hasNextMediaItem()) {
+                c.seekToNextMediaItem()
+                c.play()
+                return
+            }
+            val batch = requestQueueExtension()
+            if (batch.isNotEmpty()) appendToQueue(batch)
+            if (c.hasNextMediaItem()) {
+                c.seekToNextMediaItem()
+                c.play()
+            }
+        } finally {
+            autoAdvancing = false
+        }
+    }
+
+    private fun requestQueueExtension(): List<Track> =
+        runCatching { queueExtender?.invoke() ?: emptyList() }
+            .getOrDefault(emptyList())
+
+    /**
+     * Страховка на случай расхождения снимка и MediaController (сервис
+     * перезапускался/очередь восстановлена): возвращаем items в плеер, чтобы
+     * next()/previous()/авто-переход работали по реальной очереди.
+     */
+    private fun ensureControllerHasQueue(c: MediaController) {
+        if (c.mediaItemCount > 0) return
+        val state = _state.value
+        if (state.queue.isEmpty()) return
+        val index = state.index.coerceIn(0, state.queue.lastIndex)
+        c.setMediaItems(state.queue.map { toMediaItem(it) }, index, state.positionMs.coerceAtLeast(0L))
+        c.prepare()
+        if (state.isPlaying) c.play()
+    }
+
+    /**
+     * Просит ещё треков сразу после старта короткой очереди: трек из «Моей
+     * волны», запущенный кликом, иначе остаётся единственным в плеере
+     * (автоматическая очередь для него собралась пустой) и после конца
+     * замолкает.
+     */
+    private fun extendShortQueue() {
+        if (queueExtender == null) return
+        val version = queueVersion
+        scope.launch {
+            // Даём MainViewModel дописать состояние (playQueue обновляет его
+            // синхронно, но листенер плеера может прийти раньше).
+            delay(0)
+            if (version != queueVersion) return@launch
+            if (_state.value.queue.size > SHORT_QUEUE_MAX) return@launch
+            val batch = requestQueueExtension()
+            if (batch.isEmpty() || version != queueVersion) return@launch
+            appendToQueue(batch)
+            // Если трек успел закончиться, пока мы собирали пачку — вытаскиваем
+            // плеер из STATE_ENDED.
+            val c = controller ?: return@launch
+            if (c.playbackState == Player.STATE_ENDED) onQueueEnded()
         }
     }
 
@@ -529,6 +645,7 @@ class PlaybackController(context: Context) {
     }
 
     fun clearQueue() {
+        queueVersion++
         controller?.clearMediaItems()
         _state.update { it.copy(queue = emptyList(), index = 0, positionMs = 0L) }
     }
@@ -566,8 +683,24 @@ class PlaybackController(context: Context) {
 
     private fun toMediaItem(track: Track): MediaItem = trackToMediaItem(track)
 
-    private companion object {
+    /** Константы общие с [PlaybackService]: виджет использует то же «назад», что и UI. */
+    internal companion object {
         /** Позицию для восстановления/виджета сохраняем не чаще раза в 2 с. */
         const val PERSIST_INTERVAL_MS = 2_000L
+
+        /**
+         * Порог Spotify-поведения «назад»: дальше него первый клик только
+         * возвращает текущий трек в начало.
+         */
+        const val PREVIOUS_RESTART_MS = 3_000L
+
+        /** Окно, в котором повторный клик «назад» уже листает на предыдущий трек. */
+        const val PREVIOUS_TAP_WINDOW_MS = 2_000L
+
+        /**
+         * Очередь такого размера считаем «короткой» и сразу просим
+         * автоматическую очередь (одиночный трек сам не продолжится).
+         */
+        const val SHORT_QUEUE_MAX = 1
     }
 }

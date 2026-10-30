@@ -225,6 +225,11 @@ data class AppSettings(
     val ytDlpLastClient: String = "",
     /** Считать аудио-фичи (BPM, energy) для играющего трека через ReccoBeats. */
     val audioTelemetry: Boolean = true,
+    /**
+     * Перемешивание очереди. Переживает полную остановку приложения:
+     * при следующем запуске очередь сразу стартует в том же режиме.
+     */
+    val shuffleEnabled: Boolean = false,
 
     // Воспроизведение: онлайн-стриминг можно выключить, как «офлайн-режим» в Spotify.
     val playbackMode: PlaybackMode = PlaybackMode.STREAMING,

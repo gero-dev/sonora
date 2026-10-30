@@ -1,8 +1,12 @@
 package app.sonora.playback
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.content.Intent
+import android.os.Build
 import android.media.audiofx.Equalizer
 import androidx.annotation.OptIn
+import androidx.core.app.NotificationCompat
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.Player
@@ -12,6 +16,7 @@ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import app.sonora.AppGraph
+import app.sonora.R
 import app.sonora.core.settings.SettingsStore
 import app.sonora.core.settings.effectiveAudioQuality
 import app.sonora.widget.SonoraWidget
@@ -19,6 +24,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
@@ -33,6 +39,8 @@ class PlaybackService : MediaSessionService() {
     private var mediaSession: MediaSession? = null
     private lateinit var player: ExoPlayer
     private var equalizer: Equalizer? = null
+    /** true, пока мы сами держим foreground-уведомление до старта Media3. */
+    private var bootForegroundActive = false
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     private val settings by lazy { SettingsStore(this) }
@@ -65,7 +73,12 @@ class PlaybackService : MediaSessionService() {
 
         player.addListener(object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
-                if (isPlaying) ensureEqualizer()
+                if (isPlaying) {
+                    ensureEqualizer()
+                    // Media3 уже показал своё уведомление и держит foreground —
+                    // временное «запускаем…» больше не нужно.
+                    cancelBootForeground()
+                }
                 persistSnapshot()
                 SonoraWidget.updateAll(this@PlaybackService)
             }
@@ -132,6 +145,11 @@ class PlaybackService : MediaSessionService() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val action = intent?.action
         if (action != null && action.startsWith(ACTION_PREFIX)) {
+            // startForegroundService из виджета обязывает вызвать startForeground()
+            // за ~5 секунд, иначе Android убивает процесс с ANR. Media3 сделает
+            // это сам только когда плеер начнёт играть, а онлайн-трек резолвится
+            // дольше — поэтому держим временное уведомление сразу.
+            ensureBootForeground()
             val restart = super.onStartCommand(intent, flags, startId)
             runCatching {
                 when (action) {
@@ -159,7 +177,16 @@ class PlaybackService : MediaSessionService() {
                         if (player.mediaItemCount == 0) {
                             playFromSnapshot()
                         } else {
-                            if (player.hasPreviousMediaItem()) player.seekToPreviousMediaItem()
+                            // Та же Spotify-логика, что и в PlaybackController.previous():
+                            // далеко от начала — только в начало текущего трека,
+                            // повторное нажатие (позиция ~0) листает на предыдущий.
+                            when {
+                                player.currentPosition > PlaybackController.PREVIOUS_RESTART_MS ->
+                                    player.seekTo(0L)
+                                player.hasPreviousMediaItem() ->
+                                    player.seekToPreviousMediaItem()
+                                else -> player.seekTo(0L)
+                            }
                             player.play()
                         }
                     }
@@ -167,9 +194,56 @@ class PlaybackService : MediaSessionService() {
             }.onFailure { android.util.Log.w("Playback", "widget action failed: ${it.message}") }
             persistSnapshot()
             SonoraWidget.updateAll(this)
+            // Нечего играть (нет сохранённой очереди) — не висим foreground-сервисом.
+            if (player.mediaItemCount == 0) {
+                cancelBootForeground()
+                stopSelf()
+                return START_NOT_STICKY
+            }
             return restart
         }
         return super.onStartCommand(intent, flags, startId)
+    }
+
+    /**
+     * Временное foreground-уведомление на время старта из виджета: без него
+     * startForegroundService + медленный резолв онлайн-трека даёт ANR.
+     * Скрываем, как только Media3 показал своё уведомление, или через 12 секунд.
+     */
+    private fun ensureBootForeground() {
+        if (bootForegroundActive) return
+        runCatching {
+            val manager = getSystemService(NotificationManager::class.java)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val channel = NotificationChannel(
+                    BOOT_CHANNEL_ID,
+                    "Запуск воспроизведения",
+                    NotificationManager.IMPORTANCE_LOW,
+                )
+                manager.createNotificationChannel(channel)
+            }
+            val notification = NotificationCompat.Builder(this, BOOT_CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_launcher_foreground)
+                .setContentTitle("Sonora")
+                .setContentText("Запускаем воспроизведение…")
+                .setOngoing(true)
+                .setPriority(NotificationCompat.PRIORITY_LOW)
+                .build()
+            startForeground(BOOT_NOTIFICATION_ID, notification)
+            bootForegroundActive = true
+            scope.launch {
+                delay(BOOT_NOTIFICATION_TIMEOUT_MS)
+                cancelBootForeground()
+            }
+        }.onFailure { android.util.Log.w("Playback", "boot foreground failed: ${it.message}") }
+    }
+
+    private fun cancelBootForeground() {
+        if (!bootForegroundActive) return
+        bootForegroundActive = false
+        runCatching {
+            getSystemService(NotificationManager::class.java).cancel(BOOT_NOTIFICATION_ID)
+        }
     }
 
     /** Ставит в плеер последнюю сохранённую очередь и сразу играет. */
@@ -237,6 +311,10 @@ class PlaybackService : MediaSessionService() {
         const val ACTION_PLAY_PAUSE = "${ACTION_PREFIX}PLAY_PAUSE"
         const val ACTION_NEXT = "${ACTION_PREFIX}NEXT"
         const val ACTION_PREVIOUS = "${ACTION_PREFIX}PREVIOUS"
+
+        private const val BOOT_CHANNEL_ID = "sonora_boot"
+        private const val BOOT_NOTIFICATION_ID = 101
+        private const val BOOT_NOTIFICATION_TIMEOUT_MS = 12_000L
 
         fun widgetAction(context: android.content.Context, action: String): Intent =
             Intent(context, PlaybackService::class.java).setAction(action)

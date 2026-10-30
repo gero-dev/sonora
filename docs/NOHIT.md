@@ -1,6 +1,7 @@
-# NoHiT: DPI-обход в Sonora вместо WARP
+﻿# NoHiT: DPI-обход в Sonora вместо WARP
 
-> Статус: **2.0.0**. Встроен [NoHiT](https://github.com/Avedanger/NoHiT)
+> Статус: **2.3.0**. Обновлено до **NoHiT 0.3.0-alpha.5** (`nohit-core` вендорен из тега).
+>. Встроен [NoHiT](https://github.com/Avedanger/NoHiT)
 > (Apache-2.0): DoH/GeoHide DNS + фрагментация TLS ClientHello + автоподбор
 > стратегии. Исходники лежат в `app/src/main/java/dev/nohit/core/` (вендоринг,
 > чтобы не тянуть отдельный Gradle-модуль под AGP 9), лицензия —
@@ -14,6 +15,9 @@
 | `NohitDns` (DoH Cloudflare/Google/AdGuard + UDP GeoHide) | резолвинг в локальном прокси и AutoTuner |
 | `SplitPlan` (S1–S5: куски ClientHello по 1–8 байт) | локальный прокси `app.sonora.net.nohit.NohitProxy` |
 | `AutoTuner` | кнопка «Стратегия NoHiT» в «Настройки → Поток и сеть», автораз в неделю в фоне |
+| `TlsFraming` / `SplitPlan.TLS_*` / `SNI_*` (0.3) | законная переупаковка TLS-записи ClientHello и разрез по SNI — новые стратегии автоподбора |
+| `HostPolicy` / `skipHosts` (0.3) | банки/госуслуги не фрагментируются: прокси уважает policy |
+| `NetworkChangeWatcher` / `GeoHideUpdater` (0.3) | сброс DNS-кэша при смене сети и обновление списка GeoHide в фоне |
 | `NoHiT.client()` | используется через общий `Http.client` (OkHttp) |
 
 ## Зачем локальный прокси, а не только `NoHiT.client()`
@@ -47,6 +51,13 @@ CONNECT-туннеля по плану `SplitPlan` (используется `Fr
 - «Стратегия NoHiT» — текущая DNS/фрагментация и кнопка автоподбора;
 - WARP остался ниже как **резерв**: «WARP-автопилот» по умолчанию включён и
   поднимает туннель, только если NoHiT не дал результата.
+
+## Обновление до 0.3.0-alpha.2
+
+- Вендорены 13 файлов `nohit-core` из тега `v0.3.0-alpha.5` (было 5 из 0.1.1): добавлен `AddressClassifier` (фильтр приватных адресов в DNS-ответах, включён по умолчанию), улучшены резолвер и автообновление GeoHide.
+- Автоподбор теперь умеет TLS-record фрагментацию (`TLS_64/128/256`, комбинации с TCP и SNI-разрезом) — это законно по RFC 8446 §5.1; старые `chunks`-пресеты `S1–S5` удалены, сохранённые конфиги читаются обратно.
+- Прокси Sonora применяет `HostPolicy` из конфига: `skipHosts` (банки, госуслуги) идут без вмешательства в TLS.
+- `NoHiT.init()` сам ставит `NetworkChangeWatcher` (сброс DNS-кэша при смене сети) и `GeoHideUpdater` (обновление списка GeoHide).
 
 ## Результаты проверки на реальной сети РФ (29.10.2026)
 

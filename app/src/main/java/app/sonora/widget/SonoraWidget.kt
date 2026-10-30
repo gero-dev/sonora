@@ -1,4 +1,4 @@
-﻿package app.sonora.widget
+package app.sonora.widget
 
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
@@ -516,8 +516,11 @@ object SonoraWidget {
         action: String,
         requestCode: Int,
     ): PendingIntent {
-        val intent = Intent(action).setComponent(ComponentName(context, ACTION_RECEIVER_CLASS))
-        return PendingIntent.getBroadcast(
+        // PendingIntent.getForegroundService запускает сервис от имени виджета
+        // с allowlist-привилегией: Android 14 не блокирует такой старт, в отличие
+        // от startForegroundService из обычного broadcast.
+        val intent = app.sonora.playback.PlaybackService.widgetAction(context, action)
+        return PendingIntent.getForegroundService(
             context,
             requestCode,
             intent,

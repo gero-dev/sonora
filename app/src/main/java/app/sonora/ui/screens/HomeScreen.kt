@@ -84,6 +84,7 @@ import app.sonora.ui.WaveMood
 import app.sonora.ui.WaveSort
 import app.sonora.ui.WaveSourceMode
 import app.sonora.ui.WaveUiState
+import app.sonora.ui.WaveStatus
 import app.sonora.ui.components.CoverArt
 import app.sonora.ui.components.CoverArtBox
 import app.sonora.ui.components.CreatePlaylistDialog
@@ -181,7 +182,14 @@ fun HomeScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) -> 
                     onToggleFavorites = { vm.setWaveFavoritesOnly(!wave.filters.favoritesOnly) },
                     onMood = vm::setWaveMood,
                     onSort = vm::setWaveSort,
-                    onTrackClick = { vm.playOrOpen(it) },
+                    onResetFilters = { vm.resetWaveFilters() },
+                    onTrackClick = { track ->
+                        // Клик по плитке играет волну с этого трека: очередь
+                        // собирается из всех волновых треков, поэтому next и
+                        // автопереход работают даже в стриминговой библиотеке.
+                        val index = wave.tracks.indexOfFirst { it.id == track.id }
+                        if (index >= 0) vm.playQueue(wave.tracks, index) else vm.playOrOpen(track)
+                    },
                     onLoadMore = { vm.loadMoreWave() },
                     onSettings = { showWaveSettings = true },
                     onDislike = { vm.dislikeWaveTrack(it) },
@@ -646,6 +654,7 @@ private fun WaveCard(
     onToggleFavorites: () -> Unit,
     onMood: (WaveMood) -> Unit,
     onSort: (WaveSort) -> Unit,
+    onResetFilters: () -> Unit,
     onTrackClick: (Track) -> Unit,
     onLoadMore: () -> Unit,
     onSettings: () -> Unit,
@@ -786,14 +795,47 @@ private fun WaveCard(
             )
         }
 
-        val error = state.error
-        if (!error.isNullOrBlank() && state.tracks.isEmpty() && !state.loading) {
+        // Активные фильтры и вклад ReccoBeats — одной строкой, без лишних перерисовок.
+        val filterLine = remember(
+            state.filterSummary,
+            state.featuresUsed,
+            state.filters.hasActiveFilter,
+        ) {
+            buildList {
+                if (state.filters.hasActiveFilter && state.filterSummary.isNotBlank()) {
+                    add(state.filterSummary)
+                }
+                if (state.featuresUsed > 0) add("ReccoBeats: ${state.featuresUsed}")
+            }.joinToString(" · ")
+        }
+        if (filterLine.isNotBlank()) {
             Text(
-                text = error,
+                text = filterLine,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+
+        // Пустая волна обязана объяснить причину: фильтр не «снимается» молча.
+        val reason = state.error?.takeIf { it.isNotBlank() }
+            ?: state.hint?.takeIf { state.showsEmptyReason }
+        if (!reason.isNullOrBlank() && state.tracks.isEmpty() && !state.loading) {
+            Text(
+                text = reason,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.error,
                 modifier = Modifier.padding(vertical = 4.dp),
             )
+            if (state.filters.hasActiveFilter && state.status != WaveStatus.ERROR) {
+                TextButton(
+                    onClick = onResetFilters,
+                    contentPadding = PaddingValues(horizontal = 0.dp, vertical = 2.dp),
+                ) {
+                    Text("Сбросить фильтры")
+                }
+            }
         }
 
         if (state.tracks.isNotEmpty()) {
