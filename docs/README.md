@@ -30,6 +30,7 @@
 | [STREAMING-RF.md](STREAMING-RF.md) | история стриминга без VPN и ограничения (WARP удалён в 3.0.0) |
 | [PC-STREAMING-AUDIT.md](PC-STREAMING-AUDIT.md) | замеры: DPI-блокировка TLS и что работало с WARP (история) |
 | [UPDATE.md](UPDATE.md) | обновления из GitHub: автопроверка, кэш, добровольное скачивание, SHA-256, установка |
+| [REFRESH-RATE.md](REFRESH-RATE.md) | частота экрана 1–120 Гц, ограничение ColorOS и как включить 120 Гц |
 | [NOHIT.md](NOHIT.md) | DPI-обход NoHiT вместо WARP: компоненты, локальный прокси, проверка на сети, ограничения |
 | [RECOGNITION.md](RECOGNITION.md) | поиск песни по аудиофрагменту: AudD, локальный отпечаток, ограничения |
 | [PERFORMANCE.md](PERFORMANCE.md) | скорость интерфейса: причины подтормаживаний, изменения, замеры gfxinfo |
@@ -56,4 +57,4 @@
 - Сборка: `./gradlew :app:assembleDebug` (JDK 21, Android SDK 37).
 - APK: `app/build/outputs/apk/debug/app-debug.apk`.
 - Проверка: `./gradlew :app:testDebugUnitTest :app:lintDebug`.
-- Версия: `3.3.0`, `versionCode 42`.
+- Версия: `3.3.1`, `versionCode 43`.

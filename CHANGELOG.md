@@ -3,6 +3,26 @@
 Все заметные изменения проекта. Формат — [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/),
 версии — [Semantic Versioning](https://semver.org/lang/ru/).
 
+## [3.3.1] - 2026-10-30
+
+### ColorOS / OnePlus: проверено и задокументировано ограничение 90 Гц
+
+- На реальном OnePlus PKG110 (ColorOS 16, Android 16) подтверждено:
+  панель поддерживает 60/90/120 Гц, но ColorOS принудительно ограничивает
+  **сторонние приложения** render-диапазоном 0–90 Гц
+  (equestedMaxRefreshRateRange: 90, enderFrameRate 90).
+- Проверены и не помогают: preferredRefreshRate=120,
+  preferredDisplayModeId 120-Гц режима, View.setRequestedFrameRate(120),
+  SurfaceControl.Transaction.setFrameRate, ndroid:isGame, targetSdk 35,
+  запись peak_refresh_rate с WRITE_SETTINGS (ColorOS SettingsProvider
+  отклоняет: «You cannot keep your settings in the secure settings»).
+- Единственные рабочие способы: системный режим «Высокая/Принудительно 120 Гц»
+  в настройках экрана ColorOS либо ADB-команда
+  `adb shell settings put system peak_refresh_rate 1` (до перезагрузки).
+- Подробности и точные команды — в `docs/REFRESH-RATE.md`.
+- На Pixel/stock Android адаптивные 1–120 Гц работают как раньше.
+- Убраны экспериментальный запрос разрешения и попытки записи системных
+  настроек — приложение не просит бесполезных разрешений.
 ## [3.3.0] - 2026-10-30
 
 ### Автоматическая адаптивная частота экрана 1–120 Гц (LTPO)

@@ -101,3 +101,13 @@
   появляется на жест и снимается после отпускания.
 - 120 Гц не проверить на эмуляторе (нет такого режима), логика ограничена 120 Гц
   и использует системный preferred refresh rate.
+## Sonora 3.3.1 — ColorOS/OnePlus
+
+- Проверено на OnePlus PKG110 (ColorOS 16/Android 16): панель 60/90/120, но
+  ColorOS режет сторонние приложения до 90 Гц; все app-level способы
+  (preferredRefreshRate, modeId, View.setRequestedFrameRate, SurfaceControl,
+  isGame, targetSdk 35, WRITE_SETTINGS+peak_refresh_rate) не помогают.
+- Рабочий вариант: `adb shell settings put system peak_refresh_rate 1`
+  (120 Гц до перезагрузки) либо системный режим ColorOS; подробности в
+  `docs/REFRESH-RATE.md`.
+- Экспериментальные запросы разрешений убраны, сборка/тесты/lint зелёные.
