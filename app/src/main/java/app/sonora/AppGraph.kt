@@ -61,10 +61,13 @@ class AppGraph private constructor(context: Context) {
         // ExoPlayer, yt-dlp.
         runCatching { dev.nohit.core.NoHiT.init(appContext) }
             .onFailure { android.util.Log.w("NoHiT", "init: ${it.message}") }
-        if (settings.current.nohitEnabled) {
-            app.sonora.net.nohit.NohitProxy.start()
-            maybeTuneNohit()
+        // NoHiT — единственный обход и он работает автоматически: не оставляем
+        // пользователю выключателей, которые можно случайно сломать.
+        if (!settings.current.nohitEnabled) {
+            settings.update { it.copy(nohitEnabled = true) }
         }
+        app.sonora.net.nohit.NohitProxy.start()
+        maybeTuneNohit()
     }
 
     /**
@@ -73,16 +76,34 @@ class AppGraph private constructor(context: Context) {
      * запускаем его на каждом старте.
      */
     private fun maybeTuneNohit() {
+        val cfg = runCatching { dev.nohit.core.NoHiT.currentConfig() }.getOrNull()
+        val strategyInactive = cfg == null ||
+            (!cfg.split.isActive())
         val stale = System.currentTimeMillis() - settings.current.nohitTunedAtMs >
-            7L * 24 * 60 * 60 * 1000
-        if (!stale) return
+            24L * 60 * 60 * 1000
+        if (!stale && !strategyInactive) return
         kotlinx.coroutines.CoroutineScope(
             kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO,
         ).launch {
-            val report = runCatching { dev.nohit.core.AutoTuner.tune(appContext) }.getOrNull()
+            // Пробуем подобрать рабочую стратегию автоматически; повтор — при
+            // следующем запуске, если сеть не позволила.
+            var report = runCatching { dev.nohit.core.AutoTuner.tune(appContext) }.getOrNull()
+            if (report?.ok != true && cfg != null) {
+                report = runCatching {
+                    dev.nohit.core.AutoTuner.tune(
+                        appContext,
+                        base = cfg.copy(
+                            split = dev.nohit.core.SplitPlan(
+                                sniSplit = dev.nohit.core.SniMode.MID,
+                                tlsRecordChunk = 128,
+                            ),
+                        ),
+                    )
+                }.getOrNull()
+            }
             android.util.Log.i(
                 "NoHiT",
-                "tune: ok=${report?.ok} dns=${report?.dns?.name} split=${report?.split?.chunks} ${report?.latencyMs}ms",
+                "tune: ok=${report?.ok} dns=${report?.dns?.name} strategy=${report?.strategyName} ${report?.latencyMs}ms",
             )
             settings.update { it.copy(nohitTunedAtMs = System.currentTimeMillis()) }
         }

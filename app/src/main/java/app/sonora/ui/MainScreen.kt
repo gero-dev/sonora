@@ -124,14 +124,18 @@ fun MainScreen(graph: AppGraph) {
         { route ->
             val current = navController.currentBackStackEntry?.destination?.route
             if (current != route) {
-                // С «Обзора»/«Подключений» на Главную возвращаемся именно
-                // popBackStack: обычный navigate(HOME) с restoreState может
-                // вернуть вложенный экран и оставить пользователя на месте.
-                val nestedHome = route == Routes.HOME &&
-                    (current == Routes.DISCOVER || current == Routes.CONNECTIONS)
-                val returnedByPop = nestedHome &&
-                    navController.popBackStack(Routes.HOME, inclusive = false)
-                if (!returnedByPop) {
+                if (route == Routes.HOME) {
+                    // На Главную всегда возвращаемся popBackStack: иначе
+                    // restoreState восстанавливает ранее сохранённый вложенный
+                    // экран (Поиск/Обзор), и кнопка «Главная» выглядит мёртвой.
+                    val popped = navController.popBackStack(Routes.HOME, inclusive = false)
+                    if (!popped) {
+                        navController.navigate(Routes.HOME) {
+                            popUpTo(0) { inclusive = true }
+                            launchSingleTop = true
+                        }
+                    }
+                } else {
                     navController.navigate(route) {
                         // Снимаем всё, что открыто поверх Главной («Обзор»,
                         // «Подключения» и т.п.), сохраняя состояние вкладок.

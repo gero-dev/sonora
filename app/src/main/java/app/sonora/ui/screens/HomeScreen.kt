@@ -26,6 +26,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.ChevronRight
@@ -153,7 +154,7 @@ fun HomeScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) -> 
             ),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            item { HomeGreeting(localCount = localTracks.size) }
+            item { HomeGreeting(localCount = localTracks.size, onAccount = { navigate(Routes.GOOGLE_LOGIN) }) }
             item {
                 WaveCard(
                     state = wave,
@@ -388,22 +389,38 @@ private fun HomeSectionHeader(
 
 /** Приветствие по времени суток + краткая сводка по фонотеке. */
 @Composable
-private fun HomeGreeting(localCount: Int) {
+private fun HomeGreeting(localCount: Int, onAccount: () -> Unit) {
     Column(
         Modifier
             .fillMaxWidth()
             .padding(bottom = 4.dp),
     ) {
-        Text(
-            text = "SONORA",
-            style = MaterialTheme.typography.labelMedium.copy(letterSpacing = 3.sp),
-            color = MaterialTheme.colorScheme.primary,
-        )
-        Spacer(Modifier.height(6.dp))
-        Text(
-            text = greetingForNow(),
-            style = MaterialTheme.typography.headlineLarge,
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = "SONORA",
+                    style = MaterialTheme.typography.labelMedium.copy(letterSpacing = 3.sp),
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = greetingForNow(),
+                    style = MaterialTheme.typography.headlineLarge,
+                )
+            }
+            // Вход в Google-аккаунт всегда под рукой — в правом верхнем углу.
+            IconButton(onClick = onAccount) {
+                Icon(
+                    imageVector = Icons.Rounded.AccountCircle,
+                    contentDescription = "Google-аккаунт",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(30.dp),
+                )
+            }
+        }
         Spacer(Modifier.height(4.dp))
         Text(
             text = if (localCount == 0) {

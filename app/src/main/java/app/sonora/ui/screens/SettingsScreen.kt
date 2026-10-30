@@ -35,6 +35,7 @@ import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Cloud
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material.icons.rounded.Palette
@@ -365,26 +366,20 @@ fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
                 modifier = Modifier.padding(top = 4.dp),
             )
             Spacer(Modifier.height(4.dp))
-            SettingsLabel("DPI-обход (NoHiT)")
-            SwitchRow(
-                title = "Обход блокировок NoHiT",
-                subtitle = "Фрагментация TLS ClientHello + DoH: единственный обход, без VPN и только для трафика Sonora",
-                checked = settings.nohitEnabled,
-                onCheckedChange = vm::setNohitEnabled,
-            )
-            ClickRow(
-                title = "Стратегия NoHiT",
-                subtitle = when {
-                    nohitTuningState -> nohitMessageState ?: "Подбираем стратегию…"
-                    nohitMessageState != null -> nohitMessageState!!
+            SettingsLabel("DPI-обход NoHiT (автоматически)")
+            InfoRow(title = "Статус", value = "Включён, работает в фоне")
+            InfoRow(
+                title = "Стратегия",
+                value = when {
+                    nohitTuningState -> nohitMessageState ?: "Подбирается автоматически…"
                     else -> nohitConfigLabelState
                 },
-                onClick = { vm.tuneNohit() },
             )
             Text(
-                text = "NoHiT — единственный сетевой обход: фрагментация TLS ClientHello " +
-                    "и DoH применяются только к трафику Sonora. Переключатель полностью " +
-                    "применяется после перезапуска приложения.",
+                text = "Ничего настраивать не нужно: NoHiT работает только для трафика " +
+                    "Sonora, сам подбирает стратегию при запуске и смене сети, не создаёт " +
+                    "VPN и не мешает сторонним VPN. Если провайдер режет TLS, обход " +
+                    "применяется автоматически.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(vertical = 4.dp),
@@ -1182,28 +1177,48 @@ private fun SettingsSection(
     icon: ImageVector,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    Column(Modifier.fillMaxWidth().padding(bottom = 14.dp)) {
+    // Аккордеон: настройки раздела скрыты, пока пользователь не откроет его.
+    var expanded by rememberSaveable(title) { mutableStateOf(false) }
+    Column(Modifier.fillMaxWidth().padding(bottom = 10.dp)) {
         Row(
-            modifier = Modifier.padding(start = 6.dp, bottom = 8.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(18.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                .clickable { expanded = !expanded }
+                .padding(horizontal = 14.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(18.dp),
+                modifier = Modifier.size(20.dp),
             )
-            Spacer(Modifier.width(8.dp))
-            Text(title, style = MaterialTheme.typography.titleLarge)
+            Spacer(Modifier.width(10.dp))
+            Text(
+                title,
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.weight(1f),
+            )
+            Icon(
+                imageVector = Icons.Rounded.ExpandMore,
+                contentDescription = if (expanded) "Свернуть" else "Развернуть",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(22.dp),
+            )
         }
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(24.dp))
-                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                .padding(16.dp),
-            content = content,
-        )
+        if (expanded) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 6.dp)
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                    .padding(16.dp),
+                content = content,
+            )
+        }
     }
 }
 
