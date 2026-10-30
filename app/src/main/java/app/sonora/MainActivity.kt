@@ -1,10 +1,11 @@
-package app.sonora
+﻿package app.sonora
 
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.view.MotionEvent
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -14,12 +15,14 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.lifecycleScope
 import app.sonora.ui.MainScreen
+import app.sonora.core.display.AdaptiveRefreshRate
 import app.sonora.ui.theme.SonoraTheme
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
     private lateinit var graph: AppGraph
+    private lateinit var refreshRate: AdaptiveRefreshRate
 
     private val permissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { }
@@ -28,6 +31,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         graph = (application as SonoraApp).graph
+        refreshRate = AdaptiveRefreshRate(this)
 
         handleDeepLink(intent)
         requestStartupPermissions()
@@ -38,6 +42,21 @@ class MainActivity : ComponentActivity() {
                 MainScreen(graph = graph)
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        refreshRate.start()
+    }
+
+    override fun onPause() {
+        refreshRate.stop()
+        super.onPause()
+    }
+
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        refreshRate.onTouch(ev)
+        return super.dispatchTouchEvent(ev)
     }
 
     override fun onNewIntent(intent: Intent) {
