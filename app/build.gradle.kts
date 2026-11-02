@@ -1,4 +1,4 @@
-﻿import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     id("com.android.application")
@@ -14,8 +14,8 @@ android {
         applicationId = "app.sonora"
         minSdk = 26
         targetSdk = 34
-        versionCode = 44
-        versionName = "3.4.0"
+        versionCode = 45
+        versionName = "3.5.0"
         vectorDrawables.useSupportLibrary = true
     }
 
