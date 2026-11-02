@@ -220,7 +220,16 @@ fun MainScreen(graph: AppGraph) {
                                 selected = selectedTabRoute == tab.route,
                                 onClick = { onTabClick(tab.route) },
                                 icon = { Icon(tab.icon, contentDescription = tab.label) },
-                                label = { Text(tab.label) },
+                                label = {
+                                    // Не даём подписям переноситься («Медиатек/а»,
+                                    // «Настройк/и») на узких экранах с крупным шрифтом.
+                                    Text(
+                                        tab.label,
+                                        maxLines = 1,
+                                        softWrap = false,
+                                        style = MaterialTheme.typography.labelSmall,
+                                    )
+                                },
                                 colors = NavigationBarItemDefaults.colors(
                                     selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
                                     indicatorColor = MaterialTheme.colorScheme.primaryContainer,
