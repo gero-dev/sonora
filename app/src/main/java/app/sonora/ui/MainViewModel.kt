@@ -54,6 +54,11 @@ import app.sonora.data.wave.WaveSnapshotStore
 import app.sonora.data.wave.WaveSorter
 import app.sonora.data.wave.ArtistGraph
 import app.sonora.data.import.ImportedTrackEntry
+import app.sonora.data.import.ImportSearchPlanner
+import app.sonora.data.import.ImportTrackMatcher
+import app.sonora.data.import.LibraryTrackIndex
+import app.sonora.data.import.MatchCandidate
+import app.sonora.data.import.RemoteTrackIndex
 import app.sonora.playback.PlayerUiState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
@@ -64,6 +69,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -197,6 +203,12 @@ data class PlaylistImportUiState(
     val warnings: List<String> = emptyList(),
     val error: String? = null,
     val done: Boolean = false,
+    /** Идёт сохранение найденных онлайн-треков на устройство. */
+    val saving: Boolean = false,
+    /** Сколько найденных онлайн-треков поставлено в очередь сохранения. */
+    val savedTotal: Int = 0,
+    /** Сколько из них уже сохранено на устройство. */
+    val savedDone: Int = 0,
 )
 
 /** Форматы, которые можно сохранить на устройство. */
@@ -206,8 +218,12 @@ private val YOUTUBE_ID = Regex("[A-Za-z0-9_-]{11}")
 /** Версия схемы метаданных: при повышении сбрасываются устаревшие отметки «проверено». */
 private const val METADATA_SCHEMA_VERSION = 4
 
-/** Сколько треков просить у InnerTube в поиске и в очереди «дальше». */
-private const val REMOTE_SEARCH_LIMIT = 30
+/**
+ * Сколько треков просить у InnerTube в поиске и в очереди «дальше».
+ * InnerTube отдаёт за один ответ не больше ~20 позиций, поэтому значение
+ * влияет только на потолок: сколько результатов вообще согласен показать UI.
+ */
+private const val REMOTE_SEARCH_LIMIT = 100
 
 /** Тестовый ролик для диагностики потока, когда ничего не играет. */
 private const val TEST_VIDEO_ID = "dQw4w9WgXcQ"
@@ -227,8 +243,16 @@ private const val RADIO_QUERY_LIMIT = 4
 /** Если related по видео дал меньше треков, добираем поисковыми запросами. */
 private const val RADIO_RELATED_ENOUGH = 8
 
-/** Максимум треков за один импорт списка: каждый неизвестный ищется в InnerTube. */
-private const val MAX_PLAYLIST_IMPORT = 150
+/**
+ * Сколько треков за один импорт проверяется сетевым поиском. Локальные
+ * совпадения и треки со ссылкой/`videoId` ищутся без сети, поэтому лимит
+ * касается только «неизвестных» строк: без него большой экспорт Spotify
+ * превращается в тысячи последовательных запросов к InnerTube.
+ */
+private const val IMPORT_NETWORK_SEARCH_BUDGET = 400
+
+/** Сколько треков InnerTube просим на один запрос при импорте списка. */
+private const val IMPORT_SEARCH_LIMIT = ImportSearchPlanner.CANDIDATE_LIMIT
 
 /** Через сколько секунд прослушивания трек считается «дослушанным» для истории. */
 private const val HISTORY_MIN_LISTEN_MS = 20_000L
@@ -1421,7 +1445,23 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
     }
 
     fun cancelMobileDownloads() {
+        val pending = _pendingMobileDownloads.value
         _pendingMobileDownloads.value = emptyList()
+        // Отказ не должен выглядеть как успех. Раньше треки просто исчезали из
+        // очереди: экран импорта писал «найдено 40 треков», а на устройство не
+        // попадало ничего, и никакого объяснения пользователь не получал.
+        if (pending.isEmpty()) return
+        _saveStates.update { current ->
+            current + pending.associate { track ->
+                track.id to TrackSaveState.unavailable("Сохранение отменено")
+            }
+        }
+        val importedPending = pending.count { candidate ->
+            importedSaveTracks.any { it.id == candidate.id }
+        }
+        if (importedPending > 0) {
+            toast("Импорт: сохранение отменено для $importedPending трек(ов)")
+        }
     }
 
     /** Выдано ли разрешение на мобильную сеть в текущей сессии. */
@@ -3137,6 +3177,9 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
 
     fun dismissPlaylistImport() {
         if (!_playlistFileImport.value.importing) {
+            // Сброс скрывает и счётчик сохранения: иначе он «оживёт» при следующем импорте.
+            importedSaveTracks.clear()
+            stopImportedSaveCounter()
             _playlistFileImport.value = PlaylistImportUiState()
         }
     }
@@ -3147,6 +3190,11 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
      */
     fun importPlaylistFile(uri: Uri) {
         if (_playlistFileImport.value.importing) return
+        // Новый импорт начинает новый счётчик сохранения: треки прошлой пачки
+        // не должны попадать в «сохранено N из M». Список чистим здесь, а не в
+        // конце: при ошибке чтения файла старые треки остались бы висеть.
+        importedSaveTracks.clear()
+        stopImportedSaveCounter()
         _playlistFileImport.value = PlaylistImportUiState(importing = true)
         viewModelScope.launch {
             val data = try {
@@ -3159,7 +3207,10 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
                 )
                 return@launch
             }
-            val entries = data.entries.take(MAX_PLAYLIST_IMPORT)
+            // Раньше здесь стоял жёсткий `.take(150)`, из-за которого экспорт
+            // Spotify/Apple Music обрезался до первых 150 строк и молча терял
+            // остальное. Обрабатываем весь список целиком.
+            val entries = data.entries
             if (entries.isEmpty()) {
                 _playlistFileImport.value = PlaylistImportUiState(
                     error = "В файле не нашлось треков",
@@ -3171,20 +3222,49 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
                 importing = true,
                 total = entries.size,
             )
+            // Индексы и кэш выдач живут весь импорт: сборка кандидатов на каждую
+            // строку была бы квадратичной на больших файлах.
+            val inputs = buildImportMatchInputs()
+            val cache = RemoteTrackIndex()
             val found = LinkedHashMap<String, Track>()
             var notFound = 0
-            entries.forEachIndexed { index, entry ->
-                val track = resolveImportedEntry(entry)
-                if (track != null) {
-                    found[track.id] = track
-                } else {
-                    notFound++
+            var networkSearches = 0
+            try {
+                // Матчинг по локальной библиотеке — самая тяжёлая часть, ей не
+                // место на главном потоке: иначе большой экспорт морозит UI.
+                withContext(Dispatchers.Default) {
+                    entries.forEachIndexed { index, entry ->
+                        val resolution = resolveImportedEntry(
+                            entry = entry,
+                            inputs = inputs,
+                            cache = cache,
+                            networkBudgetLeft = IMPORT_NETWORK_SEARCH_BUDGET - networkSearches,
+                        )
+                        if (resolution.searches > 0) {
+                            networkSearches += resolution.searches
+                        }
+                        val track = resolution.track
+                        if (track != null) {
+                            found[track.id] = track
+                        } else {
+                            notFound++
+                        }
+                        // Прогресс обновляем порциями: на 5 000 строк запись
+                        // StateFlow на каждую строку заметна в UI.
+                        if (index % 5 == 0 || index == entries.lastIndex) {
+                            _playlistFileImport.update {
+                                it.copy(
+                                    processed = index + 1,
+                                    matched = found.size,
+                                    notFound = notFound,
+                                )
+                            }
+                        }
+                    }
                 }
-                _playlistFileImport.value = _playlistFileImport.value.copy(
-                    processed = index + 1,
-                    matched = found.size,
-                    notFound = notFound,
-                )
+            } catch (cancelled: CancellationException) {
+                _playlistFileImport.value = PlaylistImportUiState()
+                throw cancelled
             }
             if (found.isEmpty()) {
                 _playlistFileImport.value = PlaylistImportUiState(
@@ -3204,75 +3284,289 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
                 name = "Импорт: $baseName".take(80),
                 trackIds = found.keys.toList(),
             )
+            // Импорт не просто находит треки, но и сохраняет их на устройство:
+            // каждый найденный онлайн-трек ставится в общую очередь сохранения
+            // (файл → локальная копия с youtubeId/downloadedTrackId в extra).
+            val toSave = remote.filter { track ->
+                track.playable && !isTrackDownloaded(track)
+            }
+            // Пропущенные из-за лимита поиска строки честно называем в отчёте:
+            // иначе «не найдено» выглядело бы как отсутствие трека в каталоге.
+            val extraWarnings = buildList {
+                if (networkSearches >= IMPORT_NETWORK_SEARCH_BUDGET && notFound > 0) {
+                    add(
+                        "Сетевой поиск в этом импорте ограничен " +
+                            "$IMPORT_NETWORK_SEARCH_BUDGET запросами: остальные строки " +
+                            "искались только среди локальной библиотеки и уже найденного.",
+                    )
+                }
+            }
             _playlistFileImport.value = PlaylistImportUiState(
                 processed = entries.size,
                 total = entries.size,
                 matched = found.size,
                 notFound = notFound,
                 playlistName = playlist.name,
-                warnings = data.warnings,
+                warnings = data.warnings + extraWarnings,
                 done = true,
+                saving = toSave.isNotEmpty(),
+                savedTotal = toSave.size,
             )
-        }
-    }
-
-    private suspend fun resolveImportedEntry(entry: ImportedTrackEntry): Track? {
-        val local = graph.library.tracks.value
-            .filter { it.playable }
-            .maxByOrNull { matchScore(it, entry) }
-            ?.takeIf { matchScore(it, entry) >= 3 }
-        if (local != null) return local
-
-        val videoId = entry.videoId?.takeIf { YOUTUBE_ID.matches(it) }
-            ?: entry.url?.let(::youtubeIdFromUrl)
-        if (videoId != null) {
-            return trackFromEntry(videoId, entry)
-        }
-
-        val query = listOfNotNull(entry.artist, entry.title)
-            .joinToString(" ")
-            .ifBlank { entry.title }
-        val results = runCatching { graph.youtube.search(query, 5) }
-            .getOrDefault(emptyList())
-            .filter { it.playable }
-        return results
-            .maxByOrNull { matchScore(it, entry) }
-            ?.takeIf { matchScore(it, entry) >= 3 }
-    }
-
-    private fun matchScore(track: Track, entry: ImportedTrackEntry): Int {
-        val title = normalizeMatch(track.title)
-        val wantedTitle = normalizeMatch(entry.title)
-        if (title.isBlank() || wantedTitle.isBlank()) return 0
-        var score = when {
-            title == wantedTitle -> 3
-            title.contains(wantedTitle) || wantedTitle.contains(title) -> 1
-            else -> 0
-        }
-        val artist = normalizeMatch(track.artist)
-        val wantedArtist = normalizeMatch(entry.artist)
-        if (wantedArtist.isNotBlank() && artist.isNotBlank()) {
-            score += when {
-                artist == wantedArtist -> 2
-                artist.contains(wantedArtist) || wantedArtist.contains(artist) -> 1
-                else -> 0
+            // Все совпадения — уже локальные файлы: «сохранено 0 из 0» не показываем.
+            if (toSave.isNotEmpty()) {
+                toSave.forEach { track -> queueImportedSave(track) }
             }
         }
-        val duration = entry.durationMs
-        if (duration != null && duration > 0 && track.durationMs > 0 &&
-            kotlin.math.abs(duration - track.durationMs) <= 10_000
-        ) {
-            score++
-        }
-        return score
     }
 
-    private fun normalizeMatch(value: String?): String =
-        value.orEmpty()
-            .lowercase()
-            .replace(Regex("""\([^)]*\)|\[[^]]*]"""), " ")
-            .replace(Regex("""[^a-zа-я0-9]+"""), " ")
-            .trim()
+    /**
+     * Треки, поставленные в очередь сохранения текущим импортом. Счётчик
+     * «сохранено N из M» считается только по ним, чтобы не учитывать
+     * посторонние загрузки пользователя.
+     */
+    private val importedSaveTracks = mutableListOf<Track>()
+    private var importedSaveCounter: Job? = null
+
+    /**
+     * Видела ли подписка хоть одно активное/ожидающее сохранение. Нужно, чтобы
+     * не «зафиксировать» пачку до того, как она началась: первая эмиссия
+     * combine может прийти раньше, чем saveWorker успел пометить треки.
+     */
+    private var importedSaveSawActivity = false
+
+    /**
+     * Ставит найденный при импорте онлайн-трек в очередь сохранения и держит
+     * счётчик «сохранено N из M» в актуальном состоянии, пока идёт загрузка.
+     *
+     * Мобильная сеть: разрешение спрашивается ровно как у обычной загрузки
+     * (requestSave(allowMobile = false)) — из импорта трафик молча не тратится.
+     */
+    private fun queueImportedSave(track: Track) {
+        importedSaveTracks += track
+        requestSave(track, allowMobile = false)
+        startImportedSaveCounter()
+    }
+
+    private fun stopImportedSaveCounter() {
+        importedSaveCounter?.cancel()
+        importedSaveCounter = null
+        importedSaveSawActivity = false
+    }
+
+    /**
+     * Сохранение идёт уже после завершения импорта, поэтому прогресс нельзя
+     * посчитать один раз: состояние queue/percent/done приходит от saveWorker
+     * асинхронно. Держим подписку на _saveStates (+ ожидание разрешения
+     * мобильной сети) и обновляем PlaylistImportUiState на каждое изменение,
+     * пока очередь не опустеет: тогда счётчик замирает на финальном значении.
+     */
+    private fun startImportedSaveCounter() {
+        if (importedSaveCounter?.isActive == true) return
+        importedSaveSawActivity = false
+        importedSaveCounter = viewModelScope.launch {
+            combine(_saveStates, _pendingMobileDownloads) { states, pending -> states to pending }
+                .collect { (states, pending) ->
+                    val queued = importedSaveTracks.toList()
+                    val current = _playlistFileImport.value
+                    if (queued.isEmpty() || current.savedTotal <= 0) return@collect
+                    val done = queued.count { track ->
+                        states[track.id]?.status == SaveStatus.DONE || isTrackDownloaded(track)
+                    }
+                    val active = queued.count { states[it.id]?.isActive == true }
+                    val waiting = queued.count { track -> pending.any { it.id == track.id } }
+                    if (active > 0 || waiting > 0) importedSaveSawActivity = true
+                    val next = current.copy(
+                        saving = active > 0 || waiting > 0,
+                        savedDone = done.coerceIn(0, current.savedTotal),
+                    )
+                    if (next != current) _playlistFileImport.value = next
+                    // Пачка реально шла и теперь пуста — фиксируем результат и
+                    // закрываем подписку, чтобы она не жила до конца сессии.
+                    // Отменяем именно себя: это штатный способ закончить collect.
+                    if (importedSaveSawActivity && active == 0 && waiting == 0) {
+                        importedSaveTracks.clear()
+                        throw CancellationException("import save batch finished")
+                    }
+                }
+        }
+    }
+
+    /** Локальные кандидаты для матчера: только то, что участвует в сравнении. */
+    private data class ImportMatchInputs(
+        val localIndex: LibraryTrackIndex,
+        val localCandidates: List<MatchCandidate>,
+        val candidatesById: Map<String, Track>,
+    )
+
+    /**
+     * Индексы собираются один раз на импорт, а не на каждую строку: при 5 000
+     * треков в файле пересборка кандидатов внутри цикла была бы квадратичной.
+     */
+    private fun buildImportMatchInputs(): ImportMatchInputs {
+        val localTracks = graph.library.tracks.value
+            .filter { it.playable && it.source == Source.LOCAL }
+        return ImportMatchInputs(
+            localIndex = LibraryTrackIndex(localTracks),
+            localCandidates = localTracks.map { it.toMatchCandidate() },
+            candidatesById = localTracks.associateBy { it.id },
+        )
+    }
+
+    /** Итог сопоставления строки: найденный трек и признак потраченного сетевого поиска. */
+    private data class ImportResolution(
+        val track: Track?,
+        val usedNetwork: Boolean,
+        val searches: Int = if (usedNetwork) 1 else 0,
+    )
+
+    /**
+     * Сопоставляет одну строку импорта с треком.
+     *
+     * Порядок намеренно от дешёвого к дорогому:
+     * 1. локальная библиотека — уже сохранённый файл не качаем заново;
+     * 2. явная ссылка/`videoId` в самом файле — без единого запроса;
+     * 3. уже найденные ранее в этом импорте треки (кэш выдач) — тоже без сети;
+     * 4. один сетевой поиск по самому точному запросу из [ImportSearchPlanner].
+     *
+     * Раньше здесь был ровно один запрос `"артист название"` на каждую строку,
+     * и при несовпадении строка молча терялась. Теперь есть план запросов от
+     * точного к широкому, а результат ещё раз сверяется матчером.
+     *
+     * @param allowNetwork `false` исчерпал бюджет импорта: строку ищем только
+     *   среди уже известных треков, без обращения к сети.
+     */
+    private suspend fun resolveImportedEntry(
+        entry: ImportedTrackEntry,
+        inputs: ImportMatchInputs,
+        cache: RemoteTrackIndex,
+        networkBudgetLeft: Int,
+    ): ImportResolution {
+        // 1. Локальная библиотека в приоритете — уже сохранённый файл не качаем заново.
+        // 1a. Точное совпадение ключа «артист|название» — без полного скана.
+        //
+        //     Но не безусловно: если исполнитель локального трека не совпал со
+        //     строкой импорта, это может быть закрепившийся ранее неверный матч.
+        //     Раньше такой трек побеждал всегда, и починить его было нельзя —
+        //     локальная проверка идёт раньше сети, поэтому «Mr. Brightside —
+        //     The Killers» раз за разом попадал в сохранённый кавер «Mr.
+        //     Brightside — Matty Hinds», а поиск даже не выполнялся.
+        //     Теперь сомнительное локальное попадание придерживается и
+        //     используется как запасной вариант, если сеть не найдёт лучшего.
+        val localHit = localExactHit(entry, inputs)
+            ?: localMatcherHit(entry, inputs)
+
+        val suspectLocal = localHit != null &&
+            ImportTrackMatcher.artistAgrees(localHit.toMatchCandidate(), entry) == false
+
+        if (localHit != null && !suspectLocal) return ImportResolution(localHit, false)
+
+        // 2. Ссылка или videoId из файла: искать не нужно вовсе.
+        val videoId = entry.videoId?.takeIf { YOUTUBE_ID.matches(it) }
+            ?: entry.url?.let(::youtubeIdFromUrl)
+        if (videoId != null) return ImportResolution(trackFromEntry(videoId, entry), false)
+
+        // 3. Уже найденное в этом импорте: повторяющиеся строки не ищутся дважды.
+        val queries = ImportSearchPlanner.queries(entry)
+        for (query in queries) {
+            val hits = cache.lookup(query)
+            if (hits.isEmpty()) continue
+            val cached = bestOf(hits, entry) ?: continue
+            // Сомнительное локальное попадание уступает только тому, что
+            // действительно согласуется по исполнителю.
+            if (!suspectLocal ||
+                ImportTrackMatcher.artistAgrees(cached.toMatchCandidate(), entry) == true
+            ) {
+                return ImportResolution(cached, false)
+            }
+        }
+
+        // Бюджет исчерпан — отдаём то, что нашли локально, даже сомнительное:
+        // лучше возможная ошибка, чем потерянная строка.
+        if (networkBudgetLeft <= 0) {
+            return ImportResolution(localHit, false)
+        }
+
+        // 4. Сеть: идём по плану запросов от точного к широкому и останавливаемся
+        //    на первом, который дал уверенное совпадение.
+        //
+        //    Раньше здесь стоял `queries.firstOrNull()` — то есть весь план
+        //    вычислялся, но использовался только первый запрос «артист название».
+        //    Это ровно тот дефект, который план и должен был устранить: строка
+        //    с непривычным написанием артиста не находилась, хотя широкий запрос
+        //    её бы нашёл. Проверено на устройстве: файл из 4 строк с «грязными»
+        //    метаданными давал 1 «не найдено» и ровно 4 запроса — по одному на
+        //    строку вместо повторов по плану.
+        var searches = 0
+        var fallback: Track? = null
+        for (query in queries) {
+            // Бюджет проверяем перед каждым запросом: план может стоить до
+            // MAX_QUERIES запросов на строку, и один вызов не должен вывести
+            // импорт за общий лимит.
+            if (searches >= networkBudgetLeft) break
+            val results = runCatching { graph.youtube.search(query, IMPORT_SEARCH_LIMIT) }
+                .getOrDefault(emptyList())
+                .filter { it.playable }
+            searches++
+            if (results.isEmpty()) continue
+            cache.add(results)
+            val matched = bestOf(results, entry) ?: continue
+            if (!suspectLocal) return ImportResolution(matched, true, searches)
+            // Локальное попадание сомнительно, значит сетевой результат ему
+            // предпочтителен — но лишь если он сам согласуется по исполнителю,
+            // иначе это просто другой кавер.
+            if (ImportTrackMatcher.artistAgrees(matched.toMatchCandidate(), entry) == true) {
+                return ImportResolution(matched, true, searches)
+            }
+            if (fallback == null) fallback = matched
+        }
+        // Ничего уверенного в сети нет. Сомнительный локальный трек всё равно
+        // ближе к строке, чем кавер из чужого канала.
+        return ImportResolution(localHit ?: fallback, searches > 0, searches)
+    }
+
+    /** Точное попадание в локальный индекс по ключу «артист|название». */
+    private fun localExactHit(entry: ImportedTrackEntry, inputs: ImportMatchInputs): Track? =
+        inputs.localIndex.exact(entry.title, entry.artist)
+
+    /**
+     * Локальное попадание по полному сравнению: библиотека может знать трек под
+     * другим написанием, и это всё ещё дешевле сетевого поиска.
+     */
+    private fun localMatcherHit(entry: ImportedTrackEntry, inputs: ImportMatchInputs): Track? {
+        val localBest = ImportTrackMatcher.best(inputs.localCandidates, entry) ?: return null
+        return inputs.candidatesById[localBest.id]
+    }
+
+    /**
+     * Лучший трек из выдачи каталога с приоритетом совпавшего исполнителя.
+     *
+     * Позвать [ImportTrackMatcher.best] и потом проверить исполнителя
+     * недостаточно: `best` возвращает один самый высокий балл, и если это
+     * оказался кавер с точным названием, «правильный» трек из той же выдачи уже
+     * не рассматривается. Проверено на устройстве — выдача по
+     * «The Killers Mr. Brightside» (40 треков) содержит оригинал, но выбирался
+     * не он.
+     *
+     * Поэтому, если у строки есть исполнитель, сначала ищем лучшего **среди
+     * согласующихся** по исполнителю. Когда таких нет вовсе, решение принимает
+     * обычный [ImportTrackMatcher.best] — угадывать не по чему, и строка не
+     * должна потеряться.
+     */
+    private fun bestOf(results: List<Track>, entry: ImportedTrackEntry): Track? {
+        if (results.isEmpty()) return null
+        val candidates = results.map { it.toMatchCandidate() }
+        val agreeing = candidates.filter { ImportTrackMatcher.artistAgrees(it, entry) == true }
+        val best = ImportTrackMatcher.best(agreeing.ifEmpty { candidates }, entry) ?: return null
+        return results.firstOrNull { it.id == best.id }
+    }
+
+    /** Представление трека для матчера: только то, что участвует в сравнении. */
+    private fun Track.toMatchCandidate(): MatchCandidate = MatchCandidate(
+        id = id,
+        title = title,
+        artist = artist,
+        durationMs = durationMs,
+    )
 
     private fun trackFromEntry(videoId: String, entry: ImportedTrackEntry): Track = Track(
         id = "youtube:$videoId",

@@ -52,6 +52,15 @@ class PlaylistFileImporter(private val context: Context) {
             buffer.copyOf(read)
         } ?: throw FileNotFoundException("Не удалось открыть файл")
         if (bytes.isEmpty()) throw IllegalArgumentException("Файл пустой")
+        // Пикер принимает "*/*", поэтому сюда легко попадает аудиофайл. Без этой
+        // проверки байты .mp3 декодировались как текст и давали до 1000 «треков»
+        // из мусора, после чего импорт уходил в долгий бессмысленный поиск.
+        if (!looksLikeTextPlaylist(bytes)) {
+            throw IllegalArgumentException(
+                "Это не текстовый список треков: выберите CSV, JSON, M3U/M3U8 или TXT " +
+                    "с экспортом плейлиста.",
+            )
+        }
         val text = bytes.toString(Charsets.UTF_8).removePrefix("\uFEFF")
         val entries = PlaylistFileParser.parse(fileName, text)
         if (entries.isEmpty()) {
@@ -84,7 +93,43 @@ class PlaylistFileImporter(private val context: Context) {
 
     private companion object {
         const val MAX_BYTES = 8 * 1024 * 1024
-        const val MAX_ENTRIES = 1_000
+
+        /**
+         * Потолок строк в одном файле. Держим его высоким: экспорт «Мне
+         * нравится» в Spotify легко переваливает за тысячу строк, и прежние
+         * 1 000 молча обрезали список ещё до поиска.
+         */
+        const val MAX_ENTRIES = 20_000
+
+        /** Сколько первых байт проверять на «текстовость». */
+        const val SNIFF_BYTES = 4 * 1024
+
+        /** Допустимая доля управляющих байт, прежде чем файл считается бинарным. */
+        const val MAX_CONTROL_RATIO = 0.02
+
+        /**
+         * Похож ли файл на текстовый список треков. Бинарные файлы (mp3, flac,
+         * zip, изображения) содержат NUL и много управляющих байт — их нельзя
+         * декодировать как список.
+         *
+         * UTF-8 безопасен для такой эвристики: многобайтные последовательности
+         * состоят из байт >= 0x80, а управляющими считаются только 0x00..0x08,
+         * 0x0B, 0x0C, 0x0E..0x1F — они в осмысленном UTF-8-тексте не встречаются.
+         */
+        fun looksLikeTextPlaylist(bytes: ByteArray): Boolean {
+            val sample = bytes.copyOf(minOf(bytes.size, SNIFF_BYTES))
+            if (sample.isEmpty()) return false
+            var control = 0
+            for (byte in sample) {
+                val value = byte.toInt() and 0xFF
+                if (value == 0) return false
+                val isControl = value < 0x09 ||
+                    value == 0x0B || value == 0x0C ||
+                    (value in 0x0E..0x1F)
+                if (isControl) control++
+            }
+            return control.toDouble() / sample.size <= MAX_CONTROL_RATIO
+        }
     }
 }
 
@@ -422,5 +467,6 @@ object PlaylistFileParser {
     private val CONTAINER_KINDS = setOf(
         "album", "playlist", "artist", "show", "podcast", "episode", "user", "collection",
     )
-    private const val MAX_ENTRIES = 1_000
+    /** Свой потолок парсера: тот же смысл, что и MAX_ENTRIES у читателя файла. */
+    private const val MAX_ENTRIES = 20_000
 }
