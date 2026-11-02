@@ -89,6 +89,7 @@ fun HistoryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
     // Истории не нужна позиция — только текущий трек и признак игры.
     val player by vm.playerChrome.collectAsState()
     val saveStates by vm.saveStates.collectAsState()
+    val ratingIndex by vm.trackRatingIndex.collectAsState()
 
     val trackEntries = remember(entries, tracks) { vm.historyTracks() }
     val artists = remember(entries, tracks) { vm.historyArtists() }
@@ -276,6 +277,9 @@ fun HistoryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
                 null
             },
             downloadLabel = "Сохранить на устройство",
+            rating = ratingIndex.ratingOf(track),
+            onLike = { vm.toggleTrackLike(track) },
+            onDislike = { vm.toggleTrackDislike(track) },
         )
     }
 

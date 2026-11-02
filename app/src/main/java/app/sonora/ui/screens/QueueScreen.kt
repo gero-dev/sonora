@@ -66,8 +66,12 @@ import app.sonora.ui.nav.LocalArtistNavigator
 import app.sonora.ui.nav.Routes
 
 /**
- * Очередь воспроизведения: подсветка текущего трека,
- * перемещение стрелками и удаление.
+ * Очередь воспроизведения в модели Spotify:
+ *  - «Сейчас играет»;
+ *  - «Далее в очереди» — треки, добавленные вручную («Играть следующим» /
+ *    «В очередь»): их можно переставлять и удалять;
+ *  - «Далее из: <контекст>» — альбом/плейлист/волна, которые продолжатся
+ *    после пользовательской очереди; их можно только выбрать тапом.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -78,6 +82,8 @@ fun QueueScreen(vm: MainViewModel, navigate: (String) -> Unit) {
     val google by vm.googleAccount.collectAsState()
     val settings by vm.settings.collectAsState()
     val queue = player.queue
+    val userIndices = player.userQueueIndices
+    val contextIndices = player.contextQueueIndices
     // Сколько треков в очереди требуют сети — для строки «Онлайн-треков в очереди».
     val onlineInQueue = remember(queue) { queue.count { !vm.offlinePlayable(it) } }
     // Ключ строки = id трека + номер вхождения: в очереди бывают дубликаты,
@@ -107,7 +113,11 @@ fun QueueScreen(vm: MainViewModel, navigate: (String) -> Unit) {
             Column(Modifier.weight(1f)) {
                 Text("Очередь", style = MaterialTheme.typography.headlineMedium)
                 Text(
-                    text = "Треков в очереди: ${queue.size}",
+                    text = if (queue.isEmpty()) {
+                        "Очередь пуста"
+                    } else {
+                        "Треков: ${queue.size} · вручную: ${userIndices.size}"
+                    },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -161,22 +171,97 @@ fun QueueScreen(vm: MainViewModel, navigate: (String) -> Unit) {
                 contentPadding = PaddingValues(top = 4.dp, bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
-                itemsIndexed(
-                    items = queue,
-                    key = { index, _ -> queueKeys[index] },
-                    contentType = { _, _ -> "queue-track" },
-                ) { index, track ->
-                    QueueRow(
-                        track = track,
-                        index = index,
-                        isCurrent = index == player.index,
-                        canMoveUp = index > 0,
-                        canMoveDown = index < queue.lastIndex,
-                        onClick = { vm.seekToIndex(index) },
-                        onMoveUp = { vm.moveInQueue(index, index - 1) },
-                        onMoveDown = { vm.moveInQueue(index, index + 1) },
-                        onRemove = { vm.removeFromQueue(index) },
+                item(key = "header-now") {
+                    QueueSectionHeader("Сейчас играет")
+                }
+                player.current?.let { current ->
+                    item(key = "track-current") {
+                        QueueRow(
+                            track = current,
+                            label = "${player.index + 1}",
+                            isCurrent = true,
+                            editable = false,
+                            canMoveUp = false,
+                            canMoveDown = false,
+                            onClick = {},
+                            onMoveUp = {},
+                            onMoveDown = {},
+                            onRemove = {},
+                        )
+                    }
+                }
+
+                item(key = "header-user") {
+                    QueueSectionHeader(
+                        title = "Далее в очереди",
+                        subtitle = if (userIndices.isEmpty()) {
+                            "Добавленные вручную треки играют раньше контекста"
+                        } else {
+                            "Порядок можно менять"
+                        },
+                        action = if (userIndices.isNotEmpty()) "Очистить" else null,
+                        onAction = {
+                            // Убираем только пользовательскую очередь, контекст не трогаем.
+                            userIndices.reversed().forEach { index -> vm.removeFromQueue(index) }
+                        },
                     )
+                }
+                if (userIndices.isEmpty()) {
+                    item(key = "user-empty") {
+                        Text(
+                            text = "Пусто. В меню трека выберите «Играть следующим» или «В очередь».",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        )
+                    }
+                } else {
+                    itemsIndexed(
+                        items = userIndices,
+                        key = { _, globalIndex -> "user-${queueKeys[globalIndex]}" },
+                        contentType = { _, _ -> "queue-user" },
+                    ) { position, globalIndex ->
+                        val track = queue[globalIndex]
+                        QueueRow(
+                            track = track,
+                            label = "${position + 1}",
+                            isCurrent = false,
+                            editable = true,
+                            canMoveUp = position > 0,
+                            canMoveDown = position < userIndices.lastIndex,
+                            onClick = { vm.seekToIndex(globalIndex) },
+                            onMoveUp = { vm.moveInQueue(globalIndex, userIndices[position - 1]) },
+                            onMoveDown = { vm.moveInQueue(globalIndex, userIndices[position + 1]) },
+                            onRemove = { vm.removeFromQueue(globalIndex) },
+                        )
+                    }
+                }
+
+                if (contextIndices.isNotEmpty()) {
+                    item(key = "header-context") {
+                        QueueSectionHeader(
+                            title = "Далее из: ${player.contextTitle ?: "контекст"}",
+                            subtitle = "${contextIndices.size} треков",
+                        )
+                    }
+                    itemsIndexed(
+                        items = contextIndices,
+                        key = { _, globalIndex -> "ctx-${queueKeys[globalIndex]}" },
+                        contentType = { _, _ -> "queue-context" },
+                    ) { _, globalIndex ->
+                        QueueRow(
+                            track = queue[globalIndex],
+                            label = "${globalIndex + 1}",
+                            isCurrent = false,
+                            editable = false,
+                            canMoveUp = false,
+                            canMoveDown = false,
+                            onClick = { vm.seekToIndex(globalIndex) },
+                            onMoveUp = {},
+                            onMoveDown = {},
+                            onRemove = {},
+                        )
+                    }
                 }
             }
         }
@@ -273,6 +358,36 @@ fun QueueScreen(vm: MainViewModel, navigate: (String) -> Unit) {
                     }
                 }
             }
+        }
+    }
+}
+
+/** Заголовок секции очереди с необязательным действием (например, «Очистить»). */
+@Composable
+private fun QueueSectionHeader(
+    title: String,
+    subtitle: String? = null,
+    action: String? = null,
+    onAction: (() -> Unit)? = null,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(text = title, style = MaterialTheme.typography.titleMedium)
+            if (!subtitle.isNullOrBlank()) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        if (action != null && onAction != null) {
+            TextButton(onClick = onAction) { Text(action) }
         }
     }
 }
@@ -415,12 +530,13 @@ private fun SavedQueueOption(
     }
 }
 
-/** Одна строка очереди. */
+/** Одна строка очереди. Контекстные треки показываем без кнопок правки. */
 @Composable
 private fun QueueRow(
     track: Track,
-    index: Int,
+    label: String,
     isCurrent: Boolean,
+    editable: Boolean,
     canMoveUp: Boolean,
     canMoveDown: Boolean,
     onClick: () -> Unit,
@@ -436,12 +552,12 @@ private fun QueueRow(
             .background(
                 if (isCurrent) MaterialTheme.colorScheme.surfaceContainerHigh else Color.Transparent,
             )
-            .clickable(onClick = onClick)
+            .clickable(enabled = !isCurrent, onClick = onClick)
             .padding(horizontal = 8.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = "${index + 1}",
+            text = if (isCurrent) "▶" else label,
             style = MaterialTheme.typography.labelSmall,
             color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.width(24.dp),
@@ -471,27 +587,29 @@ private fun QueueRow(
                 },
             )
         }
-        IconButton(onClick = onMoveUp, enabled = canMoveUp, modifier = Modifier.size(36.dp)) {
-            Icon(
-                imageVector = Icons.Rounded.ArrowUpward,
-                contentDescription = "Выше",
-                modifier = Modifier.size(20.dp),
-            )
-        }
-        IconButton(onClick = onMoveDown, enabled = canMoveDown, modifier = Modifier.size(36.dp)) {
-            Icon(
-                imageVector = Icons.Rounded.ArrowDownward,
-                contentDescription = "Ниже",
-                modifier = Modifier.size(20.dp),
-            )
-        }
-        IconButton(onClick = onRemove, modifier = Modifier.size(36.dp)) {
-            Icon(
-                imageVector = Icons.Rounded.Delete,
-                contentDescription = "Убрать из очереди",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(20.dp),
-            )
+        if (editable) {
+            IconButton(onClick = onMoveUp, enabled = canMoveUp, modifier = Modifier.size(36.dp)) {
+                Icon(
+                    imageVector = Icons.Rounded.ArrowUpward,
+                    contentDescription = "Выше",
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+            IconButton(onClick = onMoveDown, enabled = canMoveDown, modifier = Modifier.size(36.dp)) {
+                Icon(
+                    imageVector = Icons.Rounded.ArrowDownward,
+                    contentDescription = "Ниже",
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+            IconButton(onClick = onRemove, modifier = Modifier.size(36.dp)) {
+                Icon(
+                    imageVector = Icons.Rounded.Delete,
+                    contentDescription = "Убрать из очереди",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
         }
     }
 }

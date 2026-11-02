@@ -15,6 +15,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
+import androidx.media3.session.SessionResult
 import app.sonora.AppGraph
 import app.sonora.R
 import app.sonora.core.settings.SettingsStore
@@ -28,10 +29,16 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
+private const val TAG = "SonoraPlayback"
+
 /**
  * Фоновое воспроизведение: ExoPlayer + MediaSession.
  * Благодаря MediaSessionService работают уведомление, экран блокировки,
  * кнопки на Bluetooth-гарнитуре и Android Auto.
+ *
+ * Кнопки media-сессии перехватываются [mediaSessionCallback]: «вперёд»/«назад»
+ * должны вести себя так же, как в приложении (реальный соседний трек даже в
+ * REPEAT_ONE), а не как дефолтный media3-seek.
  */
 @OptIn(UnstableApi::class)
 class PlaybackService : MediaSessionService() {
@@ -44,6 +51,31 @@ class PlaybackService : MediaSessionService() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     private val settings by lazy { SettingsStore(this) }
+
+    private val mediaSessionCallback = object : MediaSession.Callback {
+        override fun onPlayerCommandRequest(
+            session: MediaSession,
+            controller: MediaSession.ControllerInfo,
+            command: Int,
+        ): Int {
+            when (command) {
+                Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM,
+                Player.COMMAND_SEEK_TO_NEXT,
+                -> {
+                    val handled = handleNextCommand()
+                    return if (handled) SessionResult.RESULT_INFO_SKIPPED else SessionResult.RESULT_SUCCESS
+                }
+                Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM,
+                Player.COMMAND_SEEK_TO_PREVIOUS,
+                -> {
+                    val handled = handlePreviousCommand()
+                    return if (handled) SessionResult.RESULT_INFO_SKIPPED else SessionResult.RESULT_SUCCESS
+                }
+            }
+            // RESULT_SUCCESS — команду выполняет сессия штатно.
+            return SessionResult.RESULT_SUCCESS
+        }
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -84,6 +116,11 @@ class PlaybackService : MediaSessionService() {
             }
 
             override fun onMediaItemTransition(mediaItem: androidx.media3.common.MediaItem?, reason: Int) {
+                android.util.Log.i(
+                    TAG,
+                    "service_transition reason=$reason to=${player.currentMediaItemIndex} " +
+                        "count=${player.mediaItemCount} id=${mediaItem?.mediaId ?: "-"}",
+                )
                 persistSnapshot()
                 SonoraWidget.updateAll(this@PlaybackService)
             }
@@ -93,7 +130,9 @@ class PlaybackService : MediaSessionService() {
             }
         })
 
-        mediaSession = MediaSession.Builder(this, player).build()
+        mediaSession = MediaSession.Builder(this, player)
+            .setCallback(mediaSessionCallback)
+            .build()
 
         scope.launch {
             settings.state.collect { s ->
@@ -169,29 +208,21 @@ class PlaybackService : MediaSessionService() {
                         if (player.mediaItemCount == 0) {
                             playFromSnapshot()
                         } else {
-                            if (player.hasNextMediaItem()) player.seekToNextMediaItem()
-                            player.play()
+                            handleNextCommand()
                         }
+                        Unit
                     }
                     ACTION_PREVIOUS -> {
                         if (player.mediaItemCount == 0) {
                             playFromSnapshot()
                         } else {
-                            // Та же Spotify-логика, что и в PlaybackController.previous():
-                            // далеко от начала — только в начало текущего трека,
-                            // повторное нажатие (позиция ~0) листает на предыдущий.
-                            when {
-                                player.currentPosition > PlaybackController.PREVIOUS_RESTART_MS ->
-                                    player.seekTo(0L)
-                                player.hasPreviousMediaItem() ->
-                                    player.seekToPreviousMediaItem()
-                                else -> player.seekTo(0L)
-                            }
-                            player.play()
+                            handlePreviousCommand()
                         }
+                        Unit
                     }
+                    else -> Unit
                 }
-            }.onFailure { android.util.Log.w("Playback", "widget action failed: ${it.message}") }
+            }.onFailure { android.util.Log.w(TAG, "widget action failed: ${it.message}") }
             persistSnapshot()
             SonoraWidget.updateAll(this)
             // Нечего играть (нет сохранённой очереди) — не висим foreground-сервисом.
@@ -203,6 +234,81 @@ class PlaybackService : MediaSessionService() {
             return restart
         }
         return super.onStartCommand(intent, flags, startId)
+    }
+
+    /**
+     * «Вперёд» с media-кнопок/уведомления. Если приложение открыто, идём через
+     * живой `PlaybackController` (там же докупается бесконечная очередь), иначе
+     * считаем соседний индекс локально — так REPEAT_ONE больше не «залипает».
+     */
+    private fun handleNextCommand(): Boolean {
+        val live = PlaybackController.instance
+        if (live != null && live.isConnected) {
+            live.next()
+            return true
+        }
+        return advancePlayer()
+    }
+
+    private fun handlePreviousCommand(): Boolean {
+        val live = PlaybackController.instance
+        if (live != null && live.isConnected) {
+            live.previous()
+            return true
+        }
+        return restartOrPreviousPlayer()
+    }
+
+    private fun advancePlayer(): Boolean {
+        val count = player.mediaItemCount
+        if (count == 0) return false
+        val from = player.currentMediaItemIndex
+        val target = QueueModel.nextIndex(from, count, player.repeatMode)
+        if (target == QueueModel.NONE) {
+            android.util.Log.i(
+                TAG,
+                "advance reason=media_key from=$from to=-1 count=$count " +
+                    "repeat=${repeatName(player.repeatMode)} result=end_of_queue",
+            )
+            return false
+        }
+        val wasPlaying = player.isPlaying || player.playbackState == Player.STATE_ENDED
+        player.seekTo(target, 0L)
+        if (wasPlaying) player.play()
+        android.util.Log.i(
+            TAG,
+            "advance reason=media_key from=$from to=$target count=$count " +
+                "repeat=${repeatName(player.repeatMode)}",
+        )
+        return true
+    }
+
+    private fun restartOrPreviousPlayer(): Boolean {
+        val count = player.mediaItemCount
+        if (count == 0) return false
+        val current = player.currentMediaItemIndex
+        val position = runCatching { player.currentPosition }.getOrDefault(0L)
+        if (position > PlaybackController.PREVIOUS_RESTART_MS) {
+            player.seekTo(current, 0L)
+            android.util.Log.i(TAG, "previous reason=media_key from=$current result=restart")
+            return true
+        }
+        val target = QueueModel.previousIndex(current, count, player.repeatMode)
+        val wasPlaying = player.isPlaying || player.playbackState == Player.STATE_ENDED
+        player.seekTo(target, 0L)
+        if (wasPlaying) player.play()
+        android.util.Log.i(
+            TAG,
+            "previous reason=media_key from=$current to=$target count=$count " +
+                "repeat=${repeatName(player.repeatMode)}",
+        )
+        return true
+    }
+
+    private fun repeatName(mode: Int): String = when (mode) {
+        Player.REPEAT_MODE_ONE -> "ONE"
+        Player.REPEAT_MODE_ALL -> "ALL"
+        else -> "OFF"
     }
 
     /**
@@ -235,7 +341,7 @@ class PlaybackService : MediaSessionService() {
                 delay(BOOT_NOTIFICATION_TIMEOUT_MS)
                 cancelBootForeground()
             }
-        }.onFailure { android.util.Log.w("Playback", "boot foreground failed: ${it.message}") }
+        }.onFailure { android.util.Log.w(TAG, "boot foreground failed: ${it.message}") }
     }
 
     private fun cancelBootForeground() {
@@ -253,29 +359,31 @@ class PlaybackService : MediaSessionService() {
         val items = snapshot.queue.map { trackToMediaItem(it) }
         val index = snapshot.index.coerceIn(0, items.lastIndex)
         player.setMediaItems(items, index, snapshot.positionMs)
-        player.shuffleModeEnabled = snapshot.shuffle
+        // Порядок уже сохранён в самой очереди: media3-shuffle не включаем,
+        // иначе пользовательская очередь («Далее в очереди») перемешается.
+        player.shuffleModeEnabled = false
         player.repeatMode = snapshot.repeatMode
         player.prepare()
         player.play()
         return true
     }
 
-    /** Сохраняет текущую позицию/статус в снимок для виджета и следующего старта. */
+    /**
+     * Сохраняет позицию/статус. Очередь и индекс принадлежат
+     * `PlaybackController`; здесь только точечное обновление и только если
+     * плеер играет ровно сохранённую очередь (mediaId + размер).
+     */
     private fun persistSnapshot() {
         if (player.mediaItemCount == 0) return
-        val stored = PlaybackSnapshotStore.load(this)
-        if (stored.queue.isEmpty()) return
-        val index = player.currentMediaItemIndex.coerceIn(0, stored.queue.lastIndex)
-        PlaybackSnapshotStore.save(
-            this,
-            stored.copy(
-                index = index,
-                positionMs = player.currentPosition.coerceAtLeast(0L),
-                isPlaying = player.isPlaying,
-                shuffle = player.shuffleModeEnabled,
-                repeatMode = player.repeatMode,
-                updatedAtMs = System.currentTimeMillis(),
-            ),
+        val currentId = runCatching { player.currentMediaItem?.mediaId }.getOrNull()
+        PlaybackSnapshotStore.updatePlayback(
+            context = this,
+            itemCount = player.mediaItemCount,
+            index = player.currentMediaItemIndex,
+            currentMediaId = currentId,
+            positionMs = player.currentPosition.coerceAtLeast(0L),
+            isPlaying = player.isPlaying,
+            repeatMode = player.repeatMode,
         )
     }
 

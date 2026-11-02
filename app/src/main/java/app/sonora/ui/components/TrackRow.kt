@@ -39,6 +39,8 @@ import androidx.compose.material.icons.rounded.PlaylistAdd
 import androidx.compose.material.icons.rounded.PlaylistPlay
 import androidx.compose.material.icons.rounded.Radio
 import androidx.compose.material.icons.rounded.QueueMusic
+import androidx.compose.material.icons.rounded.ThumbDown
+import androidx.compose.material.icons.rounded.ThumbUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -296,6 +298,11 @@ fun SourceChip(label: String, color: Color, modifier: Modifier = Modifier) {
  * Строка трека: обложка, название, исполнитель, сердечко, необязательный trailing-слот
  * и компактное меню «Ещё» (текст песни, скачивание — только если оно разрешено).
  * Долгое нажатие открывает лист действий (см. [TrackActionSheet]).
+ *
+ * Оценки:
+ *  * [rating] `null` — экран не подключил оценки, строка выглядит как раньше;
+ *  * `0` / `1` / `-1` — показать 👍/👎, подсветив активную оценку;
+ *  * [onLike]/[onDislike] — что вызвать по тапу (и в меню «Ещё»).
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -309,6 +316,9 @@ fun TrackRow(
     trailing: @Composable (() -> Unit)? = null,
     onDownload: (() -> Unit)? = null,
     saveState: TrackSaveState? = null,
+    rating: Int? = null,
+    onLike: (() -> Unit)? = null,
+    onDislike: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val hasLyrics = !track.lyrics.isNullOrBlank() || !track.syncedLyrics.isNullOrBlank()
@@ -419,6 +429,23 @@ fun TrackRow(
                     .padding(end = 2.dp),
             )
         }
+        // Оценки трека: компактные 👍/👎 только если экран их подключил.
+        if (rating != null) {
+            RatingButton(
+                icon = Icons.Rounded.ThumbUp,
+                active = rating > 0,
+                activeTint = MaterialTheme.colorScheme.primary,
+                description = if (rating > 0) "Убрать «нравится»" else "Нравится",
+                onClick = onLike,
+            )
+            RatingButton(
+                icon = Icons.Rounded.ThumbDown,
+                active = rating < 0,
+                activeTint = MaterialTheme.colorScheme.error,
+                description = if (rating < 0) "Убрать «не нравится»" else "Не нравится",
+                onClick = onDislike,
+            )
+        }
         IconButton(onClick = onFavorite) {
             Icon(
                 imageVector = if (isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
@@ -430,7 +457,9 @@ fun TrackRow(
             trailing()
         }
         // Меню показываем только когда в нём есть хотя бы одно действие.
-        if (hasLyrics || canDownload || trackRadio != null) {
+        if (hasLyrics || canDownload || trackRadio != null ||
+            (rating != null && (onLike != null || onDislike != null))
+        ) {
             Box {
                 IconButton(onClick = { menuOpen = true }) {
                     Icon(
@@ -444,6 +473,54 @@ fun TrackRow(
                     expanded = menuOpen,
                     onDismissRequest = { menuOpen = false },
                 ) {
+                    if (rating != null && onLike != null) {
+                        DropdownMenuItem(
+                            text = {
+                                Text(if (rating > 0) "Убрать «нравится»" else "Нравится")
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Rounded.ThumbUp,
+                                    contentDescription = null,
+                                    tint = if (rating > 0) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    },
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            },
+                            onClick = {
+                                menuOpen = false
+                                onLike?.invoke()
+                            },
+                        )
+                    }
+                    if (rating != null && onDislike != null) {
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    if (rating < 0) "Убрать «не нравится»" else "Не нравится",
+                                )
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Rounded.ThumbDown,
+                                    contentDescription = null,
+                                    tint = if (rating < 0) {
+                                        MaterialTheme.colorScheme.error
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    },
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            },
+                            onClick = {
+                                menuOpen = false
+                                onDislike?.invoke()
+                            },
+                        )
+                    }
                     if (trackRadio != null) {
                         DropdownMenuItem(
                             text = { Text("Радио по треку") },
@@ -536,6 +613,38 @@ fun TrackRow(
 }
 
 /**
+ * Компактная кнопка оценки в строке: 30dp, чтобы не раздувать высоту строки
+ * и не отнимать место у названия. Неактивная иконка приглушена.
+ */
+@Composable
+private fun RatingButton(
+    icon: ImageVector,
+    active: Boolean,
+    activeTint: Color,
+    description: String,
+    onClick: (() -> Unit)?,
+) {
+    Box(
+        modifier = Modifier
+            .size(30.dp)
+            .clip(CircleShape)
+            .clickable(enabled = onClick != null) { onClick?.invoke() },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = description,
+            tint = if (active) {
+                activeTint
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
+            },
+            modifier = Modifier.size(17.dp),
+        )
+    }
+}
+
+/**
  * Лист действий над треком: играть, в очередь, следующим, в плейлист, в избранное.
  * Переиспользуется на всех экранах, где есть список треков.
  */
@@ -555,6 +664,10 @@ fun TrackActionSheet(
     onOpenArtist: (() -> Unit)? = null,
     onDownload: (() -> Unit)? = null,
     downloadLabel: String = "Скачать",
+    /** Оценка трека: null — экран не подключил 👍/👎, пункты не показываются. */
+    rating: Int? = null,
+    onLike: (() -> Unit)? = null,
+    onDislike: (() -> Unit)? = null,
 ) {
     val artistNavigator = LocalArtistNavigator.current
     val artistAction = onOpenArtist ?: if (track.artist.isNotBlank()) {
@@ -606,6 +719,28 @@ fun TrackActionSheet(
                 label = if (isFavorite) "Убрать из избранного" else "В избранное",
                 onClick = onToggleFavorite,
             )
+            if (rating != null && onLike != null) {
+                SheetAction(
+                    icon = Icons.Rounded.ThumbUp,
+                    label = if (rating > 0) "Убрать «нравится»" else "Нравится",
+                    tint = if (rating > 0) MaterialTheme.colorScheme.primary else null,
+                    onClick = {
+                        onLike?.invoke()
+                        onDismiss()
+                    },
+                )
+            }
+            if (rating != null && onDislike != null) {
+                SheetAction(
+                    icon = Icons.Rounded.ThumbDown,
+                    label = if (rating < 0) "Убрать «не нравится»" else "Не нравится",
+                    tint = if (rating < 0) MaterialTheme.colorScheme.error else null,
+                    onClick = {
+                        onDislike?.invoke()
+                        onDismiss()
+                    },
+                )
+            }
             if (onDownload != null) {
                 SheetAction(
                     icon = Icons.Rounded.Download,
@@ -678,12 +813,13 @@ fun CreatePlaylistDialog(
     )
 }
 
-/** Строка действия в нижнем листе. */
+/** Строка действия в нижнем листе. [tint] — цвет активной иконки (оценки). */
 @Composable
 private fun SheetAction(
     icon: ImageVector,
     label: String,
     onClick: () -> Unit,
+    tint: Color? = null,
 ) {
     Row(
         modifier = Modifier
@@ -696,7 +832,7 @@ private fun SheetAction(
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            tint = tint ?: MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(22.dp),
         )
         Spacer(Modifier.width(16.dp))

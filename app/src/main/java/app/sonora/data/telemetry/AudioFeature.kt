@@ -29,6 +29,17 @@ data class AudioFeature(
             instrumentalness, liveness, speechiness, loudness,
         ).all { it == null }
 
+    /**
+     * Насколько полно сервис посчитал фичи (0..1): доля непустых полей.
+     * Используется как осторожный бонус при ранжировании поиска — не как
+     * «популярность», а как признак достоверных данных о треке.
+     */
+    val confidence: Double
+        get() = listOf(
+            tempo, energy, danceability, valence, acousticness,
+            instrumentalness, liveness, speechiness, loudness,
+        ).count { it != null }.toDouble() / 9.0
+
     /** Короткая подпись для UI: «124 BPM · энергия 82%». */
     fun shortLabel(): String {
         val parts = buildList {

@@ -128,6 +128,7 @@ fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
     val settings by vm.settings.collectAsState()
     val waveHistorySize by vm.waveHistorySize.collectAsState()
     val waveDisliked by vm.waveDisliked.collectAsState()
+    val waveRatingIndex by vm.trackRatingIndex.collectAsState()
     val connections by vm.connections.collectAsState()
     val scanning by vm.scanning.collectAsState()
     val enriching by vm.enriching.collectAsState()
@@ -1095,6 +1096,7 @@ fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
                 settings = settings.wave,
                 historySize = waveHistorySize,
                 dislikedCount = waveDisliked.size,
+                likedCount = waveRatingIndex.likedCount,
                 onDismiss = { showWaveSettings = false },
                 onApply = { draft ->
                     vm.updateWaveSettings { _ -> draft }
@@ -1102,6 +1104,7 @@ fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
                 },
                 onClearHistory = { vm.clearWaveHistory() },
                 onClearDislikes = { vm.clearWaveDislikes() },
+                onClearRatings = { vm.clearTrackRatings() },
             )
         }
 

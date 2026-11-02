@@ -1,5 +1,7 @@
 package app.sonora.ui.screens
 
+import android.content.Context
+import android.content.SharedPreferences
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -31,10 +33,14 @@ import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
+import androidx.compose.material.icons.rounded.GridView
+import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.Person
@@ -44,8 +50,10 @@ import androidx.compose.material.icons.rounded.PlaylistAdd
 import androidx.compose.material.icons.rounded.PlaylistPlay
 import androidx.compose.material.icons.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.Sort
+import androidx.compose.material.icons.rounded.ViewList
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -70,6 +78,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -78,16 +88,23 @@ import app.sonora.core.model.Artist
 import app.sonora.core.model.Playlist
 import app.sonora.core.model.Source
 import app.sonora.core.model.Track
+import app.sonora.data.download.SaveStatus
 import app.sonora.data.download.TrackSaveState
 import app.sonora.playback.PlayerUiState
 import app.sonora.ui.MainViewModel
 import app.sonora.ui.components.AlbumCard
+import app.sonora.ui.components.AlbumListRow
 import app.sonora.ui.components.ArtistCard
+import app.sonora.ui.components.ArtistListRow
 import app.sonora.ui.components.CircularPlayButton
 import app.sonora.ui.components.CreatePlaylistDialog
 import app.sonora.ui.components.CreatePlaylistTile
 import app.sonora.ui.components.EmptyState
+import app.sonora.ui.components.LikedSongsCard
 import app.sonora.ui.components.PlaylistCard
+import app.sonora.ui.components.PlaylistListRow
+import app.sonora.ui.components.QuickAccessTile
+import app.sonora.ui.components.RecentTrackCard
 import app.sonora.ui.components.SectionHeader
 import app.sonora.ui.components.TrackActionSheet
 import app.sonora.ui.components.TrackRow
@@ -96,48 +113,176 @@ import app.sonora.ui.nav.Routes
 import kotlinx.coroutines.flow.StateFlow
 
 /**
- * Разделы медиатеки. Порядок чипов — как в Spotify: «Все», затем плейлисты,
- * альбомы, исполнители, треки, избранное и YouTube.
- *
- * [tabIndex] сохраняет прежнюю нумерацию вкладок экрана (0 — Треки, 1 — Альбомы,
- * 2 — Исполнители, 3 — Плейлисты, 4 — Избранное, 5 — YouTube), поэтому вся
- * логика и навигация остались теми же — изменилась только подача.
+ * Разделы медиатеки — порядок чипов как в Spotify: сверху «Все» (сводка),
+ * затем плейлисты, исполнители, альбомы, треки, загрузки и любимые треки.
+ * YouTube-импорт Sonora остаётся отдельным разделом, потому что это
+ * не тип библиотеки Spotify, а источник.
  */
-private enum class LibrarySection(val label: String, val tabIndex: Int) {
-    ALL("Все", 0),
-    PLAYLISTS("Плейлисты", 3),
-    ALBUMS("Альбомы", 1),
-    ARTISTS("Исполнители", 2),
-    TRACKS("Треки", 0),
-    FAVORITES("Избранное", 4),
-    YOUTUBE("YouTube", 5),
+private enum class LibrarySection(val label: String) {
+    ALL("Все"),
+    PLAYLISTS("Плейлисты"),
+    ARTISTS("Исполнители"),
+    ALBUMS("Альбомы"),
+    TRACKS("Треки"),
+    DOWNLOADS("Загрузки"),
+    FAVORITES("Любимые"),
+    YOUTUBE("YouTube"),
 }
 
-/** Сортировка треков в медиатеке — как в Spotify: заголовок, артист, альбом и т. д. */
-private enum class LibrarySort(val label: String) {
-    TITLE("По названию"),
-    ARTIST("По исполнителю"),
-    ALBUM("По альбому"),
-    YEAR("По году"),
-    DURATION("По длительности"),
-    ADDED("По дате добавления"),
+/**
+ * Меню сортировки в духе Spotify. Первые пункты — из запроса пользователя
+ * («Недавние», «По алфавиту», «По артисту», «По дате добавления»), дальше
+ * сохранены прежние варианты, к которым привыкли в Sonora.
+ */
+private enum class LibrarySort(val label: String, val defaultDescending: Boolean) {
+    RECENT("Недавние", true),
+    TITLE("По алфавиту", false),
+    ARTIST("По артисту", false),
+    ADDED("По дате добавления", true),
+    ALBUM("По альбому", false),
+    YEAR("По году", true),
+    DURATION("По длительности", false),
 }
 
-/** Быстрый фильтр состава вкладки «Треки». */
+/** Быстрый фильтр состава раздела «Треки». */
 private enum class LibraryFilter(val label: String) {
     ALL("Все"),
     STREAMING("Из стриминга"),
     DEVICE("Файлы устройства"),
 }
 
+/** Вид раздела: сетка обложек или компактный список строк. */
+private enum class LibraryView {
+    GRID,
+    LIST,
+}
+
 /**
- * Медиатека в духе Spotify, но со своими акцентами и темами Sonora:
- * крупный заголовок на мягком градиенте, горизонтальные фильтры-чипы,
- * карточки-плейлисты с коллажем обложек и круглым Play, плотные строки треков.
+ * UI-предпочтения медиатеки. Хранятся отдельным SharedPreferences-файлом,
+ * а не в SettingsStore: это состояние экрана (чип, сортировка, вид), а не
+ * настройка приложения, и оно не должно требовать правок слоя данных.
+ */
+private class LibraryUiPrefs(context: Context) {
+
+    private val prefs: SharedPreferences =
+        context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+    fun section(): LibrarySection = readEnum(prefs.getString(KEY_SECTION, null), LibrarySection.ALL)
+    fun sort(): LibrarySort = readEnum(prefs.getString(KEY_SORT, null), LibrarySort.RECENT)
+    fun descending(): Boolean = prefs.getBoolean(KEY_DESCENDING, true)
+    fun view(): LibraryView = readEnum(prefs.getString(KEY_VIEW, null), LibraryView.GRID)
+    fun filter(): LibraryFilter = readEnum(prefs.getString(KEY_FILTER, null), LibraryFilter.ALL)
+
+    fun setSection(value: LibrarySection) {
+        prefs.edit().putString(KEY_SECTION, value.name).apply()
+    }
+
+    fun setSort(value: LibrarySort) {
+        prefs.edit().putString(KEY_SORT, value.name).apply()
+    }
+
+    fun setDescending(value: Boolean) {
+        prefs.edit().putBoolean(KEY_DESCENDING, value).apply()
+    }
+
+    fun setView(value: LibraryView) {
+        prefs.edit().putString(KEY_VIEW, value.name).apply()
+    }
+
+    fun setFilter(value: LibraryFilter) {
+        prefs.edit().putString(KEY_FILTER, value.name).apply()
+    }
+
+    private inline fun <reified T : Enum<T>> readEnum(name: String?, fallback: T): T =
+        name?.let { stored -> runCatching { enumValueOf<T>(stored) }.getOrNull() } ?: fallback
+
+    private companion object {
+        const val PREFS_NAME = "sonora_library_ui"
+        const val KEY_SECTION = "section"
+        const val KEY_SORT = "sort"
+        const val KEY_DESCENDING = "descending"
+        const val KEY_VIEW = "view"
+        const val KEY_FILTER = "filter"
+    }
+}
+
+/** Сортировка списка с учётом выбранного направления (без копии при инверсии). */
+private fun <T> List<T>.sortedFor(comparator: Comparator<T>, descending: Boolean): List<T> =
+    sortedWith(comparator).let { if (descending) it.asReversed() else it }
+
+/** Поиск внутри медиатеки: название, исполнитель, альбом. Регистр не важен. */
+private fun Playlist.matchesQuery(query: String): Boolean =
+    name.lowercase().contains(query) ||
+        description?.lowercase()?.contains(query) == true ||
+        ownerName?.lowercase()?.contains(query) == true
+
+private fun Album.matchesQuery(query: String): Boolean =
+    name.lowercase().contains(query) || artist.lowercase().contains(query)
+
+private fun Artist.matchesQuery(query: String): Boolean = name.lowercase().contains(query)
+
+private fun Track.matchesQuery(query: String): Boolean =
+    title.lowercase().contains(query) ||
+        artist.lowercase().contains(query) ||
+        album?.lowercase()?.contains(query) == true
+
+/**
+ * Дата добавления трека. У сохранённых из стриминга есть downloadedAt,
+ * у файлов устройства — addedAt/scannedAt; если меток нет, трек остаётся
+ * в исходном порядке (stable sort).
+ */
+private fun Track.addedAtMs(): Long =
+    extra["addedAt"]?.toLongOrNull()
+        ?: extra["downloadedAt"]?.toLongOrNull()
+        ?: extra["scannedAt"]?.toLongOrNull()
+        ?: 0L
+
+private fun trackComparator(sort: LibrarySort): Comparator<Track> = when (sort) {
+    LibrarySort.RECENT, LibrarySort.ADDED -> compareBy<Track> { it.addedAtMs() }
+    LibrarySort.TITLE -> compareBy<Track> { it.title.lowercase() }
+    LibrarySort.ARTIST -> compareBy<Track>({ it.artist.lowercase() }, { it.title.lowercase() })
+    LibrarySort.ALBUM -> compareBy<Track>(
+        { it.album.orEmpty().lowercase() },
+        { it.extra["trackNo"]?.toIntOrNull() ?: 0 },
+        { it.title.lowercase() },
+    )
+    LibrarySort.YEAR -> compareBy<Track> { it.year ?: 0 }
+    LibrarySort.DURATION -> compareBy<Track> { it.durationMs }
+}
+
+private fun playlistComparator(sort: LibrarySort): Comparator<Playlist> = when (sort) {
+    LibrarySort.RECENT, LibrarySort.ADDED, LibrarySort.YEAR ->
+        compareBy<Playlist>({ it.createdAt }, { it.name.lowercase() })
+    LibrarySort.TITLE, LibrarySort.ARTIST -> compareBy<Playlist> { it.name.lowercase() }
+    LibrarySort.ALBUM -> compareBy<Playlist> { it.name.lowercase() }
+    LibrarySort.DURATION -> compareBy<Playlist> { it.trackIds.size }
+}
+
+private fun albumComparator(sort: LibrarySort): Comparator<Album> = when (sort) {
+    LibrarySort.RECENT, LibrarySort.ADDED, LibrarySort.YEAR ->
+        compareBy<Album>({ it.year ?: 0 }, { it.name.lowercase() })
+    LibrarySort.TITLE, LibrarySort.ALBUM -> compareBy<Album> { it.name.lowercase() }
+    LibrarySort.ARTIST -> compareBy<Album>({ it.artist.lowercase() }, { it.name.lowercase() })
+    LibrarySort.DURATION -> compareBy<Album> { it.trackIds.size }
+}
+
+private fun artistComparator(sort: LibrarySort): Comparator<Artist> = when (sort) {
+    LibrarySort.DURATION -> compareBy<Artist> { it.trackIds.size }
+    else -> compareBy<Artist> { it.name.lowercase() }
+}
+
+/**
+ * Медиатека в структуре Spotify:
+ * - крупный заголовок и встроенный поиск по библиотеке;
+ * - горизонтальные фильтры-чипы со счётчиками;
+ * - панель сортировки и переключатель «список/сетка»;
+ * - «Все» — сводка с закреплённым рядом, «Недавно прослушано», «Любимыми
+ *   треками», «Загруженными», «Моими плейлистами» и полками альбомов/исполнителей.
  *
- * Вся прежняя функциональность на месте: сортировка/фильтры треков,
- * сканирование, переходы в плейлист/альбом/исполнителя, долгое нажатие
- * открывает те же листы действий, YouTube-импорт и создание плейлистов.
+ * Вся прежняя функциональность сохранена: воспроизведение, сканирование,
+ * импорт YouTube (по ссылке и Takeout), создание/переименование/удаление
+ * плейлистов, скачивание, сортировка плейлистов и долгое нажатие с листом
+ * действий. Выбранный чип, сортировка, направление и вид переживают запуск.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -149,11 +294,18 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
     val player by vm.playerChrome.collectAsState()
     val scanning by vm.scanning.collectAsState()
     val importError by vm.playlistImportError.collectAsState()
+    val historyEntries by vm.historyEntries.collectAsState()
 
-    var sectionName by rememberSaveable { mutableStateOf(LibrarySection.ALL.name) }
-    var sortName by rememberSaveable { mutableStateOf(LibrarySort.TITLE.name) }
-    var sortDescending by rememberSaveable { mutableStateOf(false) }
-    var filterName by rememberSaveable { mutableStateOf(LibraryFilter.ALL.name) }
+    val context = LocalContext.current
+    val uiPrefs = remember(context) { LibraryUiPrefs(context) }
+
+    var sectionName by rememberSaveable { mutableStateOf(uiPrefs.section().name) }
+    var sortName by rememberSaveable { mutableStateOf(uiPrefs.sort().name) }
+    var sortDescending by rememberSaveable { mutableStateOf(uiPrefs.descending()) }
+    var viewName by rememberSaveable { mutableStateOf(uiPrefs.view().name) }
+    var filterName by rememberSaveable { mutableStateOf(uiPrefs.filter().name) }
+    var query by rememberSaveable { mutableStateOf("") }
+    var searchOpen by rememberSaveable { mutableStateOf(false) }
     var showCreateDialog by remember { mutableStateOf(false) }
     var showYouTubeImport by remember { mutableStateOf(false) }
     var actionTrack by remember { mutableStateOf<Track?>(null) }
@@ -165,53 +317,39 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
     var renameTarget by remember { mutableStateOf<Playlist?>(null) }
     var deleteTarget by remember { mutableStateOf<Playlist?>(null) }
 
-    val section = LibrarySection.valueOf(sectionName)
-    val sort = LibrarySort.valueOf(sortName)
-    val filter = LibraryFilter.valueOf(filterName)
+    val section = remember(sectionName) {
+        runCatching { LibrarySection.valueOf(sectionName) }.getOrDefault(LibrarySection.ALL)
+    }
+    val sort = remember(sortName) {
+        runCatching { LibrarySort.valueOf(sortName) }.getOrDefault(LibrarySort.RECENT)
+    }
+    val filter = remember(filterName) {
+        runCatching { LibraryFilter.valueOf(filterName) }.getOrDefault(LibraryFilter.ALL)
+    }
+    val view = remember(viewName) {
+        runCatching { LibraryView.valueOf(viewName) }.getOrDefault(LibraryView.GRID)
+    }
+
+    // ---------- Данные ----------
 
     val localTracks = remember(tracks) { tracks.filter { it.source == Source.LOCAL } }
-    val savedFromStreaming = remember(localTracks) { localTracks.count { it.savedFromStreaming } }
-    val sortedTracks = remember(localTracks, sort, sortDescending, filter) {
-        val filtered = when (filter) {
-            LibraryFilter.ALL -> localTracks
-            LibraryFilter.STREAMING -> localTracks.filter { it.savedFromStreaming }
-            LibraryFilter.DEVICE -> localTracks.filterNot { it.savedFromStreaming }
-        }
-        val comparator: Comparator<Track> = when (sort) {
-            LibrarySort.TITLE -> compareBy<Track> { it.title.lowercase() }
-            LibrarySort.ARTIST -> compareBy(
-                { it.artist.lowercase() },
-                { it.title.lowercase() },
-            )
-            LibrarySort.ALBUM -> compareBy(
-                { it.album.orEmpty().lowercase() },
-                { it.extra["trackNo"]?.toIntOrNull() ?: 0 },
-                { it.title.lowercase() },
-            )
-            LibrarySort.YEAR -> compareBy<Track> { it.year ?: 0 }
-            LibrarySort.DURATION -> compareBy<Track> { it.durationMs }
-            // Сохранённые из стриминга несут метку downloadedAt; у файлов
-            // устройства её нет — они остаются в конце списка.
-            LibrarySort.ADDED -> compareBy<Track> {
-                it.extra["downloadedAt"]?.toLongOrNull() ?: 0L
-            }
-        }
-        filtered.sortedWith(comparator).let { if (sortDescending) it.asReversed() else it }
+    val downloadedTracks = remember(localTracks) {
+        localTracks.filter { it.savedFromStreaming }
+            .sortedByDescending { it.extra["downloadedAt"]?.toLongOrNull() ?: 0L }
     }
+    val favoriteTracks = remember(tracks, favorites) { tracks.filter { it.id in favorites } }
     val albums = remember(localTracks) { vm.albums() }
     val artists = remember(localTracks) { vm.artists() }
-    val favoriteTracks = remember(tracks, favorites) { tracks.filter { it.id in favorites } }
-    // Не пересчитываем «хвосты» списков в теле композиции на каждой перерисовке.
-    val recentTracks = remember(localTracks) { localTracks.take(8) }
     val editablePlaylists = remember(playlists) { playlists.filter { it.editable } }
     val importedTracks = remember(tracks) {
         vm.withoutSavedCopies(
             tracks.filter { it.source == Source.YOUTUBE && !it.isVideoContent },
         )
     }
-    // Обложки плейлистов для коллажей: постер плейлиста или до 4 обложек треков.
-    // Индекс id→трек строим один раз: vm.playlistTracks() пересобирал бы всю
-    // таблицу для каждого плейлиста (O(плейлисты × треки) на главном потоке).
+    // «Недавно прослушано» — та же история, что на экране «История».
+    val recentlyPlayed = remember(historyEntries, tracks) { vm.historyTracks(16) }
+    // Обложки плейлистов для коллажей: индекс id→трек строим один раз,
+    // иначе получаем O(плейлисты × треки) на каждой перерисовке.
     val playlistCovers = remember(playlists, tracks) {
         val trackById = tracks.associateBy { it.id }
         playlists.associate { playlist ->
@@ -230,8 +368,107 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
             playlist.id to covers
         }
     }
+
+    // ---------- Поиск и сортировка ----------
+
+    val normalizedQuery = query.trim()
+    val queryKey = normalizedQuery.lowercase()
+    val searching = normalizedQuery.isNotEmpty()
+
+    val visiblePlaylists = remember(playlists, queryKey, sort, sortDescending) {
+        playlists
+            .filter { queryKey.isEmpty() || it.matchesQuery(queryKey) }
+            .sortedFor(playlistComparator(sort), sortDescending)
+    }
+    val visibleAlbums = remember(albums, queryKey, sort, sortDescending) {
+        albums
+            .filter { queryKey.isEmpty() || it.matchesQuery(queryKey) }
+            .sortedFor(albumComparator(sort), sortDescending)
+    }
+    val visibleArtists = remember(artists, queryKey, sort, sortDescending) {
+        artists
+            .filter { queryKey.isEmpty() || it.matchesQuery(queryKey) }
+            .sortedFor(artistComparator(sort), sortDescending)
+    }
+    val visibleTracks = remember(localTracks, queryKey, sort, sortDescending, filter) {
+        localTracks
+            .filter { track ->
+                (queryKey.isEmpty() || track.matchesQuery(queryKey)) && when (filter) {
+                    LibraryFilter.ALL -> true
+                    LibraryFilter.STREAMING -> track.savedFromStreaming
+                    LibraryFilter.DEVICE -> !track.savedFromStreaming
+                }
+            }
+            .sortedFor(trackComparator(sort), sortDescending)
+    }
+    val visibleFavorites = remember(favoriteTracks, queryKey, sort, sortDescending) {
+        favoriteTracks
+            .filter { queryKey.isEmpty() || it.matchesQuery(queryKey) }
+            .sortedFor(trackComparator(sort), sortDescending)
+    }
+    val visibleDownloads = remember(downloadedTracks, queryKey, sort, sortDescending) {
+        downloadedTracks
+            .filter { queryKey.isEmpty() || it.matchesQuery(queryKey) }
+            .sortedFor(trackComparator(sort), sortDescending)
+    }
+    val visibleYouTube = remember(importedTracks, queryKey, sort, sortDescending) {
+        importedTracks
+            .filter { queryKey.isEmpty() || it.matchesQuery(queryKey) }
+            .sortedFor(trackComparator(sort), sortDescending)
+    }
+    // Короткий срез для сводки: не держим в композиции весь список лишний раз.
+    val tracksPreview = remember(visibleTracks) { visibleTracks.take(12) }
+
+    val chipCounts = remember(
+        playlists, albums, artists, localTracks, downloadedTracks, favoriteTracks, importedTracks,
+    ) {
+        mapOf(
+            LibrarySection.ALL to
+                (playlists.size + albums.size + artists.size + localTracks.size + importedTracks.size),
+            LibrarySection.PLAYLISTS to playlists.size,
+            LibrarySection.ARTISTS to artists.size,
+            LibrarySection.ALBUMS to albums.size,
+            LibrarySection.TRACKS to localTracks.size,
+            LibrarySection.DOWNLOADS to downloadedTracks.size,
+            LibrarySection.FAVORITES to favoriteTracks.size,
+            LibrarySection.YOUTUBE to importedTracks.size,
+        )
+    }
+
+    // ---------- Действия ----------
+
+    val selectSection: (LibrarySection) -> Unit = { next ->
+        sectionName = next.name
+        uiPrefs.setSection(next)
+    }
+    val changeSort: (LibrarySort) -> Unit = { next ->
+        sortName = next.name
+        sortDescending = next.defaultDescending
+        uiPrefs.setSort(next)
+        uiPrefs.setDescending(next.defaultDescending)
+    }
+    val toggleDirection: () -> Unit = {
+        sortDescending = !sortDescending
+        uiPrefs.setDescending(sortDescending)
+    }
+    val changeView: (LibraryView) -> Unit = { next ->
+        viewName = next.name
+        uiPrefs.setView(next)
+    }
+    val changeFilter: (LibraryFilter) -> Unit = { next ->
+        filterName = next.name
+        uiPrefs.setFilter(next)
+    }
+    val closeSearch: () -> Unit = {
+        searchOpen = false
+        query = ""
+    }
+    val playTracks: (List<Track>) -> Unit = { list -> if (list.isNotEmpty()) vm.playQueue(list) }
+
     val bottomPadding = padding.calculateBottomPadding()
-    val playlistPlay: (Playlist) -> Unit = { vm.playPlaylist(it) }
+    val gridSections = section == LibrarySection.PLAYLISTS ||
+        section == LibrarySection.ALBUMS ||
+        section == LibrarySection.ARTISTS
 
     Box(Modifier.fillMaxSize()) {
         Column(
@@ -239,101 +476,157 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
                 .fillMaxSize()
                 .padding(top = padding.calculateTopPadding()),
         ) {
-            // Плоская шапка: без цветного ореола, как в Spotify.
             LibraryHeader(
-                localCount = localTracks.size,
-                savedFromStreaming = savedFromStreaming,
+                trackCount = localTracks.size,
+                downloadedCount = downloadedTracks.size,
                 playlistCount = playlists.size,
+                favoriteCount = favoriteTracks.size,
                 scanning = scanning,
+                searchOpen = searchOpen,
+                onSearchClick = {
+                    if (searchOpen) {
+                        closeSearch()
+                    } else {
+                        searchOpen = true
+                    }
+                },
                 onScan = { vm.scanLibrary() },
                 onAvatarClick = { navigate(Routes.SETTINGS) },
             )
+            if (searchOpen) {
+                LibrarySearchField(
+                    query = query,
+                    onQueryChange = { query = it },
+                    onClose = closeSearch,
+                )
+            }
             Spacer(Modifier.height(6.dp))
             LibraryChips(
                 selected = section,
-                onSelect = { sectionName = it.name },
+                counts = chipCounts,
+                onSelect = selectSection,
             )
-            Spacer(Modifier.height(6.dp))
-            LibraryPlayAllRow(
-                trackCount = localTracks.size,
-                onPlayAll = { vm.playLibraryShuffled() },
+            Spacer(Modifier.height(4.dp))
+            LibraryToolbar(
+                sort = sort,
+                descending = sortDescending,
+                view = view,
+                showViewToggle = gridSections,
+                onSortChange = changeSort,
+                onToggleDirection = toggleDirection,
+                onViewChange = changeView,
             )
-            Spacer(Modifier.height(8.dp))
-            when (section) {
-                LibrarySection.ALL -> AllTab(
-                    playlists = playlists,
+            Spacer(Modifier.height(4.dp))
+
+            when {
+                section == LibrarySection.ALL && searching -> LibrarySearchResults(
+                    query = normalizedQuery,
+                    playlists = visiblePlaylists,
                     playlistCovers = playlistCovers,
-                    albums = albums,
-                    artists = artists,
-                    recentTracks = recentTracks,
+                    albums = visibleAlbums,
+                    artists = visibleArtists,
+                    tracks = visibleTracks,
                     favorites = favorites,
                     player = player,
-                    bottomPadding = bottomPadding,
-                    onSelectSection = { sectionName = it.name },
-                    onCreatePlaylist = { showCreateDialog = true },
                     navigate = navigate,
+                    bottomPadding = bottomPadding,
                     onPlaylistLongClick = { playlistMenu = it },
-                    onPlayPlaylist = playlistPlay,
                     onAlbumLongClick = { albumMenu = it },
-                    onPlayAlbum = { vm.playQueue(vm.tracksByIds(it.trackIds)) },
                     onArtistLongClick = { artistMenu = it },
-                    onPlayArtist = { vm.playQueue(vm.tracksByIds(it.trackIds)) },
                     onClickTrack = { vm.playOrOpen(it) },
                     onLongClickTrack = { actionTrack = it },
                     onFavoriteTrack = { vm.toggleFavorite(it.id) },
                 )
-                LibrarySection.PLAYLISTS -> PlaylistsTab(
-                    playlists = playlists,
+                section == LibrarySection.ALL -> AllTab(
+                    playlists = visiblePlaylists,
                     playlistCovers = playlistCovers,
+                    albums = visibleAlbums,
+                    artists = visibleArtists,
+                    recentlyPlayed = recentlyPlayed,
+                    favoriteTracks = visibleFavorites,
+                    downloadedTracks = visibleDownloads,
+                    tracksPreview = tracksPreview,
+                    favorites = favorites,
+                    player = player,
+                    scanning = scanning,
+                    bottomPadding = bottomPadding,
+                    onSelectSection = selectSection,
+                    onOpenHistory = { navigate(Routes.HISTORY) },
+                    onPlayAllLibrary = { vm.playLibraryShuffled() },
+                    onCreatePlaylist = { showCreateDialog = true },
+                    navigate = navigate,
+                    onPlaylistLongClick = { playlistMenu = it },
+                    onPlayPlaylist = { vm.playPlaylist(it) },
+                    onAlbumLongClick = { albumMenu = it },
+                    onPlayAlbum = { playTracks(vm.tracksByIds(it.trackIds)) },
+                    onArtistLongClick = { artistMenu = it },
+                    onPlayArtist = { playTracks(vm.tracksByIds(it.trackIds)) },
+                    onClickTrack = { vm.playOrOpen(it) },
+                    onLongClickTrack = { actionTrack = it },
+                    onFavoriteTrack = { vm.toggleFavorite(it.id) },
+                    onPlayTracks = playTracks,
+                )
+                section == LibrarySection.PLAYLISTS -> PlaylistsTab(
+                    playlists = visiblePlaylists,
+                    playlistCovers = playlistCovers,
+                    view = view,
                     bottomPadding = bottomPadding,
                     onCreatePlaylist = { showCreateDialog = true },
                     onLongClick = { playlistMenu = it },
-                    onPlay = playlistPlay,
+                    onPlay = { vm.playPlaylist(it) },
                     navigate = navigate,
                 )
-                LibrarySection.ALBUMS -> AlbumsTab(
-                    albums = albums,
+                section == LibrarySection.ALBUMS -> AlbumsTab(
+                    albums = visibleAlbums,
+                    view = view,
                     navigate = navigate,
                     bottomPadding = bottomPadding,
-                    onPlay = { vm.playQueue(vm.tracksByIds(it.trackIds)) },
+                    onPlay = { playTracks(vm.tracksByIds(it.trackIds)) },
                     onLongClick = { albumMenu = it },
                 )
-                LibrarySection.ARTISTS -> ArtistsTab(
-                    artists = artists,
+                section == LibrarySection.ARTISTS -> ArtistsTab(
+                    artists = visibleArtists,
+                    view = view,
                     navigate = navigate,
                     bottomPadding = bottomPadding,
-                    onPlay = { vm.playQueue(vm.tracksByIds(it.trackIds)) },
+                    onPlay = { playTracks(vm.tracksByIds(it.trackIds)) },
                     onLongClick = { artistMenu = it },
                 )
-                LibrarySection.TRACKS -> TracksTab(
-                    tracks = sortedTracks,
+                section == LibrarySection.TRACKS -> TracksTab(
+                    tracks = visibleTracks,
                     favorites = favorites,
                     player = player,
-                    sort = sort,
-                    sortDescending = sortDescending,
                     filter = filter,
                     scanning = scanning,
-                    onSortChange = { sortName = it.name },
-                    onToggleDirection = { sortDescending = !sortDescending },
-                    onFilterChange = { filterName = it.name },
-                    onScan = { vm.scanLibrary() },
+                    onFilterChange = changeFilter,
                     onClick = { vm.playOrOpen(it) },
                     onLongClick = { actionTrack = it },
                     onFavorite = { vm.toggleFavorite(it.id) },
                     bottomPadding = bottomPadding,
                 )
-                LibrarySection.FAVORITES -> FavoritesTab(
-                    tracks = favoriteTracks,
+                section == LibrarySection.DOWNLOADS -> DownloadsTab(
+                    tracks = visibleDownloads,
                     favorites = favorites,
                     player = player,
-                    onPlayAll = { vm.playQueue(favoriteTracks) },
+                    saveStatesFlow = vm.saveStates,
+                    onPlayAll = { playTracks(downloadedTracks) },
                     onClick = { vm.playOrOpen(it) },
                     onLongClick = { actionTrack = it },
                     onFavorite = { vm.toggleFavorite(it.id) },
                     bottomPadding = bottomPadding,
                 )
-                LibrarySection.YOUTUBE -> YouTubeTab(
-                    tracks = importedTracks,
+                section == LibrarySection.FAVORITES -> FavoritesTab(
+                    tracks = visibleFavorites,
+                    favorites = favorites,
+                    player = player,
+                    onPlayAll = { playTracks(favoriteTracks) },
+                    onClick = { vm.playOrOpen(it) },
+                    onLongClick = { actionTrack = it },
+                    onFavorite = { vm.toggleFavorite(it.id) },
+                    bottomPadding = bottomPadding,
+                )
+                section == LibrarySection.YOUTUBE -> YouTubeTab(
+                    tracks = visibleYouTube,
                     favorites = favorites,
                     player = player,
                     onClick = { vm.playOrOpen(it) },
@@ -457,7 +750,7 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
                 onDismiss = { albumMenu = null },
                 onPlay = {
                     albumMenu = null
-                    vm.playQueue(vm.tracksByIds(album.trackIds))
+                    playTracks(vm.tracksByIds(album.trackIds))
                 },
                 onPlayNext = {
                     albumMenu = null
@@ -481,7 +774,7 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
                 onDismiss = { artistMenu = null },
                 onPlay = {
                     artistMenu = null
-                    vm.playQueue(vm.tracksByIds(artist.trackIds))
+                    playTracks(vm.tracksByIds(artist.trackIds))
                 },
                 onPlayNext = {
                     artistMenu = null
@@ -572,22 +865,25 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
 }
 
 /**
- * Шапка медиатеки: огромное «Медиатека», строка-сводка и компактные действия
- * (сканирование фонотеки + аватар-«профиль», ведущий в настройки).
+ * Шапка медиатеки: огромное «Медиатека», строка-сводка и компактные действия —
+ * поиск по библиотеке, сканирование фонотеки и аватар-«профиль» (настройки).
  */
 @Composable
 private fun LibraryHeader(
-    localCount: Int,
-    savedFromStreaming: Int,
+    trackCount: Int,
+    downloadedCount: Int,
     playlistCount: Int,
+    favoriteCount: Int,
     scanning: Boolean,
+    searchOpen: Boolean,
+    onSearchClick: () -> Unit,
     onScan: () -> Unit,
     onAvatarClick: () -> Unit,
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 20.dp, end = 16.dp, top = 10.dp, bottom = 2.dp),
+            .padding(start = 20.dp, end = 6.dp, top = 10.dp, bottom = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
@@ -600,15 +896,27 @@ private fun LibraryHeader(
             Spacer(Modifier.height(4.dp))
             Text(
                 text = buildString {
-                    append(tracksLabel(localCount))
+                    append(tracksLabel(trackCount))
                     append(" на устройстве")
-                    if (savedFromStreaming > 0) append(" · из стриминга: $savedFromStreaming")
+                    if (downloadedCount > 0) append(" · загружено: $downloadedCount")
                     if (playlistCount > 0) append(" · плейлистов: $playlistCount")
+                    if (favoriteCount > 0) append(" · любимых: $favoriteCount")
                 },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+            )
+        }
+        IconButton(onClick = onSearchClick) {
+            Icon(
+                imageVector = Icons.Rounded.Search,
+                contentDescription = if (searchOpen) "Закрыть поиск по медиатеке" else "Поиск по медиатеке",
+                tint = if (searchOpen) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
             )
         }
         IconButton(onClick = onScan) {
@@ -640,78 +948,46 @@ private fun LibraryHeader(
     }
 }
 
-/**
- * «Слушать всю медиатеку» — одна большая кнопка, как Play у «Понравившихся»
- * в Spotify: вся фонотека вперемешку, shuffle включается автоматически.
- */
+/** Встроенное поле поиска по медиатеке — раскрывается иконкой в шапке. */
 @Composable
-private fun LibraryPlayAllRow(
-    trackCount: Int,
-    onPlayAll: () -> Unit,
+private fun LibrarySearchField(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    onClose: () -> Unit,
 ) {
-    val enabled = trackCount > 0
-    val contentColor = if (enabled) {
-        MaterialTheme.colorScheme.onPrimary
-    } else {
-        MaterialTheme.colorScheme.onSurfaceVariant
-    }
-    Row(
+    OutlinedTextField(
+        value = query,
+        onValueChange = onQueryChange,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 2.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(
-                if (enabled) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.surfaceContainerHigh
-                },
-            )
-            .clickable(enabled = enabled, onClick = onPlayAll)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            imageVector = Icons.Rounded.Shuffle,
-            contentDescription = null,
-            tint = contentColor,
-            modifier = Modifier.size(22.dp),
-        )
-        Spacer(Modifier.size(10.dp))
-        Column(Modifier.weight(1f)) {
-            Text(
-                text = "Слушать всю медиатеку",
-                style = MaterialTheme.typography.titleMedium,
-                color = contentColor,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = if (enabled) {
-                    "${tracksLabel(trackCount)} · вперемешку, как плейлист"
-                } else {
-                    "Пока нет треков"
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = contentColor.copy(alpha = 0.82f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        if (enabled) {
+            .padding(horizontal = 16.dp, vertical = 2.dp),
+        placeholder = { Text("Поиск в медиатеке") },
+        leadingIcon = {
             Icon(
-                imageVector = Icons.Rounded.PlayArrow,
-                contentDescription = "Слушать всю медиатеку",
-                tint = contentColor,
-                modifier = Modifier.size(26.dp),
+                imageVector = Icons.Rounded.Search,
+                contentDescription = null,
+                modifier = Modifier.size(20.dp),
             )
-        }
-    }
+        },
+        trailingIcon = {
+            IconButton(onClick = onClose, modifier = Modifier.size(36.dp)) {
+                Icon(
+                    imageVector = Icons.Rounded.Close,
+                    contentDescription = "Закрыть поиск",
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        },
+        singleLine = true,
+        shape = RoundedCornerShape(28.dp),
+    )
 }
 
-/** Горизонтальные фильтры-чипы в духе Spotify; выбранный залит акцентом. */
+/** Горизонтальные фильтры-чипы в духе Spotify; у выбранного — акцент и счётчик. */
 @Composable
-private fun LibraryChips(    selected: LibrarySection,
+private fun LibraryChips(
+    selected: LibrarySection,
+    counts: Map<LibrarySection, Int>,
     onSelect: (LibrarySection) -> Unit,
 ) {
     Row(
@@ -724,7 +1000,7 @@ private fun LibraryChips(    selected: LibrarySection,
     ) {
         LibrarySection.entries.forEach { section ->
             val isSelected = section == selected
-            Box(
+            Row(
                 modifier = Modifier
                     .clip(CircleShape)
                     .background(
@@ -735,7 +1011,8 @@ private fun LibraryChips(    selected: LibrarySection,
                         },
                     )
                     .clickable { onSelect(section) }
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
                     text = section.label,
@@ -747,14 +1024,141 @@ private fun LibraryChips(    selected: LibrarySection,
                     },
                     maxLines = 1,
                 )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = (counts[section] ?: 0).toString(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (isSelected) {
+                        MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.72f)
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
+                    },
+                    maxLines = 1,
+                )
             }
         }
     }
 }
 
 /**
- * «Все»: сводка медиатеки рельсами, как стартовая страница Spotify.
- * Плейлисты идут первыми и запускаются верхней кнопкой Play.
+ * Панель инструментов: сортировка с направлением и переключатель вида
+ * «список/сетка» (для разделов с обложками). Состояние сохраняется в prefs.
+ */
+@Composable
+private fun LibraryToolbar(
+    sort: LibrarySort,
+    descending: Boolean,
+    view: LibraryView,
+    showViewToggle: Boolean,
+    onSortChange: (LibrarySort) -> Unit,
+    onToggleDirection: () -> Unit,
+    onViewChange: (LibraryView) -> Unit,
+) {
+    var sortMenuOpen by remember { mutableStateOf(false) }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box {
+            FilterChip(
+                selected = false,
+                onClick = { sortMenuOpen = true },
+                label = { Text(sort.label) },
+                colors = FilterChipDefaults.filterChipColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                ),
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Rounded.Sort,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                    )
+                },
+            )
+            DropdownMenu(
+                expanded = sortMenuOpen,
+                onDismissRequest = { sortMenuOpen = false },
+            ) {
+                LibrarySort.entries.forEach { option ->
+                    DropdownMenuItem(
+                        text = { Text(option.label) },
+                        leadingIcon = {
+                            if (option == sort) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Check,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            }
+                        },
+                        onClick = {
+                            sortMenuOpen = false
+                            onSortChange(option)
+                        },
+                    )
+                }
+            }
+        }
+        IconButton(onClick = onToggleDirection, modifier = Modifier.size(36.dp)) {
+            Icon(
+                imageVector = if (descending) {
+                    Icons.Rounded.ArrowDownward
+                } else {
+                    Icons.Rounded.ArrowUpward
+                },
+                contentDescription = if (descending) {
+                    "Сначала новые и большие"
+                } else {
+                    "Сначала старые и меньшие"
+                },
+                modifier = Modifier.size(18.dp),
+            )
+        }
+        Spacer(Modifier.weight(1f))
+        if (showViewToggle) {
+            ViewModeButton(
+                icon = Icons.Rounded.GridView,
+                selected = view == LibraryView.GRID,
+                description = "Показать сеткой",
+                onClick = { onViewChange(LibraryView.GRID) },
+            )
+            ViewModeButton(
+                icon = Icons.Rounded.ViewList,
+                selected = view == LibraryView.LIST,
+                description = "Показать списком",
+                onClick = { onViewChange(LibraryView.LIST) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun ViewModeButton(
+    icon: ImageVector,
+    selected: Boolean,
+    description: String,
+    onClick: () -> Unit,
+) {
+    IconButton(onClick = onClick, modifier = Modifier.size(36.dp)) {
+        Icon(
+            imageVector = icon,
+            contentDescription = description,
+            tint = if (selected) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+            modifier = Modifier.size(20.dp),
+        )
+    }
+}
+
+/**
+ * «Все»: сводка медиатеки рельсами, как домашняя страница библиотеки Spotify.
+ * Сверху — закреплённый ряд (любимые, загруженные, история), затем полки
+ * «Недавно прослушано», «Загруженные», «Мои плейлисты», альбомы и исполнители.
  */
 @Composable
 private fun AllTab(
@@ -762,11 +1166,17 @@ private fun AllTab(
     playlistCovers: Map<String, List<String>>,
     albums: List<Album>,
     artists: List<Artist>,
-    recentTracks: List<Track>,
+    recentlyPlayed: List<MainViewModel.HistoryTrackEntry>,
+    favoriteTracks: List<Track>,
+    downloadedTracks: List<Track>,
+    tracksPreview: List<Track>,
     favorites: Set<String>,
     player: PlayerUiState,
+    scanning: Boolean,
     bottomPadding: Dp,
     onSelectSection: (LibrarySection) -> Unit,
+    onOpenHistory: () -> Unit,
+    onPlayAllLibrary: () -> Unit,
     onCreatePlaylist: () -> Unit,
     navigate: (String) -> Unit,
     onPlaylistLongClick: (Playlist) -> Unit,
@@ -778,11 +1188,18 @@ private fun AllTab(
     onClickTrack: (Track) -> Unit,
     onLongClickTrack: (Track) -> Unit,
     onFavoriteTrack: (Track) -> Unit,
+    onPlayTracks: (List<Track>) -> Unit,
 ) {
     // Срезы для рельсов считаем один раз на список, а не на каждую перерисовку.
-    val featuredPlaylists = remember(playlists) { playlists.take(8) }
+    val featuredPlaylists = remember(playlists) { playlists.take(10) }
     val featuredAlbums = remember(albums) { albums.take(10) }
     val featuredArtists = remember(artists) { artists.take(10) }
+    val featuredRecent = remember(recentlyPlayed) { recentlyPlayed.take(14) }
+    val featuredDownloads = remember(downloadedTracks) { downloadedTracks.take(10) }
+    val everythingEmpty = playlists.isEmpty() && albums.isEmpty() && artists.isEmpty() &&
+        recentlyPlayed.isEmpty() && favoriteTracks.isEmpty() && downloadedTracks.isEmpty() &&
+        tracksPreview.isEmpty()
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(
@@ -793,13 +1210,98 @@ private fun AllTab(
         ),
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
+        item(key = "all-pinned") {
+            PinnedRail(
+                favoriteCount = favoriteTracks.size,
+                downloadedCount = downloadedTracks.size,
+                onSelectSection = onSelectSection,
+                onOpenHistory = onOpenHistory,
+                onPlayAllLibrary = onPlayAllLibrary,
+            )
+        }
+        if (scanning && everythingEmpty) {
+            item(key = "all-loading") { LoadingRow("Сканируем фонотеку…") }
+        }
+        if (everythingEmpty && !scanning) {
+            item(key = "all-empty") {
+                EmptyState(
+                    icon = Icons.Rounded.LibraryMusic,
+                    title = "Фонотека пуста",
+                    subtitle = "Нажмите «Сканировать» в шапке — найдём аудиофайлы на устройстве. " +
+                        "Или создайте первый плейлист.",
+                )
+            }
+        }
+
+        // «Недавно прослушано» — как Recently played в Spotify.
+        item(key = "all-recent-header") {
+            SectionHeader(
+                title = "Недавно прослушано",
+                subtitle = if (featuredRecent.isEmpty()) "Здесь появятся прослушанные треки" else null,
+                actionLabel = if (featuredRecent.isNotEmpty()) "История" else null,
+                onAction = onOpenHistory,
+            )
+        }
+        if (featuredRecent.isNotEmpty()) {
+            item(key = "all-recent-rail") {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    items(featuredRecent, key = { "all-recent-${it.track.id}" }) { entry ->
+                        RecentTrackCard(
+                            track = entry.track,
+                            onClick = { onClickTrack(entry.track) },
+                            onLongClick = { onLongClickTrack(entry.track) },
+                            modifier = Modifier.width(136.dp),
+                        )
+                    }
+                }
+            }
+        }
+
+        // «Любимые треки» — аналог Liked Songs, ведёт в раздел «Любимые».
+        item(key = "all-liked") {
+            LikedSongsCard(
+                count = favoriteTracks.size,
+                onPlay = { onPlayTracks(favoriteTracks) },
+                onClick = { onSelectSection(LibrarySection.FAVORITES) },
+            )
+        }
+
+        // «Загруженные» — локальные копии, сохранённые из стриминга.
+        item(key = "all-downloads-header") {
+            SectionHeader(
+                title = "Загруженные",
+                subtitle = if (featuredDownloads.isEmpty()) {
+                    "Скачанные треки играют без интернета"
+                } else {
+                    tracksLabel(downloadedTracks.size) + " · доступны офлайн"
+                },
+                actionLabel = if (featuredDownloads.isNotEmpty()) "Все" else null,
+                onAction = { onSelectSection(LibrarySection.DOWNLOADS) },
+            )
+        }
+        if (featuredDownloads.isNotEmpty()) {
+            item(key = "all-downloads-rail") {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    items(featuredDownloads, key = { "all-dl-${it.id}" }) { track ->
+                        RecentTrackCard(
+                            track = track,
+                            onClick = { onClickTrack(track) },
+                            onLongClick = { onLongClickTrack(track) },
+                            modifier = Modifier.width(136.dp),
+                        )
+                    }
+                }
+            }
+        }
+
+        // «Мои плейлисты» — главная полка библиотеки.
         item(key = "all-playlists-header") {
             SectionHeader(
-                title = "Плейлисты",
+                title = "Мои плейлисты",
                 subtitle = if (playlists.isEmpty()) {
                     "Создайте свой первый плейлист"
                 } else {
-                    tracksLabel(playlists.size) + " · запуск одним нажатием"
+                    tracksLabel(playlists.size)
                 },
                 actionLabel = if (playlists.isNotEmpty()) "Все" else null,
                 onAction = { onSelectSection(LibrarySection.PLAYLISTS) },
@@ -807,7 +1309,7 @@ private fun AllTab(
         }
         item(key = "all-playlists-rail") {
             LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (playlists.isEmpty()) {
+                if (featuredPlaylists.isEmpty()) {
                     item(key = "all-create-playlist") {
                         CreatePlaylistTile(
                             onClick = onCreatePlaylist,
@@ -834,20 +1336,12 @@ private fun AllTab(
                 }
             }
         }
-        if (albums.isEmpty() && artists.isEmpty() && recentTracks.isEmpty()) {
-            item(key = "all-empty") {
-                EmptyState(
-                    icon = Icons.Rounded.LibraryMusic,
-                    title = "Фонотека пуста",
-                    subtitle = "Нажмите «Сканировать» в шапке — найдём аудиофайлы на устройстве.",
-                )
-            }
-        }
-        if (albums.isNotEmpty()) {
+
+        if (featuredAlbums.isNotEmpty()) {
             item(key = "all-albums-header") {
                 SectionHeader(
                     title = "Альбомы",
-                    subtitle = tracksLabel(albums.size) + " в фонотеке",
+                    subtitle = tracksLabel(albums.size),
                     actionLabel = "Все",
                     onAction = { onSelectSection(LibrarySection.ALBUMS) },
                 )
@@ -866,11 +1360,11 @@ private fun AllTab(
                 }
             }
         }
-        if (artists.isNotEmpty()) {
+        if (featuredArtists.isNotEmpty()) {
             item(key = "all-artists-header") {
                 SectionHeader(
                     title = "Исполнители",
-                    subtitle = tracksLabel(artists.size) + " в фонотеке",
+                    subtitle = tracksLabel(artists.size),
                     actionLabel = "Все",
                     onAction = { onSelectSection(LibrarySection.ARTISTS) },
                 )
@@ -889,15 +1383,21 @@ private fun AllTab(
                 }
             }
         }
-        if (recentTracks.isNotEmpty()) {
-            item(key = "all-recent-header") {
+
+        if (tracksPreview.isNotEmpty()) {
+            item(key = "all-tracks-header") {
                 SectionHeader(
-                    title = "Недавно добавленные",
+                    title = "Треки",
+                    subtitle = "На устройстве",
                     actionLabel = "Все треки",
                     onAction = { onSelectSection(LibrarySection.TRACKS) },
                 )
             }
-            items(recentTracks, key = { "all-track-${it.id}" }, contentType = { "track" }) { track ->
+            items(
+                items = tracksPreview,
+                key = { "all-track-${it.id}" },
+                contentType = { "track" },
+            ) { track ->
                 TrackRow(
                     track = track,
                     isFavorite = track.id in favorites,
@@ -911,267 +1411,156 @@ private fun AllTab(
     }
 }
 
-/** Вкладка «Треки»: счётчики, сортировка, фильтры и плотный список. */
+/** Закреплённый ряд: быстрый доступ к любимым, загрузкам и истории прослушиваний. */
 @Composable
-private fun TracksTab(
-    tracks: List<Track>,
-    favorites: Set<String>,
-    player: PlayerUiState,
-    sort: LibrarySort,
-    sortDescending: Boolean,
-    filter: LibraryFilter,
-    scanning: Boolean,
-    onSortChange: (LibrarySort) -> Unit,
-    onToggleDirection: () -> Unit,
-    onFilterChange: (LibraryFilter) -> Unit,
-    onScan: () -> Unit,
-    onClick: (Track) -> Unit,
-    onLongClick: (Track) -> Unit,
-    onFavorite: (Track) -> Unit,
-    bottomPadding: Dp,
+private fun PinnedRail(
+    favoriteCount: Int,
+    downloadedCount: Int,
+    onSelectSection: (LibrarySection) -> Unit,
+    onOpenHistory: () -> Unit,
+    onPlayAllLibrary: () -> Unit,
 ) {
-    var sortMenuOpen by remember { mutableStateOf(false) }
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(
-            start = 16.dp,
-            end = 16.dp,
-            top = 8.dp,
-            bottom = bottomPadding + 24.dp,
-        ),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        item(key = "tracks-controls") {
-            Column {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = tracksLabel(tracks.size),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Box {
-                        FilterChip(
-                            selected = false,
-                            onClick = { sortMenuOpen = true },
-                            label = { Text(sort.label) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                            ),
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Rounded.Sort,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp),
-                                )
-                            },
-                        )
-                        DropdownMenu(
-                            expanded = sortMenuOpen,
-                            onDismissRequest = { sortMenuOpen = false },
-                        ) {
-                            LibrarySort.entries.forEach { option ->
-                                DropdownMenuItem(
-                                    text = { Text(option.label) },
-                                    leadingIcon = {
-                                        if (option == sort) {
-                                            Icon(
-                                                imageVector = Icons.Rounded.Check,
-                                                contentDescription = null,
-                                                modifier = Modifier.size(18.dp),
-                                            )
-                                        }
-                                    },
-                                    onClick = {
-                                        sortMenuOpen = false
-                                        onSortChange(option)
-                                    },
-                                )
-                            }
-                        }
-                    }
-                    IconButton(onClick = onToggleDirection) {
-                        Icon(
-                            imageVector = if (sortDescending) {
-                                Icons.Rounded.ArrowDownward
-                            } else {
-                                Icons.Rounded.ArrowUpward
-                            },
-                            contentDescription = if (sortDescending) {
-                                "Сначала больше"
-                            } else {
-                                "Сначала меньше"
-                            },
-                        )
-                    }
-                    IconButton(onClick = onScan) {
-                        if (scanning) {
-                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                        } else {
-                            Icon(Icons.Rounded.Refresh, contentDescription = "Сканировать фонотеку")
-                        }
-                    }
-                }
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState())
-                        .padding(bottom = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    LibraryFilter.entries.forEach { option ->
-                        FilterChip(
-                            selected = filter == option,
-                            onClick = { onFilterChange(option) },
-                            label = { Text(option.label) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                selectedContainerColor = MaterialTheme.colorScheme.primary,
-                                selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
-                            ),
-                        )
-                    }
-                }
-            }
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        item(key = "pinned-play-all") {
+            QuickAccessTile(
+                icon = Icons.Rounded.Shuffle,
+                title = "Слушать всё",
+                subtitle = "Вся медиатека вперемешку",
+                onClick = onPlayAllLibrary,
+                modifier = Modifier.width(224.dp),
+            )
         }
-        if (tracks.isEmpty()) {
-            item(key = "tracks-empty") {
-                EmptyState(
-                    icon = Icons.Rounded.LibraryMusic,
-                    title = if (filter == LibraryFilter.STREAMING) {
-                        "Нет сохранённых треков"
-                    } else {
-                        "Треков нет"
-                    },
-                    subtitle = when (filter) {
-                        LibraryFilter.STREAMING ->
-                            "Нажмите кнопку загрузки у онлайн-трека — он сохранится сюда, " +
-                                "рядом с музыкой на устройстве."
-                        LibraryFilter.DEVICE ->
-                            "Файлов устройства пока нет: нажмите «Сканировать», чтобы найти музыку."
-                        LibraryFilter.ALL ->
-                            "Нажмите «Сканировать» — найдём аудиофайлы на устройстве."
-                    },
-                )
-            }
-        } else {
-            items(tracks, key = { it.id }, contentType = { "track" }) { track ->
-                TrackRow(
-                    track = track,
-                    isFavorite = track.id in favorites,
-                    isPlaying = player.current?.id == track.id && player.isPlaying,
-                    onClick = { onClick(track) },
-                    onLongClick = { onLongClick(track) },
-                    onFavorite = { onFavorite(track) },
-                )
-            }
+        item(key = "pinned-liked") {
+            QuickAccessTile(
+                icon = Icons.Rounded.Favorite,
+                title = "Любимые треки",
+                subtitle = tracksLabel(favoriteCount),
+                onClick = { onSelectSection(LibrarySection.FAVORITES) },
+                modifier = Modifier.width(224.dp),
+            )
         }
-    }
-}
-
-/** Вкладка «Альбомы»: сетка обложек с круглым Play и подписью. */
-@Composable
-private fun AlbumsTab(
-    albums: List<Album>,
-    navigate: (String) -> Unit,
-    bottomPadding: Dp,
-    onPlay: (Album) -> Unit,
-    onLongClick: (Album) -> Unit,
-) {
-    if (albums.isEmpty()) {
-        EmptyState(
-            icon = Icons.Rounded.Album,
-            title = "Альбомов нет",
-            subtitle = "Альбомы собираются из тегов локальных файлов.",
-            modifier = Modifier.fillMaxSize(),
-        )
-        return
-    }
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(2),
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(
-            start = 16.dp,
-            end = 16.dp,
-            top = 8.dp,
-            bottom = bottomPadding + 24.dp,
-        ),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp),
-    ) {
-        gridItems(albums, key = { "${it.name}|${it.artist}" }, contentType = { "album" }) { album ->
-            AlbumCard(
-                album = album,
-                onClick = { navigate(Routes.album(album.name, album.artist)) },
-                onLongClick = { onLongClick(album) },
-                onPlay = { onPlay(album) },
-                modifier = Modifier.fillMaxWidth(),
+        item(key = "pinned-downloads") {
+            QuickAccessTile(
+                icon = Icons.Rounded.Download,
+                title = "Загруженные",
+                subtitle = tracksLabel(downloadedCount),
+                onClick = { onSelectSection(LibrarySection.DOWNLOADS) },
+                modifier = Modifier.width(224.dp),
+            )
+        }
+        item(key = "pinned-history") {
+            QuickAccessTile(
+                icon = Icons.Rounded.History,
+                title = "Недавно прослушано",
+                subtitle = "История и статистика",
+                onClick = onOpenHistory,
+                modifier = Modifier.width(224.dp),
             )
         }
     }
 }
 
-/** Вкладка «Исполнители»: сетка круглых аватаров, Play поверх обложки. */
+/** Строка загрузки/пустого состояния с индикатором прогресса. */
 @Composable
-private fun ArtistsTab(
-    artists: List<Artist>,
-    navigate: (String) -> Unit,
-    bottomPadding: Dp,
-    onPlay: (Artist) -> Unit,
-    onLongClick: (Artist) -> Unit,
-) {
-    if (artists.isEmpty()) {
-        EmptyState(
-            icon = Icons.Rounded.Person,
-            title = "Исполнителей нет",
-            subtitle = "Исполнители берутся из тегов локальных файлов.",
-            modifier = Modifier.fillMaxSize(),
-        )
-        return
-    }
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(2),
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(
-            start = 16.dp,
-            end = 16.dp,
-            top = 8.dp,
-            bottom = bottomPadding + 24.dp,
-        ),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp),
+private fun LoadingRow(text: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 24.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        gridItems(artists, key = { it.name }, contentType = { "artist" }) { artist ->
-            ArtistCard(
-                artist = artist,
-                onClick = { navigate(Routes.artist(artist.name)) },
-                onLongClick = { onLongClick(artist) },
-                onPlay = { onPlay(artist) },
-                modifier = Modifier.fillMaxWidth(),
+        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+        Spacer(Modifier.width(12.dp))
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** Строка «Создать плейлист» для спискового режима раздела «Плейлисты». */
+@Composable
+private fun CreatePlaylistRow(onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(56.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.PlaylistAdd,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        Column {
+            Text("Создать плейлист", style = MaterialTheme.typography.titleMedium)
+            Text(
+                text = "Новый список",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
 }
 
-/**
- * Вкладка «Плейлисты»: 2 колонки карточек с коллажем обложек и круглым Play,
- * который сразу запускает весь плейлист. Долгое нажатие — прежний лист действий.
- */
+/** Плейлисты: сетка карточек или компактный список строк, как в Spotify. */
 @Composable
 private fun PlaylistsTab(
     playlists: List<Playlist>,
     playlistCovers: Map<String, List<String>>,
+    view: LibraryView,
     navigate: (String) -> Unit,
     bottomPadding: Dp,
     onCreatePlaylist: () -> Unit,
     onLongClick: (Playlist) -> Unit,
     onPlay: (Playlist) -> Unit,
 ) {
+    if (view == LibraryView.LIST) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(
+                start = 8.dp,
+                end = 8.dp,
+                top = 4.dp,
+                bottom = bottomPadding + 24.dp,
+            ),
+        ) {
+            item(key = "create-playlist-row") { CreatePlaylistRow(onCreatePlaylist) }
+            if (playlists.isEmpty()) {
+                item(key = "playlists-empty") {
+                    EmptyState(
+                        icon = Icons.Rounded.PlaylistPlay,
+                        title = "Плейлистов нет",
+                        subtitle = "Создайте свой или синхронизируйте аккаунт в разделе «Подключения».",
+                    )
+                }
+            } else {
+                items(playlists, key = { it.id }, contentType = { "playlist" }) { playlist ->
+                    PlaylistListRow(
+                        playlist = playlist,
+                        coverUrls = playlistCovers[playlist.id].orEmpty(),
+                        onClick = { navigate(Routes.playlist(playlist.id)) },
+                        onLongClick = { onLongClick(playlist) },
+                        onMoreClick = { onLongClick(playlist) },
+                    )
+                }
+            }
+        }
+        return
+    }
     LazyVerticalGrid(
         columns = GridCells.Fixed(2),
         modifier = Modifier.fillMaxSize(),
@@ -1216,7 +1605,226 @@ private fun PlaylistsTab(
     }
 }
 
-/** Вкладка «Избранное»: крупный Play и тот же плотный ритм строк. */
+/** Альбомы: сетка обложек или строки с overflow-меню. */
+@Composable
+private fun AlbumsTab(
+    albums: List<Album>,
+    view: LibraryView,
+    navigate: (String) -> Unit,
+    bottomPadding: Dp,
+    onPlay: (Album) -> Unit,
+    onLongClick: (Album) -> Unit,
+) {
+    if (albums.isEmpty()) {
+        EmptyState(
+            icon = Icons.Rounded.Album,
+            title = "Альбомов нет",
+            subtitle = "Альбомы собираются из тегов локальных файлов.",
+            modifier = Modifier.fillMaxSize(),
+        )
+        return
+    }
+    if (view == LibraryView.LIST) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(
+                start = 8.dp,
+                end = 8.dp,
+                top = 4.dp,
+                bottom = bottomPadding + 24.dp,
+            ),
+        ) {
+            items(albums, key = { "${it.name}|${it.artist}" }, contentType = { "album" }) { album ->
+                AlbumListRow(
+                    album = album,
+                    onClick = { navigate(Routes.album(album.name, album.artist)) },
+                    onLongClick = { onLongClick(album) },
+                    onMoreClick = { onLongClick(album) },
+                )
+            }
+        }
+        return
+    }
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(2),
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(
+            start = 16.dp,
+            end = 16.dp,
+            top = 8.dp,
+            bottom = bottomPadding + 24.dp,
+        ),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp),
+    ) {
+        gridItems(albums, key = { "${it.name}|${it.artist}" }, contentType = { "album" }) { album ->
+            AlbumCard(
+                album = album,
+                onClick = { navigate(Routes.album(album.name, album.artist)) },
+                onLongClick = { onLongClick(album) },
+                onPlay = { onPlay(album) },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+    }
+}
+
+/** Исполнители: сетка круглых аватаров или строки с overflow-меню. */
+@Composable
+private fun ArtistsTab(
+    artists: List<Artist>,
+    view: LibraryView,
+    navigate: (String) -> Unit,
+    bottomPadding: Dp,
+    onPlay: (Artist) -> Unit,
+    onLongClick: (Artist) -> Unit,
+) {
+    if (artists.isEmpty()) {
+        EmptyState(
+            icon = Icons.Rounded.Person,
+            title = "Исполнителей нет",
+            subtitle = "Исполнители берутся из тегов локальных файлов.",
+            modifier = Modifier.fillMaxSize(),
+        )
+        return
+    }
+    if (view == LibraryView.LIST) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(
+                start = 8.dp,
+                end = 8.dp,
+                top = 4.dp,
+                bottom = bottomPadding + 24.dp,
+            ),
+        ) {
+            items(artists, key = { it.name }, contentType = { "artist" }) { artist ->
+                ArtistListRow(
+                    artist = artist,
+                    onClick = { navigate(Routes.artist(artist.name)) },
+                    onLongClick = { onLongClick(artist) },
+                    onMoreClick = { onLongClick(artist) },
+                )
+            }
+        }
+        return
+    }
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(2),
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(
+            start = 16.dp,
+            end = 16.dp,
+            top = 8.dp,
+            bottom = bottomPadding + 24.dp,
+        ),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp),
+    ) {
+        gridItems(artists, key = { it.name }, contentType = { "artist" }) { artist ->
+            ArtistCard(
+                artist = artist,
+                onClick = { navigate(Routes.artist(artist.name)) },
+                onLongClick = { onLongClick(artist) },
+                onPlay = { onPlay(artist) },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+    }
+}
+
+/** Треки на устройстве: фильтры состава, счётчик и плотный список. */
+@Composable
+private fun TracksTab(
+    tracks: List<Track>,
+    favorites: Set<String>,
+    player: PlayerUiState,
+    filter: LibraryFilter,
+    scanning: Boolean,
+    onFilterChange: (LibraryFilter) -> Unit,
+    onClick: (Track) -> Unit,
+    onLongClick: (Track) -> Unit,
+    onFavorite: (Track) -> Unit,
+    bottomPadding: Dp,
+) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(
+            start = 16.dp,
+            end = 16.dp,
+            top = 4.dp,
+            bottom = bottomPadding + 24.dp,
+        ),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        item(key = "tracks-controls") {
+            Column {
+                Text(
+                    text = tracksLabel(tracks.size),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 4.dp),
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .padding(bottom = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    LibraryFilter.entries.forEach { option ->
+                        FilterChip(
+                            selected = filter == option,
+                            onClick = { onFilterChange(option) },
+                            label = { Text(option.label) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+                            ),
+                        )
+                    }
+                }
+            }
+        }
+        when {
+            scanning && tracks.isEmpty() -> item(key = "tracks-loading") {
+                LoadingRow("Сканируем фонотеку…")
+            }
+            tracks.isEmpty() -> item(key = "tracks-empty") {
+                EmptyState(
+                    icon = Icons.Rounded.LibraryMusic,
+                    title = when (filter) {
+                        LibraryFilter.STREAMING -> "Нет сохранённых треков"
+                        LibraryFilter.DEVICE -> "Файлов устройства нет"
+                        LibraryFilter.ALL -> "Треков нет"
+                    },
+                    subtitle = when (filter) {
+                        LibraryFilter.STREAMING ->
+                            "Нажмите кнопку загрузки у онлайн-трека — он сохранится сюда, " +
+                                "рядом с музыкой на устройстве."
+                        LibraryFilter.DEVICE ->
+                            "Нажмите «Сканировать» в шапке, чтобы найти музыку на устройстве."
+                        LibraryFilter.ALL ->
+                            "Нажмите «Сканировать» в шапке — найдём аудиофайлы на устройстве."
+                    },
+                )
+            }
+            else -> items(tracks, key = { it.id }, contentType = { "track" }) { track ->
+                TrackRow(
+                    track = track,
+                    isFavorite = track.id in favorites,
+                    isPlaying = player.current?.id == track.id && player.isPlaying,
+                    onClick = { onClick(track) },
+                    onLongClick = { onLongClick(track) },
+                    onFavorite = { onFavorite(track) },
+                )
+            }
+        }
+    }
+}
+
+/** «Любимые» (liked songs): крупный Play и тот же плотный ритм строк. */
 @Composable
 private fun FavoritesTab(
     tracks: List<Track>,
@@ -1233,7 +1841,7 @@ private fun FavoritesTab(
         contentPadding = PaddingValues(
             start = 16.dp,
             end = 16.dp,
-            top = 8.dp,
+            top = 4.dp,
             bottom = bottomPadding + 24.dp,
         ),
         verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -1249,7 +1857,7 @@ private fun FavoritesTab(
                     CircularPlayButton(
                         onClick = onPlayAll,
                         size = 52.dp,
-                        contentDescription = "Играть все избранные",
+                        contentDescription = "Играть все любимые треки",
                     )
                     Spacer(Modifier.width(14.dp))
                 }
@@ -1283,6 +1891,202 @@ private fun FavoritesTab(
                     onClick = { onClick(track) },
                     onLongClick = { onLongClick(track) },
                     onFavorite = { onFavorite(track) },
+                )
+            }
+        }
+    }
+}
+
+/**
+ * «Загрузки»: треки, сохранённые из стриминга для офлайна. Прогресс активных
+ * сохранений читается только внутри этого раздела, чтобы проценты загрузок
+ * не перерисовывали всю медиатеку.
+ */
+@Composable
+private fun DownloadsTab(
+    tracks: List<Track>,
+    favorites: Set<String>,
+    player: PlayerUiState,
+    saveStatesFlow: StateFlow<Map<String, TrackSaveState>>,
+    onPlayAll: () -> Unit,
+    onClick: (Track) -> Unit,
+    onLongClick: (Track) -> Unit,
+    onFavorite: (Track) -> Unit,
+    bottomPadding: Dp,
+) {
+    val saveStates by saveStatesFlow.collectAsState()
+    val activeSaves = remember(saveStates) {
+        saveStates.values.count { it.status == SaveStatus.QUEUED || it.status == SaveStatus.DOWNLOADING }
+    }
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(
+            start = 16.dp,
+            end = 16.dp,
+            top = 4.dp,
+            bottom = bottomPadding + 24.dp,
+        ),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        item(key = "downloads-header") {
+            Column(Modifier.padding(bottom = 6.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (tracks.isNotEmpty()) {
+                        CircularPlayButton(
+                            onClick = onPlayAll,
+                            size = 52.dp,
+                            contentDescription = "Играть все загруженные треки",
+                        )
+                        Spacer(Modifier.width(14.dp))
+                    }
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            text = tracksLabel(tracks.size),
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            text = if (activeSaves > 0) {
+                                "Сохраняем сейчас: $activeSaves · доступны без интернета"
+                            } else {
+                                "Сохранено из стриминга · доступны без интернета"
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+        }
+        if (tracks.isEmpty()) {
+            item(key = "downloads-empty") {
+                EmptyState(
+                    icon = Icons.Rounded.Download,
+                    title = "Загрузок нет",
+                    subtitle = "Откройте онлайн-трек, нажмите «Сохранить на устройство» — " +
+                        "он появится здесь и будет играть офлайн.",
+                )
+            }
+        } else {
+            items(tracks, key = { it.id }, contentType = { "track" }) { track ->
+                TrackRow(
+                    track = track,
+                    isFavorite = track.id in favorites,
+                    isPlaying = player.current?.id == track.id && player.isPlaying,
+                    onClick = { onClick(track) },
+                    onLongClick = { onLongClick(track) },
+                    onFavorite = { onFavorite(track) },
+                    saveState = saveStates[track.id],
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Результаты встроенного поиска в разделе «Все»: плейлисты, альбомы,
+ * исполнители и треки, сгруппированные по типу — как поиск Spotify.
+ */
+@Composable
+private fun LibrarySearchResults(
+    query: String,
+    playlists: List<Playlist>,
+    playlistCovers: Map<String, List<String>>,
+    albums: List<Album>,
+    artists: List<Artist>,
+    tracks: List<Track>,
+    favorites: Set<String>,
+    player: PlayerUiState,
+    navigate: (String) -> Unit,
+    bottomPadding: Dp,
+    onPlaylistLongClick: (Playlist) -> Unit,
+    onAlbumLongClick: (Album) -> Unit,
+    onArtistLongClick: (Artist) -> Unit,
+    onClickTrack: (Track) -> Unit,
+    onLongClickTrack: (Track) -> Unit,
+    onFavoriteTrack: (Track) -> Unit,
+) {
+    val hasResults = playlists.isNotEmpty() || albums.isNotEmpty() ||
+        artists.isNotEmpty() || tracks.isNotEmpty()
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(
+            start = 8.dp,
+            end = 8.dp,
+            top = 4.dp,
+            bottom = bottomPadding + 24.dp,
+        ),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        item(key = "search-summary") {
+            Text(
+                text = "Результаты по запросу «$query»",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+            )
+        }
+        if (!hasResults) {
+            item(key = "search-empty") {
+                EmptyState(
+                    icon = Icons.Rounded.Search,
+                    title = "Ничего не найдено",
+                    subtitle = "Поиск идёт по названиям, исполнителям и альбомам. Попробуйте другой запрос.",
+                )
+            }
+        }
+        if (playlists.isNotEmpty()) {
+            item(key = "search-playlists-header") {
+                SectionHeader(title = "Плейлисты", subtitle = tracksLabel(playlists.size))
+            }
+            items(playlists, key = { "search-pl-${it.id}" }, contentType = { "playlist" }) { playlist ->
+                PlaylistListRow(
+                    playlist = playlist,
+                    coverUrls = playlistCovers[playlist.id].orEmpty(),
+                    onClick = { navigate(Routes.playlist(playlist.id)) },
+                    onLongClick = { onPlaylistLongClick(playlist) },
+                    onMoreClick = { onPlaylistLongClick(playlist) },
+                )
+            }
+        }
+        if (albums.isNotEmpty()) {
+            item(key = "search-albums-header") {
+                SectionHeader(title = "Альбомы", subtitle = tracksLabel(albums.size))
+            }
+            items(albums, key = { "search-alb-${it.name}|${it.artist}" }, contentType = { "album" }) { album ->
+                AlbumListRow(
+                    album = album,
+                    onClick = { navigate(Routes.album(album.name, album.artist)) },
+                    onLongClick = { onAlbumLongClick(album) },
+                    onMoreClick = { onAlbumLongClick(album) },
+                )
+            }
+        }
+        if (artists.isNotEmpty()) {
+            item(key = "search-artists-header") {
+                SectionHeader(title = "Исполнители", subtitle = tracksLabel(artists.size))
+            }
+            items(artists, key = { "search-art-${it.name}" }, contentType = { "artist" }) { artist ->
+                ArtistListRow(
+                    artist = artist,
+                    onClick = { navigate(Routes.artist(artist.name)) },
+                    onLongClick = { onArtistLongClick(artist) },
+                    onMoreClick = { onArtistLongClick(artist) },
+                )
+            }
+        }
+        if (tracks.isNotEmpty()) {
+            item(key = "search-tracks-header") {
+                SectionHeader(title = "Треки", subtitle = tracksLabel(tracks.size))
+            }
+            items(tracks, key = { "search-track-${it.id}" }, contentType = { "track" }) { track ->
+                TrackRow(
+                    track = track,
+                    isFavorite = track.id in favorites,
+                    isPlaying = player.current?.id == track.id && player.isPlaying,
+                    onClick = { onClickTrack(track) },
+                    onLongClick = { onLongClickTrack(track) },
+                    onFavorite = { onFavoriteTrack(track) },
                 )
             }
         }

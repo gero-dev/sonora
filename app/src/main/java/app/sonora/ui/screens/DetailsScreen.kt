@@ -1,4 +1,4 @@
-﻿package app.sonora.ui.screens
+package app.sonora.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -58,6 +58,7 @@ import app.sonora.core.model.Source
 import app.sonora.core.model.Track
 import app.sonora.core.util.Formatters
 import app.sonora.data.metadata.ArtistNames
+import app.sonora.data.wave.TrackRatingIndex
 import app.sonora.playback.PlayerUiState
 import app.sonora.ui.MainViewModel
 import app.sonora.ui.PlaylistSaveProgress
@@ -79,6 +80,7 @@ fun PlaylistDetailScreen(vm: MainViewModel, playlistId: String, navigate: (Strin
     val tracks by vm.tracks.collectAsState()
     val favorites by vm.favorites.collectAsState()
     val player by vm.playerChrome.collectAsState()
+    val ratingIndex by vm.trackRatingIndex.collectAsState()
 
     val actions = remember { DetailActions() }
     val playlist = playlists.firstOrNull { it.id == playlistId }
@@ -113,6 +115,9 @@ fun PlaylistDetailScreen(vm: MainViewModel, playlistId: String, navigate: (Strin
                 onClick = { vm.playOrOpen(it) },
                 onLongClick = { actions.track = it },
                 onFavorite = { vm.toggleFavorite(it.id) },
+                ratingIndex = ratingIndex,
+                onLike = { vm.toggleTrackLike(it) },
+                onDislike = { vm.toggleTrackDislike(it) },
                 trailing = { track ->
                     if (playlist.editable) {
                         val index = playlistTracks.indexOf(track)
@@ -195,6 +200,9 @@ fun PlaylistDetailScreen(vm: MainViewModel, playlistId: String, navigate: (Strin
         playlists = playlists,
         favorites = favorites,
         navigate = navigate,
+        ratingIndex = ratingIndex,
+        onLike = { vm.toggleTrackLike(it) },
+        onDislike = { vm.toggleTrackDislike(it) },
     )
 }
 
@@ -209,6 +217,7 @@ fun AlbumDetailScreen(
     val favorites by vm.favorites.collectAsState()
     val playlists by vm.playlists.collectAsState()
     val player by vm.playerChrome.collectAsState()
+    val ratingIndex by vm.trackRatingIndex.collectAsState()
 
     val actions = remember { DetailActions() }
     // Онлайн-версия сохранённого трека не должна дублировать локальную копию.
@@ -237,6 +246,9 @@ fun AlbumDetailScreen(
             onClick = { vm.playOrOpen(it) },
             onLongClick = { actions.track = it },
             onFavorite = { vm.toggleFavorite(it.id) },
+            ratingIndex = ratingIndex,
+            onLike = { vm.toggleTrackLike(it) },
+            onDislike = { vm.toggleTrackDislike(it) },
         ) {
             DetailCoverHeader(
                 artwork = artwork,
@@ -259,6 +271,9 @@ fun AlbumDetailScreen(
         playlists = playlists,
         favorites = favorites,
         navigate = navigate,
+        ratingIndex = ratingIndex,
+        onLike = { vm.toggleTrackLike(it) },
+        onDislike = { vm.toggleTrackDislike(it) },
     )
 }
 
@@ -276,6 +291,9 @@ internal fun DetailActionHost(
     playlists: List<Playlist>,
     favorites: Set<String>,
     navigate: (String) -> Unit,
+    ratingIndex: TrackRatingIndex? = null,
+    onLike: ((Track) -> Unit)? = null,
+    onDislike: ((Track) -> Unit)? = null,
 ) {
     actions.track?.let { track ->
         TrackActionSheet(
@@ -324,6 +342,9 @@ internal fun DetailActionHost(
                 null
             },
             downloadLabel = "Сохранить на устройство",
+            rating = ratingIndex?.ratingOf(track),
+            onLike = onLike?.let { callback -> { callback(track) } },
+            onDislike = onDislike?.let { callback -> { callback(track) } },
         )
     }
     actions.createFor?.let { track ->
@@ -612,6 +633,9 @@ private fun DetailTracks(
     onClick: (Track) -> Unit,
     onLongClick: (Track) -> Unit,
     onFavorite: (Track) -> Unit,
+    ratingIndex: TrackRatingIndex? = null,
+    onLike: ((Track) -> Unit)? = null,
+    onDislike: ((Track) -> Unit)? = null,
     modifier: Modifier = Modifier,
     trailing: @Composable (Track) -> Unit = {},
     header: @Composable () -> Unit,
@@ -643,6 +667,9 @@ private fun DetailTracks(
                     onClick = { onClick(track) },
                     onLongClick = { onLongClick(track) },
                     onFavorite = { onFavorite(track) },
+                    rating = ratingIndex?.ratingOf(track),
+                    onLike = onLike?.let { callback -> { callback(track) } },
+                    onDislike = onDislike?.let { callback -> { callback(track) } },
                     trailing = { trailing(track) },
                 )
             }

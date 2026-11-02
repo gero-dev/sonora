@@ -39,6 +39,7 @@ import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Radio
 import androidx.compose.material.icons.rounded.ThumbDown
+import androidx.compose.material.icons.rounded.ThumbUp
 import androidx.compose.material.icons.rounded.PlayCircle
 import androidx.compose.material.icons.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Refresh
@@ -115,6 +116,7 @@ fun HomeScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) -> 
     val settings by vm.settings.collectAsState()
     val waveHistorySize by vm.waveHistorySize.collectAsState()
     val waveDisliked by vm.waveDisliked.collectAsState()
+    val ratingIndex by vm.trackRatingIndex.collectAsState()
 
     var showImportGuide by remember { mutableStateOf(false) }
     var showWaveSettings by remember { mutableStateOf(false) }
@@ -173,7 +175,9 @@ fun HomeScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) -> 
                     onLoadMore = { vm.loadMoreWave() },
                     onSettings = { showWaveSettings = true },
                     onDislike = { vm.dislikeWaveTrack(it) },
+                    onLike = { vm.likeWaveTrack(it) },
                     onRadio = { vm.startTrackRadio(it) },
+                    ratingOf = { ratingIndex.ratingOf(it) },
                 )
             }
 
@@ -246,6 +250,9 @@ fun HomeScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) -> 
                         onClick = { vm.playOrOpen(track) },
                         onLongClick = { actionTrack = track },
                         onFavorite = { vm.toggleFavorite(track.id) },
+                        rating = ratingIndex.ratingOf(track),
+                        onLike = { vm.toggleTrackLike(track) },
+                        onDislike = { vm.toggleTrackDislike(track) },
                     )
                 }
             }
@@ -298,6 +305,9 @@ fun HomeScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) -> 
                     null
                 },
                 downloadLabel = "Сохранить на устройство",
+                rating = ratingIndex.ratingOf(track),
+                onLike = { vm.toggleTrackLike(track) },
+                onDislike = { vm.toggleTrackDislike(track) },
             )
         }
 
@@ -327,6 +337,7 @@ fun HomeScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) -> 
                 settings = settings.wave,
                 historySize = waveHistorySize,
                 dislikedCount = waveDisliked.size,
+                likedCount = ratingIndex.likedCount,
                 onDismiss = { showWaveSettings = false },
                 onApply = { draft ->
                     vm.updateWaveSettings { _ -> draft }
@@ -334,6 +345,7 @@ fun HomeScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) -> 
                 },
                 onClearHistory = { vm.clearWaveHistory() },
                 onClearDislikes = { vm.clearWaveDislikes() },
+                onClearRatings = { vm.clearTrackRatings() },
             )
         }
 
@@ -623,7 +635,9 @@ private fun WaveCard(
     onLoadMore: () -> Unit,
     onSettings: () -> Unit,
     onDislike: (Track) -> Unit,
+    onLike: (Track) -> Unit,
     onRadio: (Track) -> Unit,
+    ratingOf: (Track) -> Int,
 ) {
     var sortMenu by remember { mutableStateOf(false) }
     // Плоская карточка без градиента: акцент остаётся только на кнопке Play.
@@ -823,7 +837,10 @@ private fun WaveCard(
                         track = track,
                         onClick = { onTrackClick(track) },
                         onDislike = { onDislike(track) },
+                        onLike = { onLike(track) },
                         onRadio = { onRadio(track) },
+                        rating = ratingOf(track),
+                        explanation = state.explanation[track.id],
                     )
                 }
             }
@@ -878,7 +895,8 @@ private fun WaveCard(
 /**
  * Карточка трека для подборок: 160dp, обложка 12dp, тональный фон без тени.
  * Текст живёт на том же тональном контейнере, поэтому тёмная тема выглядит ровно.
- * Долгое нажатие в «Моей волне» открывает «Радио по треку» и «Не интересно».
+ * В «Моей волне» под треком — быстрые лайк/дизлайк/радио и объяснение выбора;
+ * долгое нажатие открывает то же самое в меню.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -887,6 +905,9 @@ private fun TrackTile(
     onClick: () -> Unit,
     onDislike: (() -> Unit)? = null,
     onRadio: (() -> Unit)? = null,
+    onLike: (() -> Unit)? = null,
+    rating: Int = 0,
+    explanation: String? = null,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     val hasMenu = onDislike != null || onRadio != null
@@ -926,7 +947,51 @@ private fun TrackTile(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(horizontal = 2.dp),
             )
-            Spacer(Modifier.height(6.dp))
+            // Объяснимая выдача: короткая причина, почему трек в волне.
+            if (!explanation.isNullOrBlank()) {
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = explanation,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.85f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(horizontal = 2.dp),
+                )
+            }
+            Spacer(Modifier.height(4.dp))
+            // Лайк/дизлайк прямо в волне, как в Яндекс Музыке и Spotify.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (onLike != null) {
+                    TileAction(
+                        icon = Icons.Rounded.ThumbUp,
+                        active = rating > 0,
+                        description = "Нравится",
+                        activeColor = MaterialTheme.colorScheme.primary,
+                        onClick = { onLike?.invoke() },
+                    )
+                }
+                if (onDislike != null) {
+                    TileAction(
+                        icon = Icons.Rounded.ThumbDown,
+                        active = rating < 0,
+                        description = "Не нравится",
+                        activeColor = MaterialTheme.colorScheme.error,
+                        onClick = { onDislike?.invoke() },
+                    )
+                }
+                Spacer(Modifier.weight(1f))
+                if (onRadio != null) {
+                    TileAction(
+                        icon = Icons.Rounded.Radio,
+                        active = false,
+                        description = "Радио по треку",
+                        activeColor = MaterialTheme.colorScheme.primary,
+                        onClick = { onRadio?.invoke() },
+                    )
+                }
+            }
+            Spacer(Modifier.height(2.dp))
         }
         DropdownMenu(
             expanded = menuOpen,
@@ -944,6 +1009,18 @@ private fun TrackTile(
                     },
                 )
             }
+            if (onLike != null) {
+                DropdownMenuItem(
+                    text = { Text(if (rating > 0) "Убрать «нравится»" else "Нравится") },
+                    leadingIcon = {
+                        Icon(Icons.Rounded.ThumbUp, contentDescription = null)
+                    },
+                    onClick = {
+                        menuOpen = false
+                        onLike()
+                    },
+                )
+            }
             if (onDislike != null) {
                 DropdownMenuItem(
                     text = { Text("Не интересно") },
@@ -957,6 +1034,31 @@ private fun TrackTile(
                 )
             }
         }
+    }
+}
+
+/** Компактная кнопка-иконка внутри плитки: маленькая, но с понятной зоной нажатия. */
+@Composable
+private fun TileAction(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    active: Boolean,
+    description: String,
+    activeColor: androidx.compose.ui.graphics.Color,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .size(30.dp)
+            .clip(CircleShape)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = description,
+            tint = if (active) activeColor else MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(17.dp),
+        )
     }
 }
 

@@ -186,7 +186,10 @@ object WaveEngine {
     }
 
     /** Ключи треков, которые пользователь явно отметил «не интересно». */
-    fun dislikeKey(track: Track): String = "t:${waveKey(track)}"
+    fun dislikeKey(track: Track): String = dislikeKeyOf(waveKey(track))
+
+    /** Ключ скрытия по уже посчитанному [waveKey] — без повторного разбора трека. */
+    fun dislikeKeyOf(waveKey: String): String = "t:$waveKey"
 
     fun isDisliked(track: Track, disliked: Set<String>): Boolean =
         dislikeKey(track) in disliked

@@ -3,6 +3,7 @@ package app.sonora.data.wave
 import app.sonora.core.model.Source
 import app.sonora.core.model.Track
 import app.sonora.core.settings.WaveSettings
+import app.sonora.data.telemetry.AudioFeature
 import kotlin.math.exp
 import kotlin.math.ln
 import kotlin.random.Random
@@ -28,6 +29,14 @@ data class WaveRankContext(
     val recentTrackKeys: Set<String>? = null,
     /** Сид для взвешенной выборки: одинаковый сид → одинаковый порядок (тесты). */
     val seed: Long = 0L,
+    /** Оценки треков/артистов: лайки и дизлайки как отдельный сигнал. */
+    val ratings: TrackRatingIndex = TrackRatingIndex.EMPTY,
+    /** Граф «похожих исполнителей»: альбомы, жанры, явные подсказки. */
+    val artistGraph: ArtistGraph = ArtistGraph.EMPTY,
+    /** Сид радио: похожие на него треки получают приоритет. */
+    val radioSeed: Track? = null,
+    /** Дополнительные похожие исполнители из внешних запросов. */
+    val radioSimilarArtists: Set<String> = emptySet(),
 )
 
 /**
@@ -66,6 +75,33 @@ object WaveRanker {
 
     /** Вклад соответствия настроению (0..1). */
     private const val MOOD_FIT_BONUS = 1.1
+
+    /** Лайкнутый трек — сильный положительный сигнал. */
+    private const val LIKED_TRACK_BONUS = 2.2
+
+    /** Вес вкуса к артисту из оценок (лайки минус дизлайки). */
+    private const val ARTIST_RATING_WEIGHT = 1.1
+
+    /** Вес вкуса к жанру: слабее артиста. */
+    private const val GENRE_RATING_WEIGHT = 0.5
+
+    /** Бонус исполнителю, похожему на любимого (через [ArtistGraph]). */
+    private const val RELATED_ARTIST_BONUS = 0.50
+
+    /** Штраф исполнителю, похожему на дизлайкнутого. */
+    private const val RELATED_ARTIST_PENALTY = 0.80
+
+    /** Радио: тот же исполнитель, что и сид. */
+    private const val RADIO_SAME_ARTIST_BONUS = 1.5
+
+    /** Радио: исполнитель из окружения сида. */
+    private const val RADIO_RELATED_ARTIST_BONUS = 0.85
+
+    /** Радио: тот же жанр/настроение, что у сида. */
+    private const val RADIO_GENRE_BONUS = 0.5
+
+    /** Радио: похожесть аудио-фич на сид. */
+    private const val RADIO_FEATURE_BONUS = 1.1
 
     /**
      * Взвешенная выборка без повторов. [random] передаётся явно — так тесты
@@ -111,8 +147,36 @@ object WaveRanker {
             .map { it.first }
     }
 
+    /**
+     * Короткое объяснение «почему трек здесь»: 1–3 причины, которые UI
+     * показывает под треком в волне. Не влияет на порядок и не ходит в сеть.
+     */
+    fun explain(track: Track, context: WaveRankContext): String =
+        Prepared(context).reasonsOf(track).take(3).joinToString(" · ")
+
+    /**
+     * Объяснения сразу для списка треков: индексы строятся один раз.
+     * Именно этот вариант использует сборка волны, чтобы не пересчитывать
+     * историю и оценки для каждого трека отдельно.
+     */
+    fun explainAll(tracks: List<Track>, context: WaveRankContext): Map<String, String> {
+        if (tracks.isEmpty()) return emptyMap()
+        val prepared = Prepared(context)
+        return buildMap {
+            tracks.forEach { track ->
+                val text = prepared.reasonsOf(track).take(3).joinToString(" · ")
+                if (text.isNotBlank()) put(track.id, text)
+            }
+        }
+    }
+
+    /** Полный список причин (для диагностики, тестов и отчётов). */
+    fun reasons(track: Track, context: WaveRankContext): List<String> =
+        Prepared(context).reasonsOf(track)
+
     /** Предвычисленные индексы: история и артисты разбираются один раз. */
     private class Prepared(context: WaveRankContext) {
+
         private val tuning = context.tuning
         private val discovery = tuning.novelty.coerceIn(0, 100) / 100.0
         private val useHistory = tuning.useHistory
@@ -164,12 +228,53 @@ object WaveRanker {
                 emptySet()
             }
 
+        // Оценки и граф похожих исполнителей.
+        private val ratings = context.ratings
+        private val artistGraph = context.artistGraph
+        private val likedArtistKeys = ratings.likedArtists
+        private val dislikedArtistKeys = ratings.dislikedArtists
+        private val radioSeed = context.radioSeed
+        private val seedArtist = radioSeed?.artist?.trim()?.lowercase().orEmpty()
+        private val seedGenres: Set<String> = radioSeed
+            ?.let { RadioEngine.seedOf(it).genres }
+            ?.mapTo(HashSet()) { it.trim().lowercase().replace('ё', 'е') }
+            .orEmpty()
+        private val radioRelatedArtists: Set<String> = buildSet {
+            if (seedArtist.isNotBlank()) {
+                addAll(artistGraph.related(seedArtist))
+                addAll(artistGraph.related(seedArtist.replace('ё', 'е')))
+            }
+            context.radioSimilarArtists.forEach { similar ->
+                val key = similar.trim().lowercase().replace('ё', 'е')
+                if (key.isNotBlank()) add(key)
+            }
+        }
+        private val seedFeature: AudioFeature? = radioSeed?.let { featureIndex.forTrack(it) }
+
         fun weightOf(track: Track): Double {
             val artist = track.artist.trim().lowercase()
             val key = WaveEngine.waveKey(track)
 
+            // Дизлайкнутый трек не возвращаем вообще: 0 веса отсекает его в rank().
+            if (ratings.ratingOf(track) < 0) return 0.0
+
             var weight = BASE_WEIGHT
             if (track.id in favoriteIds) weight += FAVORITE_TRACK_BONUS
+
+            // Оценки: лайкнутый трек и «вкус» к исполнителю/жанру.
+            if (ratings.ratingOf(track) > 0) weight += LIKED_TRACK_BONUS
+            if (artist.isNotBlank()) {
+                weight += ratings.artistScore(artist).coerceIn(-1.5, 1.5) * ARTIST_RATING_WEIGHT
+            }
+            weight += ratings.genreScore(genreOf(track)).coerceIn(-1.0, 1.0) * GENRE_RATING_WEIGHT
+            // Похожие исполнители: лайк поднимает «соседей», дизлайк — приглушает.
+            if (artist.isNotBlank()) {
+                if (isRelatedToAny(artist, likedArtistKeys)) weight += RELATED_ARTIST_BONUS
+                if (isRelatedToAny(artist, dislikedArtistKeys)) {
+                    weight -= RELATED_ARTIST_PENALTY
+                }
+            }
+
             if (artist.isNotBlank() && artist in favoriteArtistKeys) {
                 weight += FAVORITE_ARTIST_BONUS * (1.0 - discovery * 0.7)
             }
@@ -177,6 +282,25 @@ object WaveRanker {
             weight += (trackScores[key] ?: 0.0) * TRACK_AFFINITY_BONUS * (1.0 - discovery * 0.8)
             weight += minOf(artistCountKeys[artist] ?: 0, 8) * POPULARITY_STEP
             if (artist.isBlank()) weight -= BLANK_ARTIST_PENALTY
+
+            // Радио: чем ближе трек к сиду, тем выше шанс (но не гарантия).
+            if (radioSeed != null) {
+                when {
+                    seedArtist.isNotBlank() && artist == seedArtist ->
+                        weight += RADIO_SAME_ARTIST_BONUS
+
+                    artist in radioRelatedArtists ->
+                        weight += RADIO_RELATED_ARTIST_BONUS
+                }
+                if (seedGenres.isNotEmpty() && genreMatches(track)) {
+                    weight += RADIO_GENRE_BONUS
+                }
+                val feature = featureIndex.forTrack(track)
+                if (feature != null && seedFeature != null) {
+                    val similarity = AudioFeature.cosine(feature, seedFeature).coerceIn(0.0, 1.0)
+                    if (similarity > 0.0) weight += RADIO_FEATURE_BONUS * similarity
+                }
+            }
 
             // Чем выше новизна, тем меньше «своей» музыки в начале подборки
             // и тем охотнее волна уходит в онлайн-новинки.
@@ -217,6 +341,100 @@ object WaveRanker {
                 weight *= 1.0 - 0.75 * (0.4 + discovery * 0.6)
             }
             return weight.coerceAtLeast(0.0)
+        }
+
+        /** Жанр трека одной строкой: источники кладут его в разные поля. */
+        private fun genreOf(track: Track): String =
+            listOfNotNull(track.extra["genre"], track.extra["genres"])
+                .joinToString(" ")
+                .trim()
+                .lowercase()
+                .replace('ё', 'е')
+
+        private fun genreMatches(track: Track): Boolean {
+            val haystack = genreOf(track)
+            if (haystack.isBlank()) return false
+            return seedGenres.any { seed ->
+                seed.length >= 3 && (haystack.contains(seed) || seed.contains(haystack))
+            }
+        }
+
+        /** Исполнитель — сосед одного из [sourceArtists] по графу. */
+        private fun isRelatedToAny(artist: String, sourceArtists: Set<String>): Boolean {
+            if (sourceArtists.isEmpty()) return false
+            val key = artist.trim().lowercase().replace('ё', 'е')
+            return sourceArtists.any { source ->
+                source == key ||
+                    artistGraph.related(source).contains(key) ||
+                    artistGraph.related(key).contains(source)
+            }
+        }
+
+        private fun isNewArtist(artist: String): Boolean =
+            artist.isNotBlank() &&
+                artist !in favoriteArtistKeys &&
+                (artistCountKeys[artist] ?: 0) == 0 &&
+                artist !in knownArtists
+
+        /**
+         * Причины, по которым трек попал в подборку. Это «объяснимая выдача»:
+         * те же сигналы, что участвуют в весе, только словами и по убыванию
+         * важности. Для непонятного случая остаётся честное «разнообразие».
+         */
+        fun reasonsOf(track: Track): List<String> {
+            val artist = track.artist.trim().lowercase().replace('ё', 'е')
+            val key = WaveEngine.waveKey(track)
+            val reasons = ArrayList<String>(4)
+            when {
+                ratings.ratingOf(track) > 0 -> reasons += "вы оценили трек"
+                ratings.ratingOf(track) < 0 -> reasons += "трек вам не нравится"
+            }
+            if (track.id in favoriteIds) reasons += "в избранном"
+            if (artist.isNotBlank() && artist in favoriteArtistKeys) reasons += "любимый исполнитель"
+            if (artist.isNotBlank() && ratings.artistScore(artist) > 0.2) {
+                reasons += "ваш вкус к исполнителю"
+            }
+            if ((trackScores[key] ?: 0.0) > 0.3) reasons += "часто дослушиваете"
+            if (artist.isNotBlank() && isRelatedToAny(artist, likedArtistKeys)) {
+                reasons += "похож на любимого исполнителя"
+            }
+            if (artist.isNotBlank() && isRelatedToAny(artist, dislikedArtistKeys)) {
+                reasons += "похож на то, что вам не нравится"
+            }
+            if (radioSeed != null) {
+                if (seedArtist.isNotBlank() && artist == seedArtist) {
+                    reasons += "тот же исполнитель, что в сиде"
+                } else if (artist in radioRelatedArtists) {
+                    reasons += "похожий исполнитель"
+                }
+                if (seedGenres.isNotEmpty() && genreMatches(track)) reasons += "тот же жанр"
+            }
+            if ((!featureIndex.isEmpty || featureIndex.seedCount > 0) &&
+                featureIndex.similarityToSeeds(track) > 0.18
+            ) {
+                reasons += "похоже на любимую музыку"
+            }
+            if (radioSeed != null && seedFeature != null) {
+                val feature = featureIndex.forTrack(track)
+                if (feature != null &&
+                    AudioFeature.cosine(feature, seedFeature).coerceIn(0.0, 1.0) > 0.2
+                ) {
+                    reasons += "близко по звучанию к сиду"
+                }
+            }
+            if (mood != WaveMood.ANY &&
+                WaveMoodMatcher.score(track, mood, featureIndex.forTrack(track)) >= 0.5
+            ) {
+                reasons += "подходит настроению"
+            }
+            if (reasons.isEmpty()) {
+                reasons += if (isNewArtist(artist)) {
+                    "новый для вас исполнитель"
+                } else {
+                    "разнообразие подборки"
+                }
+            }
+            return reasons
         }
     }
 

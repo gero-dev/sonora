@@ -1,6 +1,7 @@
 package app.sonora.data.wave
 
 import app.sonora.core.model.Track
+import kotlinx.serialization.Serializable
 
 /**
  * Модели «Моей волны» без единой зависимости от Android: их используют и
@@ -11,6 +12,7 @@ import app.sonora.core.model.Track
  */
 
 /** Откуда брать треки для «Моей волны». */
+@Serializable
 enum class WaveSourceMode(val label: String) {
     MIX("Микс"),
     LOCAL("Устройство"),
@@ -21,6 +23,7 @@ enum class WaveSourceMode(val label: String) {
  * Настроение. [query] уходит в поисковый запрос InnerTube, а [WaveMoodMatcher]
  * проверяет трек по аудио-фичам ReccoBeats (или по жанру/названию, если фич нет).
  */
+@Serializable
 enum class WaveMood(val label: String, val query: String) {
     ANY("Любое", ""),
     CALM("Спокойное", "chill acoustic mix"),
@@ -30,6 +33,7 @@ enum class WaveMood(val label: String, val query: String) {
     HAPPY("Весёлое", "happy upbeat mix"),
 }
 
+@Serializable
 enum class WaveSort(val label: String) {
     FOR_YOU("Для вас"),
     TITLE("По названию"),
@@ -43,6 +47,7 @@ enum class WaveSort(val label: String) {
  * «обойти» пустой выдачей — вместо подмешивания лишних треков волна
  * честно возвращает пустой список и причину (см. [WaveStatus]).
  */
+@Serializable
 data class WaveFilters(
     val source: WaveSourceMode = WaveSourceMode.MIX,
     val mood: WaveMood = WaveMood.ANY,
@@ -67,6 +72,7 @@ data class WaveFilters(
  * Почему волна пустая или чем она ограничена. UI показывает [WaveUiState.hint]
  * и по этому статусу решает, предлагать ли «Сбросить фильтры».
  */
+@Serializable
 enum class WaveStatus {
     /** Подборка собрана. */
     READY,
@@ -107,6 +113,8 @@ data class WaveBuildResult(
     val featuresUsed: Int = 0,
     /** Подпись активных фильтров: «Микс · спокойное · избранное». */
     val filterSummary: String = "",
+    /** Объяснения выбора: `track.id → «похоже на любимую музыку»`. */
+    val explanation: Map<String, String> = emptyMap(),
 )
 
 /** Состояние экрана «Моя волна». */
@@ -127,6 +135,11 @@ data class WaveUiState(
     val featuresUsed: Int = 0,
     /** Подпись активных фильтров. */
     val filterSummary: String = "",
+    /**
+     * Почему трек попал в подборку: `track.id → «похоже на любимую музыку»`.
+     * Объяснения считает [WaveRanker] при сборке и показывает UI.
+     */
+    val explanation: Map<String, String> = emptyMap(),
 ) {
     /** Пусто и при этом не идёт загрузка — значит, пора объяснить причину. */
     val showsEmptyReason: Boolean

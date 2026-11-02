@@ -15,6 +15,10 @@ import kotlinx.coroutines.withTimeoutOrNull
  * из встроенных провайдеров приложения (MusicBrainz/iTunes/Deezer/… с дисковым
  * кэшем) и варианты из источника YouTube. Всё это не трогает плеер и не
  * блокирует UI, ошибки и таймауты приводят к частичному результату.
+ *
+ * Кандидатам добавляется видео-id (для фоновой проверки коротким сниппетом) и
+ * подпись аудио-фич из кэша телеметрии, если она уже посчитана — сеть здесь
+ * не дёргаем, чтобы обогащение оставалось быстрым.
  */
 internal class RecognitionEnricher(private val context: Context) {
 
@@ -43,14 +47,10 @@ internal class RecognitionEnricher(private val context: Context) {
             .filter { it.title.isNotBlank() }
             .distinctBy { "${it.artist}|${it.title}" }
             .take(MAX_CANDIDATES)
-            .map { candidate ->
-                RecognitionCandidate(
-                    title = candidate.title,
-                    artist = candidate.artist,
-                    sourceLabel = candidate.source.title,
-                    subtitle = candidate.album,
-                )
-            }
+
+        // Только кэш фич: сеть подтянет фоновая проверка, если пользователь её не выключил.
+        val cachedFeatures = runCatching { graph.audioFeatures.cachedFeatures(candidates) }
+            .getOrDefault(emptyMap())
 
         RecognitionEnrichment(
             coverUrl = metadata?.coverUrl ?: track.artworkUrl,
@@ -58,9 +58,41 @@ internal class RecognitionEnricher(private val context: Context) {
             year = metadata?.year,
             genre = metadata?.genre,
             artistBio = metadata?.artistBio,
-            candidates = candidates,
+            candidates = candidates.map { candidate ->
+                RecognitionCandidate(
+                    title = candidate.title,
+                    artist = candidate.artist,
+                    sourceLabel = candidate.source.title,
+                    subtitle = candidate.album,
+                    trackId = candidate.id,
+                    videoId = videoIdOf(candidate),
+                    playable = candidate.playable,
+                    audioFeatureLabel = cachedFeatures[candidate.id]
+                        ?.shortLabel()
+                        ?.takeIf { it.isNotBlank() },
+                )
+            },
             done = true,
         )
+    }
+
+    /**
+     * Достаёт видео-id кандидата тем же способом, что и телеметрия, чтобы потом
+     * можно было скачать короткий сниппет для проверки.
+     */
+    private fun videoIdOf(track: Track): String? {
+        track.extra["youtubeId"]?.takeIf { it.isNotBlank() }?.let { return it }
+        track.id.takeIf { it.startsWith("youtube:") }?.removePrefix("youtube:")
+            ?.substringBefore('?')?.takeIf { it.isNotBlank() }?.let { return it }
+        track.id.takeIf { it.startsWith("ytdlp:") }?.removePrefix("ytdlp:")
+            ?.substringBefore('?')?.takeIf { it.isNotBlank() }?.let { return it }
+        val uri = track.uri.orEmpty()
+        if (uri.startsWith("innertube:")) return uri.removePrefix("innertube:").substringBefore('?')
+        if (uri.startsWith("ytdlp:")) return uri.removePrefix("ytdlp:").substringBefore('?')
+        return track.deepLink
+            ?.let { Regex("""[?&]v=([A-Za-z0-9_-]{11})""").find(it) }
+            ?.groupValues
+            ?.getOrNull(1)
     }
 
     companion object {

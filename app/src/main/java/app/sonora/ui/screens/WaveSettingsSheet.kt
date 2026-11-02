@@ -58,10 +58,12 @@ fun WaveSettingsSheet(
     settings: WaveSettings,
     historySize: Int,
     dislikedCount: Int,
+    likedCount: Int = 0,
     onDismiss: () -> Unit,
     onApply: (WaveSettings) -> Unit,
     onClearHistory: () -> Unit,
     onClearDislikes: () -> Unit,
+    onClearRatings: () -> Unit = {},
 ) {
     // Черновик: правки применяются только по кнопке «Применить».
     var draft by remember(settings) { mutableStateOf(settings) }
@@ -183,6 +185,27 @@ fun WaveSettingsSheet(
                         )
                         TextButton(onClick = onClearDislikes) {
                             Text("Вернуть", style = MaterialTheme.typography.labelLarge)
+                        }
+                    }
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = if (likedCount > 0) {
+                            "Оценки треков: 👍 $likedCount · 👎 $dislikedCount"
+                        } else {
+                            "Оценки треков: 👍 $likedCount · 👎 $dislikedCount\n" +
+                                "Лайки и дизлайки улучшают подбор"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f),
+                    )
+                    if (likedCount > 0 || dislikedCount > 0) {
+                        TextButton(onClick = onClearRatings) {
+                            Text("Сбросить", style = MaterialTheme.typography.labelLarge)
                         }
                     }
                 }

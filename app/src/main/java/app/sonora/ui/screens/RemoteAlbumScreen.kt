@@ -1,4 +1,4 @@
-﻿package app.sonora.ui.screens
+package app.sonora.ui.screens
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -65,6 +65,7 @@ fun RemoteAlbumScreen(
     val playlists by vm.playlists.collectAsState()
     val player by vm.playerChrome.collectAsState()
     val saveStates by vm.saveStates.collectAsState()
+    val ratingIndex by vm.trackRatingIndex.collectAsState()
 
     LaunchedEffect(albumId) { vm.openRemoteAlbum(albumId, albumTitle, artist) }
 
@@ -231,6 +232,9 @@ fun RemoteAlbumScreen(
                 onFavorite = { vm.toggleFavorite(track) },
                 saveState = saveStates[track.id],
                 onDownload = if (canDownload) ({ vm.downloadTrack(track) }) else null,
+                rating = ratingIndex.ratingOf(track),
+                onLike = { vm.toggleTrackLike(track) },
+                onDislike = { vm.toggleTrackDislike(track) },
             )
         }
     }
@@ -241,5 +245,8 @@ fun RemoteAlbumScreen(
         playlists = playlists,
         favorites = favorites,
         navigate = navigate,
+        ratingIndex = ratingIndex,
+        onLike = { vm.toggleTrackLike(it) },
+        onDislike = { vm.toggleTrackDislike(it) },
     )
 }

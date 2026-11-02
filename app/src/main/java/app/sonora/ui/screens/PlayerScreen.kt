@@ -44,11 +44,14 @@ import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.QueueMusic
+import androidx.compose.material.icons.rounded.Radio
 import androidx.compose.material.icons.rounded.Repeat
 import androidx.compose.material.icons.rounded.RepeatOne
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
+import androidx.compose.material.icons.rounded.ThumbDown
+import androidx.compose.material.icons.rounded.ThumbUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.CircularProgressIndicator
@@ -121,6 +124,7 @@ private const val LYRICS_WAIT_MS = 8_000L
 fun PlayerScreen(vm: MainViewModel, onBack: () -> Unit, navigate: (String) -> Unit) {
     val player by vm.player.collectAsState()
     val favorites by vm.favorites.collectAsState()
+    val ratingIndex by vm.trackRatingIndex.collectAsState()
     val saveStates by vm.saveStates.collectAsState()
     val settings by vm.settings.collectAsState()
     val audioFeatures by vm.audioFeatures.collectAsState()
@@ -218,6 +222,20 @@ fun PlayerScreen(vm: MainViewModel, onBack: () -> Unit, navigate: (String) -> Un
                         expanded = menuExpanded,
                         onDismissRequest = { menuExpanded = false },
                     ) {
+                        // Радио доступно для любого источника: локального файла,
+                        // InnerTube, yt-dlp и SoundCloud.
+                        track?.let { radioSeed ->
+                            DropdownMenuItem(
+                                text = { Text("Радио по треку") },
+                                leadingIcon = {
+                                    Icon(Icons.Rounded.Radio, contentDescription = null)
+                                },
+                                onClick = {
+                                    menuExpanded = false
+                                    vm.startTrackRadio(radioSeed)
+                                },
+                            )
+                        }
                         track?.artist?.takeIf { it.isNotBlank() }?.let { artist ->
                             DropdownMenuItem(
                                 text = { Text("Перейти к исполнителю") },
@@ -434,6 +452,59 @@ fun PlayerScreen(vm: MainViewModel, onBack: () -> Unit, navigate: (String) -> Un
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
+                        }
+                    }
+                    // Оценки «нравится / не нравится» и радио по треку.
+                    // Лайк дополнительно попадает в избранное, дизлайк скрывает
+                    // трек из волны и приглушает похожих исполнителей.
+                    val myRating = ratingIndex.ratingOf(current)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        IconButton(onClick = { vm.toggleTrackLike(current) }) {
+                            Icon(
+                                imageVector = Icons.Rounded.ThumbUp,
+                                contentDescription = if (myRating > 0) {
+                                    "Убрать «нравится»"
+                                } else {
+                                    "Нравится"
+                                },
+                                tint = if (myRating > 0) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    actionTint
+                                },
+                                modifier = Modifier.size(22.dp),
+                            )
+                        }
+                        IconButton(onClick = { vm.toggleTrackDislike(current) }) {
+                            Icon(
+                                imageVector = Icons.Rounded.ThumbDown,
+                                contentDescription = if (myRating < 0) {
+                                    "Убрать «не нравится»"
+                                } else {
+                                    "Не нравится"
+                                },
+                                tint = if (myRating < 0) {
+                                    MaterialTheme.colorScheme.error
+                                } else {
+                                    actionTint
+                                },
+                                modifier = Modifier.size(22.dp),
+                            )
+                        }
+                        Spacer(Modifier.weight(1f))
+                        TextButton(onClick = { vm.startTrackRadio(current) }) {
+                            Icon(
+                                imageVector = Icons.Rounded.Radio,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text("Радио")
                         }
                     }
                     if (saveState?.isActive == true) {                        Spacer(Modifier.height(10.dp))

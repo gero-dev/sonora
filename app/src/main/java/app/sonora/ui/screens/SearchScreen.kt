@@ -1,5 +1,12 @@
 package app.sonora.ui.screens
 
+import android.Manifest
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -16,16 +23,25 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.GraphicEq
+import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.MusicNote
+import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -33,9 +49,21 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.sonora.core.model.Source
 import app.sonora.core.model.Track
+import app.sonora.core.util.SearchText
+import app.sonora.data.recognition.RecognitionController
+import app.sonora.data.recognition.RecognitionMode
+import app.sonora.data.recognition.RecognitionState
+import app.sonora.data.recognition.RecognizedTrack
+import app.sonora.data.telemetry.AudioFeature
+import app.sonora.data.telemetry.SearchRankItem
+import app.sonora.data.telemetry.SearchRanker
 import app.sonora.ui.MainViewModel
 import app.sonora.ui.components.CreatePlaylistDialog
 import app.sonora.ui.components.EmptyState
@@ -45,25 +73,6 @@ import app.sonora.ui.components.TrackActionSheet
 import app.sonora.ui.components.TrackRow
 import app.sonora.ui.components.sourceColor
 import app.sonora.ui.nav.Routes
-import android.Manifest
-import android.content.Context
-import android.content.Intent
-import android.net.Uri
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.clickable
-import androidx.compose.material.icons.rounded.Mic
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.style.TextOverflow
-import app.sonora.data.recognition.RecognitionController
-import app.sonora.data.recognition.RecognitionState
 import coil.compose.AsyncImage
 
 private val PagePadding = 16.dp
@@ -74,6 +83,14 @@ private val PagePadding = 16.dp
  * Результаты показываются одним списком без разделения на категории: у каждой
  * строки есть маркер источника («Устройство», «YouTube Music», …), поэтому
  * видно, откуда пришёл трек, но глазами не нужно переключать вкладки.
+ *
+ * Вверху — «поиск по мелодии»: два режима, как в поиске Google по треку:
+ *  - «Слушать вокруг» — Shazam-подобная запись того, что играет рядом;
+ *  - «Напеть мелодию» — hum-to-search по вашей фонотеке.
+ *
+ * Результаты переранжируются (совпадение текста + локальная доступность +
+ * уверенность распознавания + аудио-фичи), поэтому после распознавания нужный
+ * трек оказывается наверху, а не теряется среди похожих.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -85,6 +102,8 @@ fun SearchScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) -
     // Поиску позиция не нужна: только текущий трек и признак игры.
     val player by vm.playerChrome.collectAsState()
     val saveStates by vm.saveStates.collectAsState()
+    val audioFeatures by vm.audioFeatures.collectAsState()
+    val recognitionState by RecognitionController.state.collectAsState()
 
     var actionTrack by remember { mutableStateOf<Track?>(null) }
     var playlistForNewTrack by remember { mutableStateOf<Track?>(null) }
@@ -99,7 +118,6 @@ fun SearchScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) -
         val remote = vm.withoutSavedCopies(search.remote.filterNot { it.isVideoContent })
         (search.local + remote).distinctBy { it.id }
     }
-    val nothingFound = !queryBlank && !search.loading && results.isEmpty()
     // vm.isTrackDownloaded() просматривает всю фонотеку. Считаем это один раз
     // на список результатов, а не в композиции каждой строки при каждой перерисовке.
     val downloadedIds = remember(results, tracks) {
@@ -108,6 +126,12 @@ fun SearchScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) -
             .map { it.id }
             .toSet()
     }
+    // После распознавания/напевки поднимаем наверх совпавшие результаты.
+    val recognizedTracks = remember(recognitionState) { recognitionTracks(recognitionState) }
+    val rankedResults = remember(results, search.query, audioFeatures, downloadedIds, recognizedTracks) {
+        rankSearchResults(search.query, results, downloadedIds, audioFeatures, recognizedTracks)
+    }
+    val nothingFound = !queryBlank && !search.loading && results.isEmpty()
 
     Column(
         Modifier
@@ -140,7 +164,13 @@ fun SearchScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) -
                 shape = RoundedCornerShape(16.dp),
             )
             Spacer(Modifier.height(10.dp))
-            FragmentSearchPanel(onSearch = vm::onSearchQueryChanged)
+            FragmentSearchPanel(
+                state = recognitionState,
+                onSearch = vm::onSearchQueryChanged,
+                onPlayLocal = { trackId ->
+                    tracks.firstOrNull { it.id == trackId }?.let { vm.playOrOpen(it) }
+                },
+            )
         }
         Spacer(Modifier.height(6.dp))
         LazyColumn(
@@ -204,9 +234,9 @@ fun SearchScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) -
                         )
                     }
                 }
-                if (results.isNotEmpty()) {
-                    item { SectionHeader(title = "Найдено · ${results.size}") }
-                    items(results, key = { "result-${it.id}" }) { track ->
+                if (rankedResults.isNotEmpty()) {
+                    item { SectionHeader(title = "Найдено · ${rankedResults.size}") }
+                    items(rankedResults, key = { "result-${it.id}" }) { track ->
                         SearchTrackRow(
                             track = track,
                             isFavorite = track.id in favorites,
@@ -342,22 +372,35 @@ private fun SearchLoadingRow() {
 }
 
 /**
- * «Найти по фрагменту» — компактная точка входа в распознавание песни.
+ * «Поиск по мелодии» — компактная точка входа в распознавание песни/напева.
  *
  * Панель не требует правок MainViewModel: она читает StateFlow из
  * RecognitionController и вызывает только его публичные методы.
  * Запись и распознавание идут в фоне (Dispatchers.IO), воспроизведение не трогаем.
  */
 @Composable
-private fun FragmentSearchPanel(onSearch: (String) -> Unit) {
+private fun FragmentSearchPanel(
+    state: RecognitionState,
+    onSearch: (String) -> Unit,
+    onPlayLocal: (String) -> Unit,
+) {
     val context = LocalContext.current
-    val state by RecognitionController.state.collectAsState()
+    var mode by remember { mutableStateOf(RecognitionMode.LISTEN) }
     var showTokenDialog by remember { mutableStateOf(false) }
+    val running = state is RecognitionState.Recording || state is RecognitionState.Identifying
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
     ) { granted ->
-        if (granted) RecognitionController.start(context) else RecognitionController.permissionDenied()
+        if (!granted) {
+            RecognitionController.permissionDenied()
+        } else if (RecognitionController.hasPermission(context)) {
+            if (mode == RecognitionMode.HUM) {
+                RecognitionController.startHumming(context)
+            } else {
+                RecognitionController.start(context)
+            }
+        }
     }
     val fileLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(),
@@ -377,39 +420,97 @@ private fun FragmentSearchPanel(onSearch: (String) -> Unit) {
     LaunchedEffect(state) {
         if (state is RecognitionState.PermissionRequired) {
             if (RecognitionController.hasPermission(context)) {
-                RecognitionController.start(context)
+                if (mode == RecognitionMode.HUM) {
+                    RecognitionController.startHumming(context)
+                } else {
+                    RecognitionController.start(context)
+                }
             } else {
                 permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
             }
         }
     }
 
+    val startRecognition: () -> Unit = {
+        if (RecognitionController.hasPermission(context)) {
+            if (mode == RecognitionMode.HUM) {
+                RecognitionController.startHumming(context)
+            } else {
+                RecognitionController.start(context)
+            }
+        } else {
+            permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
+
     Column(Modifier.fillMaxWidth()) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            FilterChip(
+                selected = mode == RecognitionMode.LISTEN,
+                onClick = { if (!running) mode = RecognitionMode.LISTEN },
+                enabled = !running,
+                label = { Text("Слушать вокруг") },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Rounded.GraphicEq,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                    )
+                },
+            )
+            FilterChip(
+                selected = mode == RecognitionMode.HUM,
+                onClick = { if (!running) mode = RecognitionMode.HUM },
+                enabled = !running,
+                label = { Text("Напеть мелодию") },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Rounded.MusicNote,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                    )
+                },
+            )
+        }
+        Text(
+            text = if (mode == RecognitionMode.HUM) {
+                "Напойте или просвистите мелодию — Sonora сравнит её с треками на устройстве."
+            } else {
+                "Запишите 8 секунд того, что играет рядом: AudD (если задан ключ) или ваша фонотека."
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp, bottom = 6.dp),
+        )
+
         when (val current = state) {
             RecognitionState.Idle -> Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 OutlinedButton(
-                    onClick = {
-                        if (RecognitionController.hasPermission(context)) {
-                            RecognitionController.start(context)
-                        } else {
-                            permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                        }
-                    },
+                    onClick = startRecognition,
                     modifier = Modifier.weight(1f),
                 ) {
                     Icon(
-                        imageVector = Icons.Rounded.Mic,
+                        imageVector = if (mode == RecognitionMode.HUM) {
+                            Icons.Rounded.MusicNote
+                        } else {
+                            Icons.Rounded.Mic
+                        },
                         contentDescription = null,
                         modifier = Modifier.size(18.dp),
                     )
                     Spacer(Modifier.width(8.dp))
-                    Text("Найти по фрагменту")
+                    Text(if (mode == RecognitionMode.HUM) "Напеть мелодию" else "Найти по фрагменту")
                 }
-                TextButton(onClick = { fileLauncher.launch(arrayOf("audio/*")) }) {
-                    Text("Из файла", style = MaterialTheme.typography.labelMedium)
+                if (mode == RecognitionMode.LISTEN) {
+                    TextButton(onClick = { fileLauncher.launch(arrayOf("audio/*")) }) {
+                        Text("Из файла", style = MaterialTheme.typography.labelMedium)
+                    }
                 }
             }
 
@@ -424,19 +525,32 @@ private fun FragmentSearchPanel(onSearch: (String) -> Unit) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
-                    imageVector = Icons.Rounded.Mic,
+                    imageVector = if (current.mode == RecognitionMode.HUM) {
+                        Icons.Rounded.MusicNote
+                    } else {
+                        Icons.Rounded.Mic
+                    },
                     contentDescription = null,
                     modifier = Modifier.size(18.dp),
                     tint = MaterialTheme.colorScheme.primary,
                 )
                 Spacer(Modifier.width(8.dp))
                 Column(Modifier.weight(1f)) {
+                    val action = if (current.mode == RecognitionMode.HUM) {
+                        "Записываем мелодию"
+                    } else {
+                        "Слушаем фрагмент"
+                    }
                     Text(
-                        text = "Слушаем фрагмент… ${current.elapsedMs / 1000} с из ${current.totalMs / 1000} с",
+                        text = "$action… ${current.elapsedMs / 1000} с из ${current.totalMs / 1000} с",
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     Text(
-                        text = "Поднесите телефон ближе к музыке",
+                        text = if (current.mode == RecognitionMode.HUM) {
+                            "Напойте или просвистите мелодию ровно, без слов"
+                        } else {
+                            "Поднесите телефон ближе к музыке"
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -450,17 +564,24 @@ private fun FragmentSearchPanel(onSearch: (String) -> Unit) {
             ) {
                 CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                 Spacer(Modifier.width(10.dp))
-                Text(
-                    text = current.stage,
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.weight(1f),
-                )
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = current.phase.label,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Text(
+                        text = current.stage,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
                 TextButton(onClick = { RecognitionController.cancel() }) { Text("Отмена") }
             }
 
             is RecognitionState.Result -> FragmentResultCard(
                 result = current,
                 onSearch = onSearch,
+                onPlayLocal = onPlayLocal,
                 onOpenLink = { link -> openExternalLink(context, link) },
             )
 
@@ -485,16 +606,19 @@ private fun FragmentSearchPanel(onSearch: (String) -> Unit) {
     }
 }
 
-/** Карточка распознанного трека + результаты фонового поиска метаданных. */
+/** Карточка распознанного трека + результаты фонового поиска метаданных и проверки. */
 @Composable
 private fun FragmentResultCard(
     result: RecognitionState.Result,
     onSearch: (String) -> Unit,
+    onPlayLocal: (String) -> Unit,
     onOpenLink: (String) -> Unit,
 ) {
     val track = result.track
     val enrichment = result.enrichment
+    val verification = result.verification
     val artwork = enrichment.coverUrl ?: track.artworkUrl
+    val localTrackId = result.localTrackId
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -531,6 +655,77 @@ private fun FragmentResultCard(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
+                    val percent = track.confidencePercent
+                    if (percent != null) {
+                        Text(
+                            text = if (result.fromLocalLibrary) {
+                                "Совпадение с вашей фонотекой · $percent%"
+                            } else {
+                                "Уверенность · $percent%"
+                            },
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                }
+            }
+
+            if (result.fromCache) {
+                Text(
+                    text = "Результат из кэша — сеть не использовалась",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 6.dp),
+                )
+            }
+
+            // Top-N вариантов из локальной сверки/мелодии: можно сразу слушать.
+            if (result.alternatives.isNotEmpty()) {
+                Text(
+                    text = "Другие варианты",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+                result.alternatives.take(4).forEach { alternative ->
+                    val alternativeLocalId = alternative.localTrackId
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                if (alternativeLocalId != null) {
+                                    onPlayLocal(alternativeLocalId)
+                                } else {
+                                    onSearch(alternative.displayTitle)
+                                }
+                            }
+                            .padding(vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                text = alternative.displayTitle,
+                                style = MaterialTheme.typography.bodySmall,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                text = listOfNotNull(alternative.album, alternative.provider)
+                                    .joinToString(" · "),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        alternative.confidencePercent?.let { percentValue ->
+                            Text(
+                                text = "$percentValue%",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                    }
                 }
             }
 
@@ -554,21 +749,111 @@ private fun FragmentResultCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 8.dp),
                 )
-                enrichment.candidates.take(3).forEach { candidate ->
+                enrichment.candidates
+                    .sortedByDescending { it.confidence ?: 0.0 }
+                    .take(4)
+                    .forEach { candidate ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onSearch(candidate.displayTitle) }
+                                .padding(vertical = 3.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    text = candidate.displayTitle,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                val subtitle = listOfNotNull(
+                                    candidate.sourceLabel,
+                                    candidate.audioFeatureLabel,
+                                    candidate.subtitle,
+                                ).joinToString(" · ")
+                                if (subtitle.isNotBlank()) {
+                                    Text(
+                                        text = subtitle,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                            }
+                            candidate.confidencePercent?.let { percentValue ->
+                                Text(
+                                    text = "$percentValue%",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                            }
+                        }
+                    }
+            }
+
+            // Фоновая проверка: локальная копия, сверка короткого сниппета, фичи.
+            when {
+                result.verifying -> Row(
+                    modifier = Modifier.padding(top = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(8.dp))
                     Text(
-                        text = candidate.displayTitle,
+                        text = "Проверяем совпадение в фоне — можно продолжать слушать музыку…",
                         style = MaterialTheme.typography.bodySmall,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onSearch(candidate.displayTitle) }
-                            .padding(vertical = 2.dp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                }
+
+                verification != null -> Column(Modifier.padding(top = 6.dp)) {
+                    val summary = buildList {
+                        if (verification.localAvailable) {
+                            val score = verification.localScore
+                            add(
+                                if (score != null) {
+                                    "Есть на устройстве · ${(score * 100).toInt()}%"
+                                } else {
+                                    "Есть на устройстве"
+                                },
+                            )
+                        }
+                        if (verification.snippetChecked && verification.snippetScore != null) {
+                            add("аудио кандидата ${(verification.snippetScore * 100).toInt()}%")
+                        }
+                        verification.featuresSummary?.let { add(it) }
+                    }
+                    if (summary.isNotEmpty()) {
+                        Text(
+                            text = summary.joinToString(" · "),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                    verification.note?.let { note ->
+                        Text(
+                            text = note,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
             }
 
             Row(verticalAlignment = Alignment.CenterVertically) {
+                if (localTrackId != null) {
+                    TextButton(onClick = { onPlayLocal(localTrackId) }) {
+                        Icon(
+                            imageVector = Icons.Rounded.PlayArrow,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text("Слушать")
+                    }
+                }
                 TextButton(onClick = { onSearch(track.searchQuery) }) { Text("Искать в поиске") }
                 val link = track.songLink
                 if (!link.isNullOrBlank()) {
@@ -577,11 +862,10 @@ private fun FragmentResultCard(
                 TextButton(onClick = { RecognitionController.reset() }) { Text("Закрыть") }
             }
 
-            if (result.fromLocalLibrary) {
-                val percent = ((track.score ?: 0.0) * 100).toInt()
+            if (result.mode == RecognitionMode.HUM) {
                 Text(
-                    text = "Совпадение с вашей фонотекой · $percent%",
-                    style = MaterialTheme.typography.bodySmall,
+                    text = "Напетый поиск сравнивает мелодию только с треками на устройстве.",
+                    style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -639,4 +923,64 @@ private fun openExternalLink(context: Context, url: String) {
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
         )
     }
+}
+
+/** Треки из последнего результата распознавания — для переранжирования поиска. */
+private fun recognitionTracks(state: RecognitionState): List<RecognizedTrack> {
+    val result = state as? RecognitionState.Result ?: return emptyList()
+    return buildList {
+        add(result.track)
+        addAll(result.alternatives)
+    }
+}
+
+/** Переранжирование результатов поиска: текст, локальность, распознавание, фичи. */
+private fun rankSearchResults(
+    query: String,
+    results: List<Track>,
+    downloadedIds: Set<String>,
+    audioFeatures: Map<String, AudioFeature>,
+    recognized: List<RecognizedTrack>,
+): List<Track> {
+    if (results.isEmpty()) return results
+    val items = results.map { track ->
+        SearchRankItem(
+            track = track,
+            audioFeature = audioFeatures[track.id],
+            localAvailable = track.source == Source.LOCAL || track.id in downloadedIds,
+            recognitionScore = recognitionScoreFor(track, recognized),
+        )
+    }
+    return SearchRanker.rank(query, items).map { it.track }
+}
+
+/** Уверенность распознавания для конкретной строки поиска (или null). */
+private fun recognitionScoreFor(track: Track, recognized: List<RecognizedTrack>): Double? {
+    if (recognized.isEmpty()) return null
+    val title = SearchText.normalize(track.title)
+    val artist = SearchText.normalize(track.artist)
+    var best: Double? = null
+    for (item in recognized) {
+        val score = item.score ?: continue
+        val itemLocalId = item.localTrackId
+        if (itemLocalId != null && itemLocalId == track.id) {
+            best = maxOf(best ?: 0.0, score)
+            continue
+        }
+        val itemTitle = SearchText.normalize(item.title)
+        val itemArtist = SearchText.normalize(item.artist)
+        if (itemTitle.isBlank()) continue
+        val titleMatch = title.isNotBlank() &&
+            (title.contains(itemTitle) || itemTitle.contains(title))
+        val artistMatch = artist.isNotBlank() && itemArtist.isNotBlank() &&
+            (artist.contains(itemArtist) || itemArtist.contains(artist))
+        val candidate = when {
+            titleMatch && artistMatch -> score
+            titleMatch -> score * 0.85
+            artistMatch && itemTitle.length >= 4 && title.contains(itemTitle.take(4)) -> score * 0.6
+            else -> null
+        }
+        if (candidate != null) best = maxOf(best ?: 0.0, candidate)
+    }
+    return best
 }
