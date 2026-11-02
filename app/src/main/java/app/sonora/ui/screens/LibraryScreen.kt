@@ -288,9 +288,9 @@ private fun artistComparator(sort: LibrarySort): Comparator<Artist> = when (sort
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) -> Unit) {
-    val tracks by vm.tracks.collectAsState()
+    val rawTracks by vm.tracks.collectAsState()
     val favorites by vm.favorites.collectAsState()
-    val playlists by vm.playlists.collectAsState()
+    val rawPlaylists by vm.playlists.collectAsState()
     // Медиатеке нужен только текущий трек/статус — позиция не показывается.
     val player by vm.playerChrome.collectAsState()
     val scanning by vm.scanning.collectAsState()
@@ -298,6 +298,16 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
     val historyEntries by vm.historyEntries.collectAsState()
     // Оценки «нравится / не нравится» для рекомендаций — общий индекс волны.
     val ratingIndex by vm.trackRatingIndex.collectAsState()
+
+    // Защита от дубликатов: LazyColumn/LazyRow требуют уникальные key, а скан
+    // фонотеки и история прослушиваний могут вернуть один и тот же трек дважды
+    // (иначе крэш IllegalStateException "Key ... was already used").
+    val uniqueTracks = remember(rawTracks) { rawTracks.distinctBy { it.id } }
+    val uniquePlaylists = remember(rawPlaylists) { rawPlaylists.distinctBy { it.id } }
+    // Ниже по коду под именами tracks/playlists используются уже дедуплицированные
+    // списки: все Lazy-ключи строятся по id/названию, дубликаты ломали композицию.
+    val tracks = uniqueTracks
+    val playlists = uniquePlaylists
 
     val context = LocalContext.current
     val uiPrefs = remember(context) { LibraryUiPrefs(context) }
@@ -335,22 +345,35 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
 
     // ---------- Данные ----------
 
-    val localTracks = remember(tracks) { tracks.filter { it.source == Source.LOCAL } }
+    val localTracks = remember(tracks) {
+        tracks.filter { it.source == Source.LOCAL }.distinctBy { it.id }
+    }
     val downloadedTracks = remember(localTracks) {
         localTracks.filter { it.savedFromStreaming }
             .sortedByDescending { it.extra["downloadedAt"]?.toLongOrNull() ?: 0L }
     }
-    val favoriteTracks = remember(tracks, favorites) { tracks.filter { it.id in favorites } }
-    val albums = remember(localTracks) { vm.albums() }
-    val artists = remember(localTracks) { vm.artists() }
+    val favoriteTracks = remember(tracks, favorites) {
+        tracks.filter { it.id in favorites }.distinctBy { it.id }
+    }
+    // Ключи альбомов/артистов строятся по «название|артист» и по имени, поэтому
+    // дубликаты из разных источников схлопываем до передачи в Lazy-списки.
+    val albums = remember(localTracks) {
+        vm.albums().distinctBy { "${it.name.trim().lowercase()}|${it.artist.trim().lowercase()}" }
+    }
+    val artists = remember(localTracks) {
+        vm.artists().distinctBy { it.name.trim().lowercase() }
+    }
     val editablePlaylists = remember(playlists) { playlists.filter { it.editable } }
     val importedTracks = remember(tracks) {
         vm.withoutSavedCopies(
             tracks.filter { it.source == Source.YOUTUBE && !it.isVideoContent },
-        )
+        ).distinctBy { it.id }
     }
-    // «Недавно прослушано» — та же история, что на экране «История».
-    val recentlyPlayed = remember(historyEntries, tracks) { vm.historyTracks(16) }
+    // «Недавно прослушано» — та же история, что на экране «История», но без
+    // повторов одного трека: полка-рельс строится по ключу track.id.
+    val recentlyPlayed = remember(historyEntries, tracks) {
+        vm.historyTracks(16).distinctBy { it.track.id }
+    }
     // Обложки плейлистов для коллажей: индекс id→трек строим один раз,
     // иначе получаем O(плейлисты × треки) на каждой перерисовке.
     val playlistCovers = remember(playlists, tracks) {
