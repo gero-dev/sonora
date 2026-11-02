@@ -4,6 +4,7 @@ import app.sonora.core.model.Source
 import app.sonora.core.model.Track
 import app.sonora.core.settings.WaveSettings
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -21,14 +22,16 @@ class TrackRatingRecommendationTest {
         artist: String,
         album: String? = null,
         genre: String? = null,
+        durationMs: Long = 200_000L,
+        source: Source = Source.LOCAL,
     ) = Track(
         id = id,
         title = title,
         artist = artist,
         album = album,
-        durationMs = 200_000L,
+        durationMs = durationMs,
         uri = "file:///$id",
-        source = Source.LOCAL,
+        source = source,
         playable = true,
         extra = buildMap { if (genre != null) put("genre", genre) },
     )
@@ -107,5 +110,79 @@ class TrackRatingRecommendationTest {
             dislikedKeys = index.dislikedWaveKeys(),
         )
         assertEquals(listOf("2"), filtered.map { it.id })
+    }
+
+    @Test
+    fun `radio drops talk shows memes and non related search results`() {
+        val seed = track("ytdlp:v_xXWRQ5cms", "Want To Be Closed", "Maxians Family")
+        val info = RadioEngine.seedOf(seed)
+        val trustedRelated = track(
+            "rel1",
+            "Want To Be Closed (Reload)",
+            "Shoji Meguro",
+            durationMs = 180_000L,
+            source = Source.YOUTUBE,
+        )
+        val relatedSearch = track(
+            "rel2",
+            "Memories of You",
+            "Shoji Meguro",
+            durationMs = 200_000L,
+            source = Source.YOUTUBE,
+        )
+        val southPark = track(
+            "bad1",
+            "South Park \"Not My Waterpark\" song + VIDEO",
+            "Comedy Central",
+            durationMs = 120_000L,
+            source = Source.YOUTUBE,
+        )
+        val talkShow = track(
+            "bad2",
+            "Lalo Talks With Don Juan About Gus | Better Call Saul",
+            "Better Call Saul",
+            durationMs = 300_000L,
+            source = Source.YOUTUBE,
+        )
+        val unrelated = track(
+            "bad3",
+            "Some Random Song",
+            "Random Band",
+            durationMs = 200_000L,
+            source = Source.YOUTUBE,
+        )
+        val longMix = track(
+            "bad4",
+            "Persona Mix",
+            "Maxians Family",
+            durationMs = 3_600_000L,
+            source = Source.YOUTUBE,
+        )
+        val filtered = RadioEngine.filterCandidates(
+            candidates = listOf(
+                seed,
+                trustedRelated,
+                relatedSearch,
+                southPark,
+                talkShow,
+                unrelated,
+                longMix,
+            ),
+            seed = info,
+            tuning = WaveSettings(),
+            trustedIds = setOf(trustedRelated.id),
+            relatedArtists = setOf("Shoji Meguro", "Maxians Family"),
+            strictRelevance = true,
+        )
+        assertEquals(listOf("rel1", "rel2"), filtered.map { it.id })
+    }
+
+    @Test
+    fun `artist queries for video seed do not use generic fallbacks`() {
+        val seed = track("youtube:abc", "Song", "Artist", genre = "video game music")
+        val queries = RadioEngine.artistQueries(RadioEngine.seedOf(seed), WaveSettings())
+        assertFalse(queries.any { it == "music mix" })
+        assertFalse(queries.any { it == "new music mix" })
+        assertTrue(queries.any { it.contains("Artist") })
     }
 }

@@ -90,6 +90,7 @@ import app.sonora.core.model.Source
 import app.sonora.core.model.Track
 import app.sonora.data.download.SaveStatus
 import app.sonora.data.download.TrackSaveState
+import app.sonora.data.wave.TrackRatingIndex
 import app.sonora.playback.PlayerUiState
 import app.sonora.ui.MainViewModel
 import app.sonora.ui.components.AlbumCard
@@ -295,6 +296,8 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
     val scanning by vm.scanning.collectAsState()
     val importError by vm.playlistImportError.collectAsState()
     val historyEntries by vm.historyEntries.collectAsState()
+    // Оценки «нравится / не нравится» для рекомендаций — общий индекс волны.
+    val ratingIndex by vm.trackRatingIndex.collectAsState()
 
     val context = LocalContext.current
     val uiPrefs = remember(context) { LibraryUiPrefs(context) }
@@ -464,6 +467,8 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
         query = ""
     }
     val playTracks: (List<Track>) -> Unit = { list -> if (list.isNotEmpty()) vm.playQueue(list) }
+    val onLikeTrack: (Track) -> Unit = { vm.toggleTrackLike(it) }
+    val onDislikeTrack: (Track) -> Unit = { vm.toggleTrackDislike(it) }
 
     val bottomPadding = padding.calculateBottomPadding()
     val gridSections = section == LibrarySection.PLAYLISTS ||
@@ -530,6 +535,9 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
                     player = player,
                     navigate = navigate,
                     bottomPadding = bottomPadding,
+                    ratingIndex = ratingIndex,
+                    onLikeTrack = onLikeTrack,
+                    onDislikeTrack = onDislikeTrack,
                     onPlaylistLongClick = { playlistMenu = it },
                     onAlbumLongClick = { albumMenu = it },
                     onArtistLongClick = { artistMenu = it },
@@ -550,6 +558,9 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
                     player = player,
                     scanning = scanning,
                     bottomPadding = bottomPadding,
+                    ratingIndex = ratingIndex,
+                    onLikeTrack = onLikeTrack,
+                    onDislikeTrack = onDislikeTrack,
                     onSelectSection = selectSection,
                     onOpenHistory = { navigate(Routes.HISTORY) },
                     onPlayAllLibrary = { vm.playLibraryShuffled() },
@@ -598,6 +609,9 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
                     player = player,
                     filter = filter,
                     scanning = scanning,
+                    ratingIndex = ratingIndex,
+                    onLikeTrack = onLikeTrack,
+                    onDislikeTrack = onDislikeTrack,
                     onFilterChange = changeFilter,
                     onClick = { vm.playOrOpen(it) },
                     onLongClick = { actionTrack = it },
@@ -609,6 +623,9 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
                     favorites = favorites,
                     player = player,
                     saveStatesFlow = vm.saveStates,
+                    ratingIndex = ratingIndex,
+                    onLikeTrack = onLikeTrack,
+                    onDislikeTrack = onDislikeTrack,
                     onPlayAll = { playTracks(downloadedTracks) },
                     onClick = { vm.playOrOpen(it) },
                     onLongClick = { actionTrack = it },
@@ -619,6 +636,9 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
                     tracks = visibleFavorites,
                     favorites = favorites,
                     player = player,
+                    ratingIndex = ratingIndex,
+                    onLikeTrack = onLikeTrack,
+                    onDislikeTrack = onDislikeTrack,
                     onPlayAll = { playTracks(favoriteTracks) },
                     onClick = { vm.playOrOpen(it) },
                     onLongClick = { actionTrack = it },
@@ -629,6 +649,9 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
                     tracks = visibleYouTube,
                     favorites = favorites,
                     player = player,
+                    ratingIndex = ratingIndex,
+                    onLikeTrack = onLikeTrack,
+                    onDislikeTrack = onDislikeTrack,
                     onClick = { vm.playOrOpen(it) },
                     onLongClick = { actionTrack = it },
                     onFavorite = { vm.toggleFavorite(it.id) },
@@ -686,6 +709,15 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
                     }
                 } else {
                     null
+                },
+                rating = ratingIndex.ratingOf(track),
+                onLike = {
+                    actionTrack = null
+                    vm.toggleTrackLike(track)
+                },
+                onDislike = {
+                    actionTrack = null
+                    vm.toggleTrackDislike(track)
                 },
                 downloadLabel = "Сохранить на устройство",
             )
@@ -1189,6 +1221,9 @@ private fun AllTab(
     onLongClickTrack: (Track) -> Unit,
     onFavoriteTrack: (Track) -> Unit,
     onPlayTracks: (List<Track>) -> Unit,
+    ratingIndex: TrackRatingIndex,
+    onLikeTrack: (Track) -> Unit,
+    onDislikeTrack: (Track) -> Unit,
 ) {
     // Срезы для рельсов считаем один раз на список, а не на каждую перерисовку.
     val featuredPlaylists = remember(playlists) { playlists.take(10) }
@@ -1405,6 +1440,9 @@ private fun AllTab(
                     onClick = { onClickTrack(track) },
                     onLongClick = { onLongClickTrack(track) },
                     onFavorite = { onFavoriteTrack(track) },
+                    rating = ratingIndex.ratingOf(track),
+                    onLike = { onLikeTrack(track) },
+                    onDislike = { onDislikeTrack(track) },
                 )
             }
         }
@@ -1746,6 +1784,9 @@ private fun TracksTab(
     onLongClick: (Track) -> Unit,
     onFavorite: (Track) -> Unit,
     bottomPadding: Dp,
+    ratingIndex: TrackRatingIndex,
+    onLikeTrack: (Track) -> Unit,
+    onDislikeTrack: (Track) -> Unit,
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -1818,6 +1859,9 @@ private fun TracksTab(
                     onClick = { onClick(track) },
                     onLongClick = { onLongClick(track) },
                     onFavorite = { onFavorite(track) },
+                    rating = ratingIndex.ratingOf(track),
+                    onLike = { onLikeTrack(track) },
+                    onDislike = { onDislikeTrack(track) },
                 )
             }
         }
@@ -1835,6 +1879,9 @@ private fun FavoritesTab(
     onLongClick: (Track) -> Unit,
     onFavorite: (Track) -> Unit,
     bottomPadding: Dp,
+    ratingIndex: TrackRatingIndex,
+    onLikeTrack: (Track) -> Unit,
+    onDislikeTrack: (Track) -> Unit,
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -1891,6 +1938,9 @@ private fun FavoritesTab(
                     onClick = { onClick(track) },
                     onLongClick = { onLongClick(track) },
                     onFavorite = { onFavorite(track) },
+                    rating = ratingIndex.ratingOf(track),
+                    onLike = { onLikeTrack(track) },
+                    onDislike = { onDislikeTrack(track) },
                 )
             }
         }
@@ -1913,6 +1963,9 @@ private fun DownloadsTab(
     onLongClick: (Track) -> Unit,
     onFavorite: (Track) -> Unit,
     bottomPadding: Dp,
+    ratingIndex: TrackRatingIndex,
+    onLikeTrack: (Track) -> Unit,
+    onDislikeTrack: (Track) -> Unit,
 ) {
     val saveStates by saveStatesFlow.collectAsState()
     val activeSaves = remember(saveStates) {
@@ -1977,6 +2030,9 @@ private fun DownloadsTab(
                     onLongClick = { onLongClick(track) },
                     onFavorite = { onFavorite(track) },
                     saveState = saveStates[track.id],
+                    rating = ratingIndex.ratingOf(track),
+                    onLike = { onLikeTrack(track) },
+                    onDislike = { onDislikeTrack(track) },
                 )
             }
         }
@@ -2005,6 +2061,9 @@ private fun LibrarySearchResults(
     onClickTrack: (Track) -> Unit,
     onLongClickTrack: (Track) -> Unit,
     onFavoriteTrack: (Track) -> Unit,
+    ratingIndex: TrackRatingIndex,
+    onLikeTrack: (Track) -> Unit,
+    onDislikeTrack: (Track) -> Unit,
 ) {
     val hasResults = playlists.isNotEmpty() || albums.isNotEmpty() ||
         artists.isNotEmpty() || tracks.isNotEmpty()
@@ -2087,6 +2146,9 @@ private fun LibrarySearchResults(
                     onClick = { onClickTrack(track) },
                     onLongClick = { onLongClickTrack(track) },
                     onFavorite = { onFavoriteTrack(track) },
+                    rating = ratingIndex.ratingOf(track),
+                    onLike = { onLikeTrack(track) },
+                    onDislike = { onDislikeTrack(track) },
                 )
             }
         }
@@ -2107,6 +2169,9 @@ private fun YouTubeTab(
     importError: String?,
     saveStatesFlow: StateFlow<Map<String, TrackSaveState>>,
     bottomPadding: Dp,
+    ratingIndex: TrackRatingIndex,
+    onLikeTrack: (Track) -> Unit,
+    onDislikeTrack: (Track) -> Unit,
 ) {
     // Прогресс скачиваний обновляется часто: подписку держим внутри вкладки,
     // чтобы проценты сохранения не перерисовывали всю Медиатеку.
@@ -2175,6 +2240,9 @@ private fun YouTubeTab(
                     onLongClick = { onLongClick(track) },
                     onFavorite = { onFavorite(track) },
                     saveState = saveStates[track.id],
+                    rating = ratingIndex.ratingOf(track),
+                    onLike = { onLikeTrack(track) },
+                    onDislike = { onDislikeTrack(track) },
                 )
             }
         }

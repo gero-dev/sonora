@@ -101,6 +101,8 @@ class PlaybackController(context: Context) {
     private var lastPersistAt = 0L
     private var lastPersistTrackId: String? = null
     private var lastPersistPlaying: Boolean? = null
+    private var lastPersistRepeat: Int? = null
+    private var lastPersistShuffle: Boolean? = null
     private var restoredSession = false
 
     /** Пока идёт пакетное изменение очереди, снимок состояния не пересчитываем. */
@@ -373,7 +375,9 @@ class PlaybackController(context: Context) {
                 android.util.Log.i(
                     TAG,
                     "restore action=use_player count=${c.mediaItemCount} " +
-                        "snapshot=${snapshot.queue.size} shuffle=${snapshot.shuffle}",
+                        "snapshot=${snapshot.queue.size} " +
+                        "repeat=${repeatName(runCatching { c.repeatMode }.getOrNull())} " +
+                        "shuffle=${snapshot.shuffle}",
                 )
             }
             RestorePlan.LOAD_SNAPSHOT -> {
@@ -397,9 +401,14 @@ class PlaybackController(context: Context) {
                         index,
                         snapshot.positionMs.coerceAtLeast(0L),
                     )
-                    c.repeatMode = snapshot.repeatMode
                     c.prepare()
                     c.pause()
+                    // Режимы применяем после prepare: некоторые состояния плеера
+                    // до готовности очереди игнорируют setRepeatMode.
+                    c.repeatMode = snapshot.repeatMode
+                    if (c.repeatMode != snapshot.repeatMode) {
+                        c.repeatMode = snapshot.repeatMode
+                    }
                 }.onFailure { android.util.Log.w(TAG, "restore failed: ${it.message}") }
                 _state.update {
                     it.copy(
@@ -407,7 +416,7 @@ class PlaybackController(context: Context) {
                         queueSections = entries.map { it.section },
                         contextTitle = contextTitle,
                         shuffle = snapshot.shuffle,
-                        repeatMode = snapshot.repeatMode,
+                        repeatMode = runCatching { c.repeatMode }.getOrDefault(snapshot.repeatMode),
                         index = index,
                         positionMs = snapshot.positionMs,
                         isPlaying = false,
@@ -415,7 +424,9 @@ class PlaybackController(context: Context) {
                 }
                 android.util.Log.i(
                     TAG,
-                    "restore action=load_snapshot count=${snapshot.queue.size} index=$index",
+                    "restore action=load_snapshot count=${snapshot.queue.size} index=$index " +
+                        "repeat=${repeatName(runCatching { c.repeatMode }.getOrDefault(snapshot.repeatMode))} " +
+                        "shuffle=${snapshot.shuffle}",
                 )
             }
             RestorePlan.NONE -> android.util.Log.i(TAG, "restore action=none")
@@ -474,17 +485,26 @@ class PlaybackController(context: Context) {
             PlaybackSnapshotStore.clear(appContext)
             lastPersistTrackId = null
             lastPersistPlaying = null
+            lastPersistRepeat = null
+            lastPersistShuffle = null
             return
         }
         val trackId = state.current?.id
+        // Режимы повтора/перемешивания тоже должны попадать в снимок сразу:
+        // раньше троттлинг мог пропустить переключение repeat, и после
+        // kill/relaunch приложение поднимало уже устаревший OFF.
         val important = force ||
             trackId != lastPersistTrackId ||
-            state.isPlaying != lastPersistPlaying
+            state.isPlaying != lastPersistPlaying ||
+            state.repeatMode != lastPersistRepeat ||
+            state.shuffle != lastPersistShuffle
         val now = elapsed()
         if (!important && now - lastPersistAt < PERSIST_INTERVAL_MS) return
         lastPersistAt = now
         lastPersistTrackId = trackId
         lastPersistPlaying = state.isPlaying
+        lastPersistRepeat = state.repeatMode
+        lastPersistShuffle = state.shuffle
         PlaybackSnapshotStore.save(
             appContext,
             PlaybackSnapshot(
@@ -734,8 +754,8 @@ class PlaybackController(context: Context) {
                 snapshot.index.coerceIn(0, snapshot.queue.lastIndex),
                 snapshot.positionMs.coerceAtLeast(0L),
             )
-            c.repeatMode = snapshot.repeatMode
             c.prepare()
+            c.repeatMode = snapshot.repeatMode
         }
     }
 
@@ -799,7 +819,10 @@ class PlaybackController(context: Context) {
         }
         c.repeatMode = next
         _state.update { it.copy(repeatMode = next) }
-        android.util.Log.i(TAG, "repeat mode=${repeatName(next)}")
+        // Сразу в снимок: иначе при kill в течение 2 с после переключения
+        // после перезапуска восстанавливался старый режим.
+        persistState(force = true)
+        android.util.Log.i(TAG, "repeat mode=${repeatName(next)} persisted=true")
     }
 
     fun setSpeed(speed: Float) {

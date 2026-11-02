@@ -362,9 +362,16 @@ class PlaybackService : MediaSessionService() {
         // Порядок уже сохранён в самой очереди: media3-shuffle не включаем,
         // иначе пользовательская очередь («Далее в очереди») перемешается.
         player.shuffleModeEnabled = false
-        player.repeatMode = snapshot.repeatMode
         player.prepare()
+        // Режим повтора применяем после prepare, чтобы он не потерялся на
+        // холодном старте сервиса (виджет/кнопка Play при убитом процессе).
+        player.repeatMode = snapshot.repeatMode
         player.play()
+        android.util.Log.i(
+            TAG,
+            "play_from_snapshot count=${items.size} index=$index " +
+                "repeat=${repeatName(player.repeatMode)}",
+        )
         return true
     }
 

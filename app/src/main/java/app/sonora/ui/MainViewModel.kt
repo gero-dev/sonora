@@ -224,6 +224,8 @@ private const val RADIO_BATCH = 20
 private const val RADIO_REFILL_THRESHOLD = 6
 /** Сколько поисковых запросов радио отправлять в InnerTube за один батч. */
 private const val RADIO_QUERY_LIMIT = 4
+/** Если related по видео дал меньше треков, добираем поисковыми запросами. */
+private const val RADIO_RELATED_ENOUGH = 8
 
 /** Максимум треков за один импорт списка: каждый неизвестный ищется в InnerTube. */
 private const val MAX_PLAYLIST_IMPORT = 150
@@ -981,6 +983,12 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
             )
             // Пока шёл сетевой поиск, пользователь мог включить другое радио.
             if (generation != radioGeneration) return@launch
+            // Пустое радио лучше не запускать: очередь не заменяем случайной музыкой.
+            if (related.isEmpty()) {
+                stopRadio()
+                toast("Недостаточно данных для радио: похожих треков не нашлось")
+                return@launch
+            }
             val seedPlayable = playableNow(listOf(seed)).firstOrNull()
             val queue = WaveEngine.dedupe(listOfNotNull(seedPlayable) + related)
             if (queue.isEmpty()) {
@@ -1035,10 +1043,13 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
                     )
                     if (generation != radioGeneration) return@collect
                     val fresh = queueable(batch).filterNot { it.id in knownIds }
-                    if (fresh.isNotEmpty()) {
-                        appendUniqueToQueue(fresh)
-                        markRadioSeen(fresh)
+                    if (fresh.isEmpty()) {
+                        // Похожих больше нет — не дёргаем сеть на каждом тике.
+                        radioActive = false
+                        return@collect
                     }
+                    appendUniqueToQueue(fresh)
+                    markRadioSeen(fresh)
                 } finally {
                     radioRefilling = false
                 }
@@ -1049,11 +1060,14 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
     /**
      * Кандидаты для радио по любому сиду.
      *
-     * Онлайн-часть: «похожие» InnerTube (если есть videoId) плюс поисковые
-     * запросы [RadioEngine] — «исполнитель radio», похожие исполнители, жанр.
-     * Если InnerTube молчит, пробуем yt-dlp. Локальная часть — вся подходящая
-     * фонотека: похожесть поднимает [WaveRanker] (сид, граф исполнителей,
-     * оценки, аудио-фичи). Дизлайки и уже показанное отсекаются.
+     * Для сида с `videoId` (InnerTube, YouTube, yt-dlp) главный источник —
+     * InnerTube related/watch-next по этому видео: это «похожие на сам трек»,
+     * а не общий поиск «artist radio», который на YouTube легко выдаёт
+     * South Park/Family Guy/ток-шоу. Поиск — только дополнение к related и
+     * только по запросам от артиста/похожих/жанра; yt-dlp — последний фолбэк.
+     * Вся выдача проходит строгий музыкальный фильтр [RadioEngine.filterCandidates]
+     * (45–600 с, без клипов/шоу/сборников, с проверкой исполнителя). Локальная
+     * часть — фонотека в окружении сида; дизлайки и показанное отсекаются.
      */
     private suspend fun radioCandidates(
         seed: Track,
@@ -1068,11 +1082,22 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
         val disliked = graph.playHistory.disliked.value + ratings.dislikedWaveKeys()
         val now = System.currentTimeMillis()
         val remote = LinkedHashMap<String, Track>()
+        val trustedIds = HashSet<String>()
+        val relatedArtists = HashSet<String>()
 
-        fun addRemote(tracks: List<Track>) {
+        fun normalizeArtist(value: String): String =
+            value.trim().lowercase().replace('ё', 'е')
+
+        fun addRemote(tracks: List<Track>, trusted: Boolean = false) {
             tracks.forEach { track ->
                 if (track.playable && !track.isVideoContent) {
                     remote.putIfAbsent(track.id, track)
+                    if (trusted) {
+                        trustedIds += track.id
+                        normalizeArtist(track.artist)
+                            .takeIf { it.isNotBlank() }
+                            ?.let(relatedArtists::add)
+                    }
                 }
             }
         }
@@ -1080,30 +1105,71 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
         if (streamingAllowed()) {
             val videoId = youtubeVideoId(seed)
             if (videoId != null) {
+                // 1) Основной источник: InnerTube related/watch-next по видео сида.
                 addRemote(
-                    runCatching { graph.youtube.related(videoId, limit) }
-                        .getOrDefault(emptyList()),
+                    runCatching {
+                        graph.youtube.related(videoId, limit.coerceAtLeast(REMOTE_SEARCH_LIMIT))
+                    }.getOrDefault(emptyList()),
+                    trusted = true,
                 )
-            }
-            val queries = RadioEngine.queries(seedInfo, tuning)
-            for (query in queries.take(RADIO_QUERY_LIMIT)) {
-                if (!isActive) break
-                addRemote(
-                    runCatching { graph.youtube.search(query, REMOTE_SEARCH_LIMIT) }
-                        .getOrDefault(emptyList()),
+                // 2) Related мало — до 2 запросов от артиста/похожих, без общего radio.
+                if (remote.size < RADIO_RELATED_ENOUGH) {
+                    for (query in RadioEngine.artistQueries(seedInfo, tuning, limit = 2)) {
+                        if (!isActive) break
+                        addRemote(
+                            runCatching { graph.youtube.search(query, REMOTE_SEARCH_LIMIT) }
+                                .getOrDefault(emptyList()),
+                        )
+                    }
+                }
+                // 3) Последний фолбэк — yt-dlp, только если совсем ничего нет.
+                if (remote.isEmpty() &&
+                    graph.settings.current.streamSource != StreamSource.INNERTUBE
+                ) {
+                    for (query in RadioEngine.artistQueries(seedInfo, tuning, limit = 2)) {
+                        if (!isActive) break
+                        addRemote(
+                            runCatching { graph.ytDlp.search(query, limit = 10) }
+                                .getOrDefault(emptyList())
+                                .map { it.toSonoraTrack() },
+                        )
+                    }
+                }
+            } else {
+                // У сида нет видео (локальный файл/SoundCloud): ищем только
+                // от артиста/похожих/жанра — общие «radio» запросы не нужны.
+                val queries = RadioEngine.artistQueries(
+                    seedInfo,
+                    tuning,
+                    limit = RADIO_QUERY_LIMIT,
                 )
-                if (remote.size >= limit * 3) break
-            }
-            // InnerTube пуст/упал — пробуем yt-dlp (если он не отключён).
-            if (remote.isEmpty() && graph.settings.current.streamSource != StreamSource.INNERTUBE) {
-                for (query in queries.take(2)) {
+                for (query in queries) {
                     if (!isActive) break
-                    val fromYtDlp = runCatching { graph.ytDlp.search(query, limit = 10) }
-                        .getOrDefault(emptyList())
-                        .map { it.toSonoraTrack() }
-                    addRemote(fromYtDlp)
+                    addRemote(
+                        runCatching { graph.youtube.search(query, REMOTE_SEARCH_LIMIT) }
+                            .getOrDefault(emptyList()),
+                    )
+                    if (remote.size >= limit * 2) break
+                }
+                if (remote.isEmpty() &&
+                    graph.settings.current.streamSource != StreamSource.INNERTUBE
+                ) {
+                    for (query in queries.take(2)) {
+                        if (!isActive) break
+                        addRemote(
+                            runCatching { graph.ytDlp.search(query, limit = 10) }
+                                .getOrDefault(emptyList())
+                                .map { it.toSonoraTrack() },
+                        )
+                    }
                 }
             }
+        }
+
+        // Дополняем «похожих исполнителей» графом локальной библиотеки.
+        val artistGraphAll = ArtistGraph.of(graph.library.tracks.value + remote.values)
+        if (seedInfo.artistKey.isNotBlank()) {
+            relatedArtists += artistGraphAll.related(seedInfo.artistKey)
         }
 
         val pool = RadioEngine.filterCandidates(
@@ -1111,24 +1177,21 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
             seed = seedInfo,
             tuning = tuning,
             dislikedKeys = disliked,
+            trustedIds = trustedIds,
+            relatedArtists = relatedArtists,
+            strictRelevance = true,
         ).filterNot { track ->
             track.id in excludeIds || WaveEngine.waveKey(track) in excludeKeys
         }
         if (pool.isEmpty()) return@withContext emptyList()
 
         // Не выдаём случайную фонотеку за радио: оставляем треки, у которых
-        // есть сигнал похожести на сид (или они пришли из запросов по сиду).
+        // есть сигнал похожести на сид (или они пришли из выдачи по сиду).
         val remoteIds = remote.keys
         val seedArtistKey = seedInfo.artistKey
         val seedGenres = seedInfo.genres
             .map { it.trim().lowercase().replace('ё', 'е') }
             .filter { it.length >= 3 }
-        val artistGraphAll = ArtistGraph.of(graph.library.tracks.value + remote.values)
-        val relatedArtists = if (seedArtistKey.isNotBlank()) {
-            artistGraphAll.related(seedArtistKey)
-        } else {
-            emptySet()
-        }
         val signalPool = pool.filter { track ->
             if (track.id in remoteIds) return@filter true
             val artist = track.artist.trim().lowercase().replace('ё', 'е')
