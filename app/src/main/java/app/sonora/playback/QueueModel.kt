@@ -242,4 +242,58 @@ object QueueModel {
             else -> "Очередь · ${tracks.size} треков"
         }
     }
+
+    /**
+     * Что стало с очередью после пересборки под новый фильтр.
+     *
+     * @param changed true, если пересборка что-то сделала: очередь или
+     *   дополнилась, или очистилась, или текущий трек оставлен вопреки фильтру.
+     */
+    data class QueueRebuildPlan(
+        val removeIndices: List<Int>,
+        val append: List<Track>,
+        val keptCurrent: Boolean,
+    ) {
+        val changed: Boolean get() = removeIndices.isNotEmpty() || append.isNotEmpty() || keptCurrent
+    }
+
+    /**
+     * План пересборки очереди под фильтр [keep].
+     *
+     * Индексы удаления исключают текущий трек: оборвать звучащую музыку из-за
+     * смены настройки нельзя, поэтому неподходящий текущий трек доигрывает, а
+     * очередь вокруг него уже перестраивается ([keptCurrent] сообщает об этом).
+     *
+     * Дополнение идёт в конец списка. Так сохраняется порядок того, что
+     * пользователь слушает и поставил следующим, — пересборка не перетасовывает
+     * очередь, она лишь убирает лишнее и досыпает недостающее.
+     *
+     * Чистая функция без Android: вызывающий сам превращает индексы в вызовы
+     * `removeMediaItem` и `addMediaItem` (см. PlaybackController.rebuildQueue).
+     * Здесь же лежит вся арифметика, поэтому она покрыта тестами без эмулятора.
+     *
+     * @param queue очередь в фактическом порядке плеера.
+     * @param currentIndex индекс текущего трека или [NONE].
+     * @param candidates чем можно дополнить очередь (обычно подборка волны).
+     */
+    fun rebuildPlan(
+        queue: List<Track>,
+        currentIndex: Int,
+        candidates: List<Track>,
+        keep: (Track) -> Boolean,
+    ): QueueRebuildPlan {
+        val currentTrack = queue.getOrNull(currentIndex)
+        val keptCurrent = currentTrack != null && !keep(currentTrack)
+
+        // Удаляем с конца, чтобы индексы до конца прохода оставались валидными.
+        val removeIndices = queue.indices.reversed()
+            .filter { index -> index != currentIndex && !keep(queue[index]) }
+
+        val present = queue.mapTo(HashSet()) { it.id }
+        val append = candidates
+            .filter { keep(it) && it.id !in present }
+            .distinctBy { it.id }
+
+        return QueueRebuildPlan(removeIndices, append, keptCurrent)
+    }
 }

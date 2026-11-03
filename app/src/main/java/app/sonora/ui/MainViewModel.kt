@@ -573,12 +573,15 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
         runCatching { Toast.makeText(graph.appContext, message, Toast.LENGTH_SHORT).show() }
     }
 
-    /** Sonora — музыкальный плеер: видео/клипы/подкасты не запускаем. */
-    private fun blockedVideo(track: Track): Boolean {
-        if (!track.isVideoContent) return false
-        toast("Видео отключено: Sonora играет только музыку.")
-        return true
-    }
+    /**
+     * Sonora — музыкальный плеер: видео/клипы/подкасты не запускаем.
+     *
+     * Молча: видеотреки отсеиваются массово (фильтрами очереди, волны и
+     * поиска), и всплывающее сообщение на каждый такой трек превращалось в
+     * поток одинаковых уведомлений. Что видео не играем — видно по настройке
+     * «Только музыка», объяснять это на каждом треке незачем.
+     */
+    private fun blockedVideo(track: Track): Boolean = track.isVideoContent
 
     /** Если включён режим «Только загруженное», стриминговый трек не запускаем. */
     private fun blockedByMode(track: Track): Boolean {
@@ -587,8 +590,13 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
         return true
     }
 
-    /** Убирает из очереди стриминговые треки (текущий не трогаем). */
-    private fun pruneStreamingQueue(showEmptyMessage: Boolean) {
+    /**
+     * Убирает из очереди стриминговые треки (текущий не трогаем).
+     *
+     * Возвращает число удалённых. Сообщение об удалении остаётся: это заметное
+     * действие над очередью, и пользователь должен видеть, что именно исчезло.
+     */
+    private fun pruneStreamingQueue(showEmptyMessage: Boolean): Int {
         val removed = graph.playback.removeWhere { track -> offlinePlayable(track) }
         when {
             removed > 0 -> toast("Стриминг убран из очереди: $removed")
@@ -603,6 +611,38 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
                     },
                 )
             }
+        }
+        return removed
+    }
+
+    /**
+     * Дописывает свежую волну в очередь — тем самым возвращая онлайн-треки,
+     * когда стриминг включают обратно.
+     *
+     * Почему это нужно отдельным шагом: фильтр очереди зависит от режима, и при
+     * выключенном стриминге онлайн-треки не только не добавляются, но и
+     * вычищаются из очереди. Включение обратно ничего не могло вернуть — в
+     * очереди их уже не оставалось, а волна, собранная в офлайн-режиме, их и не
+     * содержала. Отсюда и жалоба: «включаешь стриминг, а онлайн-треки в потоке
+     * не появляются».
+     *
+     * Порядок в очереди не трогаем: волна дописывается в конец, поэтому
+     * текущий трек и то, что пользователь уже поставил следующим, не сдвигаются.
+     */
+    private fun appendWaveToQueue() {
+        if (!streamingAllowed()) return
+        val state = graph.playback.state.value
+        if (state.queue.isEmpty()) return
+        val result = graph.playback.rebuildQueue(
+            candidates = _wave.value.tracks,
+            keep = { track -> queueable(listOf(track)).isNotEmpty() },
+        )
+        if (result.changed) {
+            android.util.Log.i(
+                "SonoraQueue",
+                "streaming rebuild: added=${result.added} removed=${result.removed} " +
+                    "keptCurrent=${result.keptCurrent}",
+            )
         }
     }
 
@@ -2274,7 +2314,15 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
     private var waveGeneration = 0
     private var loadMoreJob: Job? = null
 
-    fun refreshWave() {
+    /**
+     * @param afterLoad вызывается после того, как новая подборка легла в [_wave].
+     *   Нужен переключению стриминга: очередь можно дополнить онлайн-треками
+     *   только из НОВОЙ волны, а `buildWave` берёт их лишь при включённом
+     *   стриминге. Пересборка до окончания волны работала бы по старому
+     *   списку, где онлайн-треков нет, — то есть не добавляла бы ничего.
+     *   Не вызывается, если волна не собралась.
+     */
+    fun refreshWave(afterLoad: (() -> Unit)? = null) {
         waveJob?.cancel()
         loadMoreJob?.cancel()
         loadMoreJob = null
@@ -2319,6 +2367,8 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
             persistWaveSnapshot()
             // Фичи ReccoBeats досчитываем уже после отрисовки волны.
             if (data.tracks.isNotEmpty()) enrichWaveFeatures(generation, data.tracks)
+            // Очередь дополняем свежей подборкой — см. параметр afterLoad.
+            afterLoad?.invoke()
         }
     }
 
@@ -4554,14 +4604,18 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
 
     fun setPlaybackMode(mode: PlaybackMode) {
         updateSettings { it.copy(playbackMode = mode) }
+        // Очередь пересобираем в обе стороны: выключение убирает онлайн-треки,
+        // включение обязано вернуть их, иначе поток остаётся без онлайн-музыки
+        // до ручного перезапуска волны. Ждём свежую волну — в старой онлайн-треков
+        // может не быть вовсе.
         if (mode == PlaybackMode.LOCAL_ONLY) pruneStreamingQueue(showEmptyMessage = false)
-        refreshWave()
+        refreshWave(afterLoad = ::appendWaveToQueue)
     }
 
     fun setStreamingInQueue(enabled: Boolean) {
         updateSettings { it.copy(streamingInQueue = enabled) }
         if (!enabled) pruneStreamingQueue(showEmptyMessage = false)
-        refreshWave()
+        refreshWave(afterLoad = ::appendWaveToQueue)
     }
 
     /**
@@ -4573,7 +4627,7 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
         // Одно обновление настроек, чтобы не пересобирать волну дважды.
         updateSettings { it.copy(playbackMode = mode, streamingInQueue = enabled) }
         if (!enabled) pruneStreamingQueue(showEmptyMessage = false)
-        refreshWave()
+        refreshWave(afterLoad = ::appendWaveToQueue)
         toast(
             if (enabled) {
                 "Стриминг включён: онлайн-треки снова в очереди"
