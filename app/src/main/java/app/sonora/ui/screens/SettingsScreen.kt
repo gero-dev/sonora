@@ -849,6 +849,12 @@ fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
                     if (playlistImport.notFound > 0) {
                         append(" · не найдено: ${playlistImport.notFound}")
                     }
+                    // Онлайн-треки сохраняются на устройство асинхронно:
+                    // счётчик обновляется, пока очередь загрузки не опустеет.
+                    if (playlistImport.savedTotal > 0) {
+                        append(" · сохранено ${playlistImport.savedDone} из ${playlistImport.savedTotal}")
+                        if (playlistImport.saving) append("…")
+                    }
                 }
 
                 playlistImport.done -> "Не удалось найти треки"
@@ -895,7 +901,9 @@ fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
                                 "3. Sonora найдёт совпадения в вашей библиотеке и YouTube Music " +
                                 "и создаст плейлист «Импорт: имя файла».\n\n" +
                                 "Поддерживаются CSV/TSV, JSON, M3U/M3U8 и TXT. " +
-                                "За один раз обрабатывается до 150 треков; поиск может занять время.",
+                                "Треки со ссылкой или videoId находятся сразу, остальные — " +
+                                "поиском по YouTube Music. Размер списка не ограничен, " +
+                                "но большой файл ищется долго.",
                         )
                     },
                     confirmButton = {

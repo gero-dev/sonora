@@ -1,0 +1,15 @@
+# Sonora plain text playlist - one "Artist - Title" per line.
+# '#' and '//' lines are ignored by the importer.
+Queen - Bohemian Rhapsody
+Michael Jackson - Billie Jean
+Nirvana - Smells Like Teen Spirit
+Eagles - Hotel California
+TOTO - Africa
+a-ha - Take On Me
+Guns N' Roses - Sweet Child O' Mine
+Adele - Rolling in the Deep
+The Weeknd - Blinding Lights
+Ed Sheeran - Shape of You
+// the next two lines are deliberate hard cases (typographic dash + decorated title)
+Daft Punk – Get Lucky (feat. Pharrell Williams) [Official Video]
+Billie Eilish — Bad Guy - Remastered 2011

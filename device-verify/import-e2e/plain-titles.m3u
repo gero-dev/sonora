@@ -1,0 +1,24 @@
+#EXTM3U
+#EXTINF:354,Queen - Bohemian Rhapsody
+Queen - Bohemian Rhapsody.mp3
+#EXTINF:293,Michael Jackson - Billie Jean
+Michael Jackson - Billie Jean.mp3
+#EXTINF:301,Nirvana - Smells Like Teen Spirit
+Nirvana - Smells Like Teen Spirit.mp3
+#EXTINF:391,Eagles - Hotel California
+Eagles - Hotel California.mp3
+#EXTINF:295,TOTO - Africa
+TOTO - Africa.mp3
+#EXTINF:225,a-ha - Take On Me
+a-ha - Take On Me.mp3
+#EXTINF:356,Guns N' Roses - Sweet Child O' Mine
+Guns N' Roses - Sweet Child O' Mine.mp3
+#EXTINF:228,Adele - Rolling in the Deep
+Adele - Rolling in the Deep.mp3
+#EXTINF:200,The Weeknd - Blinding Lights
+The Weeknd - Blinding Lights.mp3
+#EXTINF:233,Ed Sheeran - Shape of You
+Ed Sheeran - Shape of You.mp3
+# hard case: typographic en dash in the EXTINF title
+#EXTINF:248,Nirvana – Smells Like Teen Spirit (Official Video)
+Nirvana - Smells Like Teen Spirit (Official Video).mp3
