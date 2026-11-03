@@ -344,7 +344,10 @@ class MetadataService(
                 if (!sameTitle(name, title)) continue
                 val artistMatch = sameArtist(candidate.text("artistName"), artist)
                 val length = candidate.text("trackTimeMillis")?.toLongOrNull() ?: 0L
-                val timeMatch = durationMatches(length, durationMs)
+                // Порог длительности зависит от того, совпал ли исполнитель:
+                // при несовпавшем он жёсткий, иначе под мягкий порог попадали
+                // каверы и живые версии.
+                val timeMatch = durationMatches(length, durationMs, artistMatch)
                 // Название совпало, плюс хотя бы один признак записи (исполнитель
                 // или длительность) — кандидат годится, дальше решают очки.
                 if (!artistMatch && !timeMatch) continue
@@ -420,7 +423,7 @@ class MetadataService(
                 val candidateArtist = (candidate["artist"] as? JsonObject)?.text("name")
                 val artistMatch = sameArtist(candidateArtist, artist)
                 val length = candidate.text("duration")?.toLongOrNull()?.times(1_000L) ?: 0L
-                val timeMatch = durationMatches(length, durationMs)
+                val timeMatch = durationMatches(length, durationMs, artistMatch)
                 if (!artistMatch && !timeMatch) continue
                 var score = 1.0
                 if (artistMatch) score += 2.0
@@ -545,9 +548,10 @@ class MetadataService(
             ?.mapNotNull { it as? JsonObject }
             ?.filter { candidate ->
                 val name = candidate.text("strTrack") ?: return@filter false
+                val artistAgrees = sameArtist(candidate.text("strArtist"), artist)
                 sameTitle(name, title) &&
-                    sameArtist(candidate.text("strArtist"), artist) &&
-                    durationMatches(audioDbDurationMs(candidate), durationMs)
+                    artistAgrees &&
+                    durationMatches(audioDbDurationMs(candidate), durationMs, artistAgrees)
             }
             ?.maxByOrNull { candidate ->
                 val length = audioDbDurationMs(candidate) ?: 0L
@@ -825,22 +829,16 @@ class MetadataService(
         artist: String?,
         durationMs: Long,
     ): Boolean {
-        val ourTitle = title.lowercase()
-        val itemTitle = item.trackName?.lowercase().orEmpty()
-        if (itemTitle.isNotBlank() && ourTitle.isNotBlank()) {
-            if (!itemTitle.contains(ourTitle) && !ourTitle.contains(itemTitle)) return false
-        }
-        if (!artist.isNullOrBlank() && !item.artistName.isNullOrBlank()) {
-            val a = item.artistName.lowercase()
-            val b = artist.lowercase()
-            if (!a.contains(b) && !b.contains(a)) return false
-        }
-        val itemDuration = item.durationSec
-        if (durationMs > 0 && itemDuration != null && itemDuration > 0) {
-            val tolerance = maxOf(15_000L, (durationMs * 0.2).toLong())
-            if (kotlin.math.abs(itemDuration * 1000.0 - durationMs) > tolerance) return false
-        }
-        return true
+        // Раньше здесь было сравнение подстрокой и отдельная логика допуска по
+        // длительности (15 с или 20 %). Из-за подстроки на трек «The Man»
+        // подходили субтитры к «The Man Who Sold the World». Теперь сравнение
+        // общее с остальными каталогами, и порог длительности тоже: он мягкий
+        // только когда исполнитель совпал.
+        if (!TextMatch.titlesMatch(item.trackName, title)) return false
+        val artistAgrees = TextMatch.artistsMatch(item.artistName, artist)
+        if (!artistAgrees) return false
+        val itemDuration = item.durationSec?.let { (it * 1_000.0).toLong() }
+        return TextMatch.durationMatches(itemDuration, durationMs, artistAgrees = true)
     }
 
     /** Убирает таймкоды `[00:12.34]` из syncedLyrics и чистит пустые строки. */
@@ -975,36 +973,34 @@ class MetadataService(
         )
     }
 
-    /** Сравнивает названия без регистра и лишних пометок («(Official Video)», «[Remastered]»). */
-    private fun sameTitle(candidate: String, expected: String): Boolean {
-        val a = cleanForCompare(candidate)
-        val b = cleanForCompare(expected)
-        if (a.isBlank() || b.isBlank()) return false
-        return a == b || a.contains(b) || b.contains(a)
-    }
+    /**
+     * Сравнивает названия. Делегирует в [TextMatch]: сравнение подстрокой,
+     * которое было здесь раньше, принимало `The Man` за `The Man Who Sold the
+     * World` и подставляло файлу чужие метаданные.
+     */
+    private fun sameTitle(candidate: String, expected: String): Boolean =
+        TextMatch.titlesMatch(candidate, expected)
 
-    private fun sameArtist(candidate: String?, expected: String): Boolean {
-        if (expected.isBlank()) return true
-        val a = cleanForCompare(candidate ?: "")
-        val b = cleanForCompare(expected)
-        if (a.isBlank()) return false
-        if (ArtistNames.matches(candidate ?: "", expected)) return true
-        return a == b || a.contains(b) || b.contains(a) ||
-            // «The Beatles» и «Beatles», «feat.»-хвосты.
-            a.replace("the ", "") == b.replace("the ", "")
-    }
+    private fun sameArtist(candidate: String?, expected: String): Boolean =
+        TextMatch.artistsMatch(candidate, expected)
 
-    private fun durationMatches(candidateMs: Long?, expectedMs: Long): Boolean {
-        if (candidateMs == null || candidateMs <= 0L) return true
-        if (expectedMs <= 0L) return true
-        return kotlin.math.abs(candidateMs - expectedMs) <= 25_000L
-    }
+    /**
+     * Порог расхождения длительности зависит от того, совпал ли исполнитель.
+     * См. [TextMatch.durationMatches]: мягкий порог при совпавшем исполнителе
+     * безобиден, а при несовпавшем пропускает каверы и живые версии.
+     */
+    private fun durationMatches(
+        candidateMs: Long?,
+        expectedMs: Long,
+        artistAgrees: Boolean = true,
+    ): Boolean = TextMatch.durationMatches(candidateMs, expectedMs, artistAgrees)
 
-    private fun cleanForCompare(value: String): String = value
-        .lowercase()
-        .replace(PARENS_REGEX, " ")
-        .replace(WHITESPACE_REGEX, " ")
-        .trim()
+    /**
+     * Оставлено для мест, где нужна именно «очищенная» строка для показа или
+     * сравнения, а не булево совпадение. Делегирует в [TextMatch.normalize],
+     * чтобы не было второй, расходящейся реализации сравнения.
+     */
+    private fun cleanForCompare(value: String): String = TextMatch.normalize(value)
 
     // ---------------------------------------------------------------- утилиты
 

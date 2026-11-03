@@ -25,6 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.DownloadDone
 import androidx.compose.material.icons.rounded.Favorite
@@ -362,7 +363,10 @@ fun TrackRow(
                 text = track.title,
                 style = MaterialTheme.typography.titleMedium,
                 color = if (isPlaying) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
+                // Две строки, как в Spotify: длинные названия («… (Official Video)
+                // [HD Remastered]») в одну строку обрезались до бессмысленного
+                // огрызка. Строка растёт по высоте, фиксированной высоты нет.
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
             val saveFailed = saveState?.status == SaveStatus.ERROR
@@ -668,6 +672,15 @@ fun TrackActionSheet(
     rating: Int? = null,
     onLike: (() -> Unit)? = null,
     onDislike: (() -> Unit)? = null,
+    /**
+     * Удаление трека. `null` — экран не умеет удалять, пункт не показывается.
+     *
+     * Раньше удалять можно было только скачанное из стриминга
+     * (`deleteDownload(fileName)`), а собственные mp3 с устройства — нет.
+     */
+    onDelete: (() -> Unit)? = null,
+    /** Пояснение под пунктом удаления: что именно исчезнет. */
+    deleteLabel: String = "Удалить",
 ) {
     val artistNavigator = LocalArtistNavigator.current
     val artistAction = onOpenArtist ?: if (track.artist.isNotBlank()) {
@@ -690,7 +703,7 @@ fun TrackActionSheet(
             Text(
                 text = track.title,
                 style = MaterialTheme.typography.titleLarge,
-                maxLines = 2,
+                maxLines = 3,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
@@ -746,6 +759,16 @@ fun TrackActionSheet(
                     icon = Icons.Rounded.Download,
                     label = downloadLabel,
                     onClick = onDownload,
+                )
+            }
+            if (onDelete != null) {
+                // Красным и в самом низу: удаление файла необратимо, поэтому его
+                // не ставят рядом с повседневными действиями вроде «В очередь».
+                SheetAction(
+                    icon = Icons.Rounded.Delete,
+                    label = deleteLabel,
+                    tint = MaterialTheme.colorScheme.error,
+                    onClick = onDelete,
                 )
             }
             HorizontalDivider(

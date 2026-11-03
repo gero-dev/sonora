@@ -322,6 +322,8 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
     var showCreateDialog by remember { mutableStateOf(false) }
     var showYouTubeImport by remember { mutableStateOf(false) }
     var actionTrack by remember { mutableStateOf<Track?>(null) }
+    /** Трек, ожидающий подтверждения удаления. */
+    var trackDeleteTarget by remember { mutableStateOf<Track?>(null) }
     var playlistForNewTrack by remember { mutableStateOf<Track?>(null) }
     var playlistMenu by remember { mutableStateOf<Playlist?>(null) }
     var albumMenu by remember { mutableStateOf<Album?>(null) }
@@ -743,6 +745,56 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
                     vm.toggleTrackDislike(track)
                 },
                 downloadLabel = "Сохранить на устройство",
+                // Удалять можно любой трек. Раньше кнопка была только у
+                // скачанного из стриминга, поэтому собственные mp3 с телефона
+                // удалить из приложения было нельзя.
+                onDelete = {
+                    actionTrack = null
+                    trackDeleteTarget = track
+                },
+                deleteLabel = if (track.source == Source.LOCAL) {
+                    if (track.uri?.startsWith("file:", ignoreCase = true) == true) {
+                        "Удалить с устройства"
+                    } else {
+                        "Удалить из медиатеки"
+                    }
+                } else {
+                    "Удалить"
+                },
+            )
+        }
+
+        // Файл пользователя уничтожается безвозвратно — спрашиваем отдельно.
+        trackDeleteTarget?.let { target ->
+            val isLocalFile = target.source == Source.LOCAL &&
+                target.uri?.startsWith("file:", ignoreCase = true) == true
+            AlertDialog(
+                onDismissRequest = { trackDeleteTarget = null },
+                title = { Text("Удалить трек?") },
+                text = {
+                    Text(
+                        if (isLocalFile) {
+                            "«${target.title}» будет убран из медиатеки, плейлистов и " +
+                                "избранного, а файл — удалён с устройства. " +
+                                "Отменить это будет нельзя."
+                        } else {
+                            "«${target.title}» будет убран из медиатеки, плейлистов и избранного."
+                        },
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            vm.deleteTrack(target)
+                            trackDeleteTarget = null
+                        },
+                    ) {
+                        Text("Удалить", color = MaterialTheme.colorScheme.error)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { trackDeleteTarget = null }) { Text("Отмена") }
+                },
             )
         }
 

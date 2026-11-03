@@ -93,6 +93,11 @@ class LibraryRepository(
         scanMutex.lock()
         _scanning.value = true
         val startedAt = System.nanoTime()
+        // Кэш листингов папок живёт ровно один цикл скана. Сбрасываем здесь, а не
+        // внутри scanner.scan(): scanLocal вызывает scan() и затем scanFolder()
+        // подряд, и сброс внутри каждого обнулял бы кэш между ними — тогда
+        // папки из extraDirs снова перечислялись бы по многу раз.
+        LocalArtwork.clearListingCache()
         return try {
             val fromMediaStore = scanner.scan(
                 settings.current.excludeShortTracks,
@@ -336,6 +341,43 @@ class LibraryRepository(
     fun isFavorite(trackId: String): Boolean = _favorites.value.contains(trackId)
 
     fun favoriteTracks(): List<Track> = tracksByIds(_favorites.value.toList())
+
+    /**
+     * Полностью убирает трек из библиотеки: из списка, из избранного и из всех
+     * плейлистов.
+     *
+     * Файл на диске здесь НЕ трогается — удаление файла требует разрешения
+     * пользователя на уровне системы (см. [deleteLocalTrackFile]). Разделение
+     * сделано намеренно: запись в JSON не может упасть, а удаление файла может
+     * быть отменено пользователем, и тогда библиотека не должна остаться в
+     * состоянии, где трек уже выброшен, но файл ещё на месте.
+     *
+     * Иначе получались «висячие» ссылки: плейлист и список избранного
+     * продолжали указывать на id, которого больше нет в библиотеке, и трек
+     * выглядел как пустая строка.
+     */
+    suspend fun removeTrack(trackId: String) {
+        val present = _tracks.value.any { it.id == trackId }
+        if (!present) return
+        publishTracks(_tracks.value.filterNot { it.id == trackId })
+        if (_favorites.value.contains(trackId)) {
+            val next = _favorites.value - trackId
+            _favorites.value = next
+            JsonFile.write(context, FILE_FAVORITES, favoritesSerializer, next.toList())
+        }
+        val cleaned = _playlists.value.map { playlist ->
+            if (playlist.trackIds.contains(trackId)) {
+                playlist.copy(trackIds = playlist.trackIds - trackId)
+            } else {
+                playlist
+            }
+        }
+        if (cleaned != _playlists.value) {
+            _playlists.value = cleaned
+            persistPlaylists()
+        }
+        persistTracks()
+    }
 
     /**
      * После сохранения онлайн-трека переносим ссылки на локальную копию:

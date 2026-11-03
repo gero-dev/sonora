@@ -37,8 +37,15 @@ class MediaStoreScanner(private val context: Context) {
     /** Персистентный кэш метаданных между сканами (filesDir/scan_cache.json). */
     private val cache = ScanCacheStore(context)
 
-    /** IO-bound чтение тегов: 4–6 параллельных retriever'ов — предел пользы на телефоне. */
-    private val metadataDispatcher = Dispatchers.IO.limitedParallelism(METADATA_PARALLELISM)
+    /**
+     * IO-bound чтение тегов. Параллельность подбирается по числу ядер: на
+     * 8-ядерном телефоне 4 retriever'а недоиспользовали устройство и скан
+     * упирался в них, а не в диск. Верхняя граница нужна потому, что
+     * `MediaMetadataRetriever` держит файловые дескрипторы, и слишком много
+     * одновременных открытий начинает мешать, а не помогать.
+     */
+    private val metadataDispatcher =
+        Dispatchers.IO.limitedParallelism(metadataParallelism())
 
     /** URI обложек альбомов: один и тот же альбом встречается десятки раз. */
     private val albumArtCache = ConcurrentHashMap<Long, String>()
@@ -161,7 +168,16 @@ class MediaStoreScanner(private val context: Context) {
                 projection,
                 selection,
                 null,
-                "${MediaStore.Audio.Media.TITLE} COLLATE NOCASE ASC",
+                // Сортировку НЕ отдаём провайдеру.
+                //
+                // `TITLE COLLATE NOCASE ASC` заставляет SQLite полностью
+                // отсортировать таблицу аудио, прежде чем вернуть первую строку:
+                // на большой фонотеке это заметная задержка до появления хоть
+                // каких-то данных, а `COLLATE NOCASE` ещё и мешает использовать
+                // индекс по title. Курсор всё равно читается целиком, поэтому
+                // сортируем уже прочитанные строки в памяти — это дешевле и
+                // даёт ровно тот же результат.
+                null,
             )?.use { cursor ->
                 val idCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
                 val titleCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
@@ -239,6 +255,10 @@ class MediaStoreScanner(private val context: Context) {
                 }
             }
         }.onFailure { error -> Log.w(TAG, "MediaStore query failed", error) }
+        // Тот же порядок, что раньше давал провайдер (`TITLE COLLATE NOCASE ASC`),
+        // но посчитанный по уже прочитанным строкам: сортировка на стороне
+        // SQLite заставляла ждать её окончания до первой строки.
+        rows.sortWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.title })
         return rows
     }
 
@@ -576,8 +596,22 @@ class MediaStoreScanner(private val context: Context) {
         /** Тег для logcat-фильтра `adb logcat -s LibraryPerf`. */
         const val TAG = "LibraryPerf"
 
-        /** Сколько файлов читаем одновременно: 4–6 — оптимум для IO-bound чтения тегов. */
-        const val METADATA_PARALLELISM = 4
+        /**
+         * Сколько файлов читаем одновременно.
+         *
+         * Нижняя граница 4 сохраняет прежнее поведение на слабых устройствах,
+         * верхняя 8 не даёт открыть слишком много файлов сразу: каждый
+         * `MediaMetadataRetriever` держит дескриптор, а чтение тегов упирается
+         * не только в процессор.
+         */
+        fun metadataParallelism(): Int =
+            (Runtime.getRuntime().availableProcessors() - 1).coerceIn(
+                MIN_METADATA_PARALLELISM,
+                MAX_METADATA_PARALLELISM,
+            )
+
+        const val MIN_METADATA_PARALLELISM = 4
+        const val MAX_METADATA_PARALLELISM = 8
 
         /** Префикс тега папки MediaStore в кэше; сам RELATIVE_PATH идёт следом. */
         const val MEDIASTORE_FOLDER_PREFIX = "@mediastore:"

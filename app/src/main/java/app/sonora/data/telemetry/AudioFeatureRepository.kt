@@ -9,6 +9,8 @@ import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -75,27 +77,31 @@ class AudioFeatureRepository(
     /**
      * Анализ одного трека: короткий сниппет + ReccoBeats. Вызывается только
      * через [featuresFor], поэтому не дублируется для одного ключа.
+     *
+     * Порядок шагов важен для скорости. Раньше было «взять слот в лимите —
+     * скачать сниппет — отправить запрос», и лимит в 1 запрос/сек превращался в
+     * «1 запрос/сек ПЛЮС время скачивания»: пока один трек скачивался, право на
+     * следующий запрос уже наступило, но никто им не пользовался. Теперь
+     * сниппет скачивается ДО ожидания слота, и ожидание оплачивается только
+     * оставшимся временем. Скачивание — это локальная работа yt-dlp, публичный
+     * API она не нагружает, поэтому выносить её за лимит безопасно.
      */
-    private suspend fun analyzeAndCache(key: String, track: Track): AudioFeature? =
-        analysisLimiter.withPermit {
+    private suspend fun analyzeAndCache(key: String, track: Track): AudioFeature? {
+        if (!enabled) return null
+        val videoId = videoIdOf(track) ?: return null
+
+        // Вне лимита: локальная подготовка, сеть ReccoBeats ещё не тронута.
+        val snippet = analysisLimiter.withPermit {
+            ytDlp.downloadSnippet(videoId)
+        } ?: return null
+
+        return try {
             awaitRateLimit()
-            val videoId = videoIdOf(track)
-            if (videoId == null) {
-                null
-            } else {
-                val snippet = ytDlp.downloadSnippet(videoId)
-                if (snippet == null) {
-                    null
-                } else {
-                    val feature = try {
-                        client.analyze(snippet)
-                    } finally {
-                        runCatching { snippet.delete() }
-                    }
-                    feature?.also { cache.put(key, it) }
-                }
-            }
+            client.analyze(snippet)?.also { cache.put(key, it) }
+        } finally {
+            runCatching { snippet.delete() }
         }
+    }
 
     /** Фоновый прогрев — вызывается при старте трека, результат не нужен. */
     fun prefetch(track: Track) {
@@ -107,13 +113,33 @@ class AudioFeatureRepository(
      * Фоновый прогрев пачки (например, кандидатов поиска/распознавания):
      * последовательно, чтобы не плодить сетевые запросы и декодирование.
      */
+    /**
+     * Фоновый прогрев пачки (например, кандидатов поиска/распознавания).
+     *
+     * Параллельно, а не по очереди. Последовательный обход складывал время
+     * скачивания сниппетов со временем ожидания лимита, хотя это независимые
+     * задержки: пока один трек ждёт свою секунду, остальные могут уже
+     * скачиваться. Общий лимит запросов к API держится внутри
+     * [awaitRateLimit] и от параллельности не нарушается, а число одновременных
+     * задач ограничено семафором — на сотни кандидатов корутины не плодятся.
+     *
+     * Дубликаты убираются по ключу кэша: один и тот же трек в списке не должен
+     * оплачиваться дважды.
+     */
     fun prefetchAll(tracks: List<Track>, limit: Int = MAX_PREFETCH) {
         if (!enabled || tracks.isEmpty()) return
+        val unique = tracks.asSequence()
+            .filter { !it.isVideoContent }
+            .distinctBy { cacheKey(it) }
+            .take(limit)
+            .toList()
+        if (unique.isEmpty()) return
         scope.launch {
-            tracks.asSequence()
-                .filter { !it.isVideoContent }
-                .take(limit)
-                .forEach { track -> runCatching { featuresFor(track) } }
+            coroutineScope {
+                unique.map { track ->
+                    async { runCatching { featuresFor(track) } }
+                }.awaitAll()
+            }
         }
     }
 
@@ -172,8 +198,17 @@ class AudioFeatureRepository(
     }
 
     private companion object {
-        const val MAX_PARALLEL_ANALYSES = 2
+        /**
+         * Одновременных скачиваний сниппетов. Запросы к API всё равно идут не
+         * чаще [MIN_REQUEST_INTERVAL_MS], поэтому это ограничивает только
+         * локальную работу yt-dlp.
+         */
+        const val MAX_PARALLEL_ANALYSES = 3
+
+        /** Общий предел: чаще одного обращения к публичному API в секунду. */
         const val MIN_REQUEST_INTERVAL_MS = 1_000L
-        const val MAX_PREFETCH = 3
+
+        /** Сколько треков прогревать за один вызов: 3 было слишком мало. */
+        const val MAX_PREFETCH = 8
     }
 }

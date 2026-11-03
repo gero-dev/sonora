@@ -31,6 +31,7 @@ import app.sonora.data.metadata.MetadataFileEntry
 import app.sonora.data.telemetry.AudioFeature
 import app.sonora.data.metadata.MetadataFiles
 import app.sonora.data.library.LibraryRepository
+import app.sonora.data.library.LocalFileDeleter
 import app.sonora.data.remote.StreamProbe
 import app.sonora.data.remote.youtube.innertube.StreamInfo
 import app.sonora.data.streaming.StreamingAudit
@@ -224,6 +225,15 @@ private const val METADATA_SCHEMA_VERSION = 4
  * влияет только на потолок: сколько результатов вообще согласен показать UI.
  */
 private const val REMOTE_SEARCH_LIMIT = 100
+
+/**
+ * Пауза перед сетевым поиском, чтобы не дёргать сеть на каждую букву.
+ *
+ * Было 280 мс, причём экран оставался пустым до конца сетевого запроса: поиск
+ * выглядел «тормозящим», хотя сеть ещё даже не опрашивалась. Локальная выдача
+ * теперь публикуется сразу, поэтому пауза относится только к сети.
+ */
+private const val SEARCH_DEBOUNCE_MS = 180L
 
 /** Тестовый ролик для диагностики потока, когда ничего не играет. */
 private const val TEST_VIDEO_ID = "dQw4w9WgXcQ"
@@ -2058,9 +2068,15 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
         val generation = ++searchGeneration
         searchJob = viewModelScope.launch {
             _search.update { it.copy(loading = true, error = null) }
-            delay(280)
+            delay(SEARCH_DEBOUNCE_MS)
             if (generation != searchGeneration) return@launch
+            // Локальные результаты показываем сразу, не дожидаясь сети. Раньше
+            // `local` и `remote` публиковались одним `_search.update` в конце,
+            // поэтому собственные mp3 не появлялись на экране, пока не вернётся
+            // сетевой поиск, — на медленном канале это те самые секунды ожидания.
             val local = graph.library.searchLocal(normalized)
+            if (generation != searchGeneration) return@launch
+            _search.update { it.copy(local = local) }
             val remoteResult = try {
                 Result.success(graph.youtube.search(normalized, REMOTE_SEARCH_LIMIT))
             } catch (cancelled: CancellationException) {
@@ -2088,7 +2104,6 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
             }
             _search.update {
                 it.copy(
-                    local = local,
                     remote = remote,
                     loading = false,
                     error = when {
@@ -3662,6 +3677,61 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
 
     fun deleteDownload(fileName: String) {
         viewModelScope.launch { graph.downloads.delete(fileName) }
+    }
+
+    // ---------- Удаление трека ----------
+
+    /**
+     * Удаляет трек: убирает его из библиотеки, избранного и плейлистов, а файл
+     * на диске стирает, если он принадлежит приложению или пользователь
+     * подтвердил удаление.
+     *
+     * Раньше удалить можно было только скачанное из стриминга — собственные mp3
+     * пользователя из общей памяти оставались на месте. Порядок намеренно
+     * такой: сначала библиотека, потом файл. Если удаление файла не удалось,
+     * трек всё равно исчезает из списка, и пользователь получает об этом
+     * сообщение, а не молчаливый отказ.
+     *
+     * @param consentGiven пользователь уже подтвердил удаление в системном
+     *   диалоге — повторять запрос разрешения не нужно.
+     */
+    fun deleteTrack(track: Track, consentGiven: Boolean = false) {
+        viewModelScope.launch {
+            val isLocal = track.source == Source.LOCAL
+            if (isLocal && !LocalFileDeleter.exists(graph.appContext, track.uri)) {
+                // Файла уже нет: убираем только запись, сообщать не о чем.
+                graph.library.removeTrack(track.id)
+                return@launch
+            }
+
+            var fileDeleted = true
+            if (isLocal) {
+                fileDeleted = withContext(Dispatchers.IO) {
+                    LocalFileDeleter.deleteFile(
+                        resolver = graph.appContext.contentResolver,
+                        uri = track.uri,
+                        consentGiven = consentGiven,
+                    )
+                }
+            }
+
+            // Скачанное приложением лежит в его собственной папке — снимаем и
+            // запись менеджера загрузок, иначе трек вернётся после перезапуска.
+            val fileName = track.extra["downloadFileName"]
+            if (!fileName.isNullOrBlank()) {
+                runCatching { graph.downloads.delete(fileName) }
+            }
+
+            graph.library.removeTrack(track.id)
+
+            toast(
+                when {
+                    !fileDeleted -> "Трек убран из библиотеки, файл удалить не удалось"
+                    isLocal -> "Трек удалён с устройства"
+                    else -> "Трек удалён"
+                },
+            )
+        }
     }
 
     // ---------- Обложки и метаданные из файлов ----------
