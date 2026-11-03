@@ -157,6 +157,13 @@ class PlaybackController(context: Context) {
     private var nextUid = 1L
     private var contextTitle: String? = null
 
+    /**
+     * Размер очереди, для которого посчитан [contextTitle]. Нужен, чтобы
+     * пересчитывать подпись «Далее из: …» при изменении состава очереди и не
+     * делать это на каждом обновлении позиции.
+     */
+    private var contextTitleSize = -1
+
     // Отложенные действия, если контроллер ещё подключается (холодный старт).
     private var pendingNext = false
     private var pendingToggle = false
@@ -308,6 +315,14 @@ class PlaybackController(context: Context) {
             runCatching { c.shuffleModeEnabled = false }
         }
         reconcileQueueFromPlayer(c)
+        // Подпись «Далее из: …» выведена из состава очереди, поэтому её нужно
+        // пересчитывать при каждом изменении размера. Иначе после удаления или
+        // дописывания треков она сообщает прежнее число («Очередь · 20 треков»
+        // при десяти в очереди).
+        if (entries.size != contextTitleSize) {
+            contextTitle = QueueModel.inferContextTitle(entries.map { trackOf(it.trackId) })
+            contextTitleSize = entries.size
+        }
         val duration = runCatching { c.duration }.getOrDefault(0L)
         val position = effectivePosition(c)
         val index = runCatching { c.currentMediaItemIndex }.getOrDefault(0).coerceAtLeast(0)
@@ -1113,6 +1128,83 @@ class PlaybackController(context: Context) {
             refresh()
         }
         return removed
+    }
+
+    /**
+     * Что стало с очередью после пересборки под новый фильтр.
+     *
+     * @param added сколько треков дописано в конец;
+     * @param removed сколько убрано;
+     * @param keptCurrent текущий трек не подошёл под фильтр, но доигрывает
+     *   (менять его на ходу — значит оборвать музыку на середине).
+     */
+    data class RebuildResult(
+        val added: Int,
+        val removed: Int,
+        val keptCurrent: Boolean,
+    ) {
+        val changed: Boolean get() = added > 0 || removed > 0 || keptCurrent
+    }
+
+    /**
+     * Пересобирает очередь под новый фильтр: убирает неподходящие треки и
+     * дописывает подходящие, которых в очереди не было.
+     *
+     * Нужна при переключении стриминга. Раньше включение стриминга только
+     * пересобирало подборку волны, а очередь плеера не трогало: онлайн-треки
+     * не появлялись, пока пользователь не запускал волну заново. Симметрично,
+     * выключение стриминга вычищало онлайн-треки из очереди, поэтому включение
+     * обратно уже не могло их вернуть — их там просто не оставалось.
+     *
+     * Текущий трек намеренно не трогаем: если он не проходит фильтр, он
+     * доигрывает, а очередь вокруг него уже перестроена. Порядок уже стоящих
+     * треков сохраняется — пересборка не должна тасовать то, что пользователь
+     * слушает сейчас.
+     *
+     * Вся арифметика вынесена в [QueueModel.rebuildPlan] и покрыта юнит-тестами;
+     * здесь остаются только вызовы MediaController.
+     *
+     * @param candidates треки, которыми можно дополнить очередь;
+     * @param keep какие треки допустимы в очереди после смены режима.
+     */
+    fun rebuildQueue(candidates: List<Track>, keep: (Track) -> Boolean): RebuildResult {
+        val c = controller ?: return RebuildResult(0, 0, false)
+        reconcileQueueFromPlayer(c)
+        val currentIndex = runCatching { c.currentMediaItemIndex }.getOrDefault(QueueModel.NONE)
+        val queue = entries.map { trackOf(it.trackId) }
+        val playableCandidates = candidates.filter { it.playable && !it.uri.isNullOrBlank() }
+        val plan = QueueModel.rebuildPlan(queue, currentIndex, playableCandidates, keep)
+
+        // 1. Убираем всё, что больше не подходит. Индексы приходят в убывающем
+        //    порядке, поэтому удаление не сдвигает ещё не обработанные позиции.
+        var removed = 0
+        suppressRefresh {
+            val working = entries.toMutableList()
+            for (index in plan.removeIndices) {
+                if (index >= c.mediaItemCount || index !in working.indices) continue
+                if (runCatching { c.removeMediaItem(index) }.isSuccess) {
+                    working.removeAt(index)
+                    removed++
+                }
+            }
+            if (removed > 0) entries = working
+        }
+
+        // 2. Дописываем подходящее. [plan.append] уже исключает то, что было в
+        //    очереди до удаления; после удаления проверяем ещё раз, чтобы
+        //    случайно не продублировать оставшийся трек.
+        val present = entries.mapTo(HashSet()) { it.trackId }
+        val fresh = plan.append.filter { it.id !in present }
+        if (fresh.isEmpty()) {
+            if (removed > 0) refresh()
+            return RebuildResult(0, removed, plan.keptCurrent)
+        }
+        appendToQueueInternal(fresh)
+        android.util.Log.i(
+            TAG,
+            "rebuild_queue added=${fresh.size} removed=$removed keptCurrent=${plan.keptCurrent}",
+        )
+        return RebuildResult(fresh.size, removed, plan.keptCurrent)
     }
 
     /** Перестановка внутри пользовательской секции после текущего трека. */

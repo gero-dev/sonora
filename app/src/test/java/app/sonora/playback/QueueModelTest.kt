@@ -226,4 +226,186 @@ class QueueModelTest {
         )
         assertNull(QueueModel.inferContextTitle(listOf(track("a"))))
     }
+
+    // ---------------- пересборка очереди при смене режима стриминга ----------------
+
+    /** Онлайн-трек: всё, что не файл с устройства. */
+    private fun online(id: String) = track(id)
+
+    private fun local(id: String) = track(id).copy(uri = "file:///music/$id.mp3")
+
+    private fun onlyLocal(t: Track) = t.uri?.startsWith("file://") == true
+
+    /**
+     * Главный сценарий жалобы: очередь собрана в офлайн-режиме из одних файлов,
+     * затем стриминг включают. Онлайн-треки обязаны появиться в очереди, иначе
+     * поток остаётся без онлайн-музыки до ручного перезапуска волны.
+     */
+    @Test
+    fun `enabling streaming appends online candidates`() {
+        val queue = listOf(local("a"), local("b"), local("c"))
+        val plan = QueueModel.rebuildPlan(
+            queue = queue,
+            currentIndex = 0,
+            candidates = listOf(online("x"), online("y")),
+            keep = { true },
+        )
+
+        assertTrue("нечего удалять: офлайн-треки допустимы и при стриминге", plan.removeIndices.isEmpty())
+        assertEquals(listOf("x", "y"), plan.append.map { it.id })
+        assertTrue(plan.changed)
+    }
+
+    /**
+     * Обратная сторона: при выключении стриминга онлайн-треки уходят из очереди.
+     */
+    @Test
+    fun `disabling streaming removes online tracks`() {
+        val queue = listOf(local("a"), online("x"), local("b"), online("y"))
+        val plan = QueueModel.rebuildPlan(
+            queue = queue,
+            currentIndex = 0,
+            candidates = emptyList(),
+            keep = ::onlyLocal,
+        )
+
+        assertEquals("индексы идут с конца, чтобы удаление не сдвигало оставшиеся", listOf(3, 1), plan.removeIndices)
+        assertTrue(plan.append.isEmpty())
+    }
+
+    /**
+     * Текущий трек не удаляем, даже если он не подходит под фильтр: оборвать
+     * звучащую музыку из-за смены настройки нельзя. Очередь вокруг него при
+     * этом чистится, и об этом сообщает [QueueModel.QueueRebuildPlan.keptCurrent].
+     */
+    @Test
+    fun `current track survives the filter but is reported`() {
+        val queue = listOf(online("cur"), online("x"), local("b"))
+        val plan = QueueModel.rebuildPlan(
+            queue = queue,
+            currentIndex = 0,
+            candidates = emptyList(),
+            keep = ::onlyLocal,
+        )
+
+        assertTrue("текущий индекс не должен попасть в удаление", 0 !in plan.removeIndices)
+        assertEquals(listOf(1), plan.removeIndices)
+        assertTrue("о доигрывающем текущем треке нужно сообщить", plan.keptCurrent)
+    }
+
+    /** Текущий трек подходит — тревожить пользователя незачем. */
+    @Test
+    fun `keptCurrent is false when current fits the filter`() {
+        val plan = QueueModel.rebuildPlan(
+            queue = listOf(local("cur"), online("x")),
+            currentIndex = 0,
+            candidates = emptyList(),
+            keep = ::onlyLocal,
+        )
+
+        assertEquals(listOf(1), plan.removeIndices)
+        assertTrue(!plan.keptCurrent)
+    }
+
+    /**
+     * Дополнение не должно дублировать то, что уже стоит в очереди: иначе один
+     * и тот же трек зазвучит дважды подряд.
+     */
+    @Test
+    fun `append skips tracks already queued`() {
+        val queue = listOf(local("a"), online("x"))
+        val plan = QueueModel.rebuildPlan(
+            queue = queue,
+            currentIndex = 0,
+            candidates = listOf(online("x"), online("y")),
+            keep = { true },
+        )
+
+        assertEquals(listOf("y"), plan.append.map { it.id })
+    }
+
+    /** Дубликаты внутри самих кандидатов тоже схлопываются. */
+    @Test
+    fun `append deduplicates candidates`() {
+        val plan = QueueModel.rebuildPlan(
+            queue = listOf(local("a")),
+            currentIndex = 0,
+            candidates = listOf(online("x"), online("x"), online("y")),
+            keep = { true },
+        )
+
+        assertEquals(listOf("x", "y"), plan.append.map { it.id })
+    }
+
+    /** Неподходящие кандидаты не дописываются: фильтр действует и на них. */
+    @Test
+    fun `append respects the filter`() {
+        val plan = QueueModel.rebuildPlan(
+            queue = listOf(local("a")),
+            currentIndex = 0,
+            candidates = listOf(online("x"), local("b")),
+            keep = ::onlyLocal,
+        )
+
+        assertEquals(listOf("b"), plan.append.map { it.id })
+    }
+
+    /**
+     * Ничего не изменилось — пересборка не должна считаться изменением, иначе
+     * интерфейс будет дёргаться и писать в лог на каждое переключение.
+     */
+    @Test
+    fun `unchanged queue reports no change`() {
+        val plan = QueueModel.rebuildPlan(
+            queue = listOf(local("a"), local("b")),
+            currentIndex = 0,
+            candidates = emptyList(),
+            keep = ::onlyLocal,
+        )
+
+        assertTrue("удалять нечего", plan.removeIndices.isEmpty())
+        assertTrue("дописывать нечего", plan.append.isEmpty())
+        assertTrue("текущий подходит", !plan.keptCurrent)
+        assertTrue("изменений нет", !plan.changed)
+    }
+
+    /** Пустая очередь — вырожденный случай: план не должен падать. */
+    @Test
+    fun `empty queue produces empty plan`() {
+        val plan = QueueModel.rebuildPlan(
+            queue = emptyList(),
+            currentIndex = QueueModel.NONE,
+            candidates = listOf(online("x")),
+            keep = { true },
+        )
+
+        assertTrue(plan.removeIndices.isEmpty())
+        assertEquals(listOf("x"), plan.append.map { it.id })
+        assertTrue(!plan.keptCurrent)
+    }
+
+    /**
+     * Индексы удаления обязаны идти по убыванию: вызывающий удаляет их по
+     * очереди через removeMediaItem, и при возрастающем порядке второй индекс
+     * указывал бы уже не на тот элемент.
+     */
+    @Test
+    fun `remove indices are strictly descending`() {
+        // Чётные — файлы, нечётные — онлайн. Текущий (0) подходит под фильтр.
+        val queue = List(6) { if (it % 2 == 0) local("t$it") else online("t$it") }
+        val plan = QueueModel.rebuildPlan(
+            queue = queue,
+            currentIndex = 0,
+            candidates = emptyList(),
+            keep = ::onlyLocal,
+        )
+
+        assertEquals(listOf(5, 3, 1), plan.removeIndices)
+        assertEquals(
+            "порядок обязан убывать",
+            plan.removeIndices.sortedDescending(),
+            plan.removeIndices,
+        )
+        assertTrue("текущий подходит, тревожить незачем", !plan.keptCurrent)
+    }
 }
