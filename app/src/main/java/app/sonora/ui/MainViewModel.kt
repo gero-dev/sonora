@@ -3,6 +3,7 @@ package app.sonora.ui
 import android.content.Intent
 import android.media.MediaMetadataRetriever
 import android.net.Uri
+import android.provider.OpenableColumns
 import android.util.Log
 import android.widget.Toast
 import androidx.lifecycle.ViewModel
@@ -29,6 +30,8 @@ import app.sonora.data.download.TrackSaveState
 import app.sonora.data.metadata.ArtistNames
 import app.sonora.data.metadata.MetadataFileEntry
 import app.sonora.data.telemetry.AudioFeature
+import app.sonora.data.telemetry.TelemetryFileEntry
+import app.sonora.data.telemetry.TelemetryFileParser
 import app.sonora.data.metadata.MetadataFiles
 import app.sonora.data.library.LibraryRepository
 import app.sonora.data.library.LocalFileDeleter
@@ -80,6 +83,11 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlin.random.Random
 
 data class SearchUiState(
@@ -212,9 +220,47 @@ data class PlaylistImportUiState(
     val savedDone: Int = 0,
 )
 
+/**
+ * Прогресс/результат импорта и выгрузки данных о треках — файла с
+ * аудио-характеристиками (BPM, энергия и т. п.), который читает
+ * [TelemetryFileParser].
+ *
+ * Это данные только о треках: ничего не скачивается и не создаётся, строки
+ * лишь сопоставляются с уже сохранённой библиотекой и ложатся в кэш фич.
+ */
+data class TelemetryImportUiState(
+    val importing: Boolean = false,
+    val fileName: String? = null,
+    val read: Int = 0,
+    val withFeatures: Int = 0,
+    val matched: Int = 0,
+    val cached: Int = 0,
+    val warnings: List<String> = emptyList(),
+    val error: String? = null,
+    val done: Boolean = false,
+    val exporting: Boolean = false,
+    val exportMessage: String? = null,
+)
+
 /** Форматы, которые можно сохранить на устройство. */
 private val DOWNLOAD_EXTENSIONS = setOf("mp3", "m4a", "aac", "ogg", "oga", "opus", "webm", "flac", "wav")
 private val YOUTUBE_ID = Regex("[A-Za-z0-9_-]{11}")
+
+/** Потолок размера файла данных о треках: больше — это уже не список, а мусор. */
+private const val TELEMETRY_MAX_BYTES = 8 * 1024 * 1024
+
+/** Сколько первых байт проверять на «текстовость» перед разбором. */
+private const val TELEMETRY_SNIFF_BYTES = 4 * 1024
+
+/** Допустимая доля управляющих байт, прежде чем файл считается бинарным. */
+private const val TELEMETRY_MAX_CONTROL_RATIO = 0.02
+
+/**
+ * Настройки выгрузки: компактный JSON без значений по умолчанию — файл должен
+ * быть маленьким, а отсутствующие характеристики не должны появляться как
+ * `"energy": null`.
+ */
+private val TELEMETRY_JSON = Json { prettyPrint = false; encodeDefaults = false }
 
 /** Версия схемы метаданных: при повышении сбрасываются устаревшие отметки «проверено». */
 private const val METADATA_SCHEMA_VERSION = 4
@@ -3846,6 +3892,213 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
             toast("Метаданные: совпало $matched, обновлено $updated")
         }
     }
+
+    // ------------------------------------------- Данные о треках (телеметрия)
+
+    private val _telemetryImport = MutableStateFlow(TelemetryImportUiState())
+    val telemetryImport: StateFlow<TelemetryImportUiState> = _telemetryImport.asStateFlow()
+
+    fun dismissTelemetryImport() {
+        _telemetryImport.value = TelemetryImportUiState()
+    }
+
+    /**
+     * Читает выбранный файл с данными о треках и применяет его к кэшу фич.
+     *
+     * Файл принимается того же вида, что и обычный импорт списка треков: тот же
+     * JSON, та же таблица, те же хвосты. Отличие только в том, что в строках
+     * могут быть числа характеристик.
+     */
+    fun importTelemetryFile(uri: Uri) {
+        if (_telemetryImport.value.importing) return
+        _telemetryImport.value = TelemetryImportUiState(importing = true)
+        viewModelScope.launch {
+            val read = runCatching { readTelemetryFile(uri) }.getOrNull()
+            if (read == null) {
+                _telemetryImport.value = TelemetryImportUiState(
+                    error = "Файл не прочитан: нужен текстовый JSON, CSV или TXT",
+                )
+                return@launch
+            }
+            val data = runCatching {
+                TelemetryFileParser.parse(read.first, read.second)
+            }.getOrElse { error ->
+                _telemetryImport.value = TelemetryImportUiState(
+                    fileName = read.first,
+                    error = error.message ?: "Файл не разобран",
+                )
+                return@launch
+            }
+            if (data.entries.isEmpty()) {
+                _telemetryImport.value = TelemetryImportUiState(
+                    fileName = data.fileName,
+                    warnings = data.warnings,
+                    error = "В файле не нашлось ни одного трека",
+                )
+                return@launch
+            }
+
+            val localTracks = graph.library.tracks.value.filter { it.source == Source.LOCAL }
+            val result = runCatching {
+                graph.audioFeatures.importEntries(localTracks, data.entries)
+            }.getOrElse { error ->
+                _telemetryImport.value = TelemetryImportUiState(
+                    fileName = data.fileName,
+                    error = error.message ?: "Не удалось применить данные",
+                )
+                return@launch
+            }
+
+            _telemetryImport.value = TelemetryImportUiState(
+                fileName = data.fileName,
+                read = result.read,
+                withFeatures = result.withFeatures,
+                matched = result.matched,
+                cached = result.cached,
+                warnings = data.warnings + result.warnings,
+                done = true,
+            )
+            toast("Данные о треках: совпало ${result.matched}, записано ${result.cached}")
+        }
+    }
+
+    /**
+     * Готовит выгрузку кэша фич и отдаёт текст вызывающей стороне.
+     *
+     * Запись файла делает экран через системный диалог: у ViewModel нет доступа к
+     * дереву документов, выбранному пользователем, а просить разрешение на запись
+     * в общую память ради одной выгрузки не стоит.
+     */
+    fun exportTelemetryFile(onReady: (String) -> Unit) {
+        if (_telemetryImport.value.exporting) return
+        _telemetryImport.value = _telemetryImport.value.copy(exporting = true, exportMessage = null)
+        viewModelScope.launch {
+            val tracks = graph.library.tracks.value.filter { it.source == Source.LOCAL }
+            val entries = runCatching { graph.audioFeatures.exportEntries(tracks) }
+                .getOrDefault(emptyList())
+            if (entries.isEmpty()) {
+                _telemetryImport.value = _telemetryImport.value.copy(
+                    exporting = false,
+                    exportMessage = "Нечего выгружать: данных о треках пока нет",
+                )
+                return@launch
+            }
+            val text = buildTelemetryJson(entries)
+            _telemetryImport.value = _telemetryImport.value.copy(
+                exporting = false,
+                exportMessage = "Готово к сохранению: ${entries.size} треков",
+            )
+            onReady(text)
+        }
+    }
+
+    fun setTelemetryExportMessage(message: String?) {
+        _telemetryImport.value = _telemetryImport.value.copy(exportMessage = message)
+    }
+
+    /** Отмечает, что файл выгрузки записан на устройство. */
+    fun onTelemetryExported(saved: Boolean) {
+        _telemetryImport.value = _telemetryImport.value.copy(
+            exportMessage = if (saved) "Файл сохранён" else "Сохранение отменено",
+        )
+    }
+
+    /**
+     * Читает файл в текст с потолком размера.
+     *
+     * Потолок нужен не из вредности: выбранный по ошибке видеофайл в гигабайт
+     * иначе был бы прочитан целиком в память, и приложение упало бы по OOM.
+     *
+     * @return имя файла и содержимое, либо `null`, если файл пуст, слишком велик
+     *   или не похож на текст.
+     */
+    private suspend fun readTelemetryFile(uri: Uri): Pair<String, String>? =
+        withContext(Dispatchers.IO) {
+            val resolver = graph.appContext.contentResolver
+            val name = queryTelemetryDisplayName(uri)
+            val bytes = resolver.openInputStream(uri)?.use { input ->
+                val buffer = java.io.ByteArrayOutputStream()
+                val chunk = ByteArray(64 * 1024)
+                var total = 0
+                while (true) {
+                    val count = input.read(chunk)
+                    if (count <= 0) break
+                    total += count
+                    if (total > TELEMETRY_MAX_BYTES) return@withContext null
+                    buffer.write(chunk, 0, count)
+                }
+                buffer.toByteArray()
+            } ?: return@withContext null
+            if (bytes.isEmpty()) return@withContext null
+            val sniff = bytes.take(TELEMETRY_SNIFF_BYTES)
+            val controls = sniff.count { byte ->
+                val value = byte.toInt() and 0xFF
+                value < 0x09 || (value in 0x0E..0x1F)
+            }
+            if (sniff.any { it.toInt() == 0 } ||
+                controls > sniff.size * TELEMETRY_MAX_CONTROL_RATIO
+            ) {
+                return@withContext null
+            }
+            name to String(bytes, Charsets.UTF_8)
+        }
+
+    private fun queryTelemetryDisplayName(uri: Uri): String {
+        val projection = arrayOf(android.provider.OpenableColumns.DISPLAY_NAME)
+        return runCatching {
+            graph.appContext.contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val index = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                    if (index >= 0) cursor.getString(index) else null
+                } else {
+                    null
+                }
+            }
+        }.getOrNull() ?: uri.lastPathSegment.orEmpty()
+    }
+
+    /**
+     * Сериализует записи в JSON, который читает [TelemetryFileParser].
+     *
+     * Характеристики пишутся вложенным объектом `audio_features`, а пустые поля
+     * не пишутся вовсе: `"energy": null` в файле выглядит как испорченное
+     * значение, тогда как его отсутствие однозначно означает «неизвестно».
+     */
+    private fun buildTelemetryJson(entries: List<TelemetryFileEntry>): String =
+        TELEMETRY_JSON.encodeToString(
+            buildJsonArray {
+                entries.forEach { entry ->
+                    add(
+                        buildJsonObject {
+                            put("title", JsonPrimitive(entry.title))
+                            entry.artist?.let { put("artist", JsonPrimitive(it)) }
+                            entry.album?.let { put("album", JsonPrimitive(it)) }
+                            entry.durationMs?.let { put("duration_ms", JsonPrimitive(it)) }
+                            entry.videoId?.let { put("video_id", JsonPrimitive(it)) }
+                            entry.url?.let { put("url", JsonPrimitive(it)) }
+                            entry.feature?.let { feature ->
+                                val numbers = buildJsonObject {
+                                    feature.tempo?.let { put("tempo", JsonPrimitive(it)) }
+                                    feature.energy?.let { put("energy", JsonPrimitive(it)) }
+                                    feature.danceability?.let { put("danceability", JsonPrimitive(it)) }
+                                    feature.valence?.let { put("valence", JsonPrimitive(it)) }
+                                    feature.acousticness?.let { put("acousticness", JsonPrimitive(it)) }
+                                    feature.instrumentalness?.let {
+                                        put("instrumentalness", JsonPrimitive(it))
+                                    }
+                                    feature.liveness?.let { put("liveness", JsonPrimitive(it)) }
+                                    feature.speechiness?.let { put("speechiness", JsonPrimitive(it)) }
+                                    feature.loudness?.let { put("loudness", JsonPrimitive(it)) }
+                                }
+                                if (numbers.isNotEmpty()) {
+                                    put("audio_features", numbers)
+                                }
+                            }
+                        },
+                    )
+                }
+            },
+        )
 
     private fun findTrackForEntry(
         entry: MetadataFileEntry,
