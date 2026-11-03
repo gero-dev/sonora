@@ -273,8 +273,12 @@ object SidecarMetadata {
     private fun resolveSibling(parent: File, name: String): File? {
         val direct = File(parent, name)
         if (direct.isFile) return direct
+        // Через кэш листингов: раньше здесь был отдельный listFiles() на каждое
+        // имя, и на папке с сотнями треков это давало больше тысячи перечислений
+        // каталога за один скан.
         return runCatching {
-            parent.listFiles()?.firstOrNull { it.isFile && it.name.equals(name, ignoreCase = true) }
+            LocalArtwork.listFilesCached(parent)
+                .firstOrNull { it.name.equals(name, ignoreCase = true) }
         }.getOrNull()
     }
 

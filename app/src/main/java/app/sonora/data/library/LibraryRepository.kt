@@ -93,6 +93,11 @@ class LibraryRepository(
         scanMutex.lock()
         _scanning.value = true
         val startedAt = System.nanoTime()
+        // Кэш листингов папок живёт ровно один цикл скана. Сбрасываем здесь, а не
+        // внутри scanner.scan(): scanLocal вызывает scan() и затем scanFolder()
+        // подряд, и сброс внутри каждого обнулял бы кэш между ними — тогда
+        // папки из extraDirs снова перечислялись бы по многу раз.
+        LocalArtwork.clearListingCache()
         return try {
             val fromMediaStore = scanner.scan(
                 settings.current.excludeShortTracks,
