@@ -129,11 +129,12 @@ fun HomeScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) -> 
     val localTracks = remember(tracks) { tracks.filter { it.source == Source.LOCAL } }
     val recent = remember(localTracks) { localTracks.take(15) }
     val favoriteTracks = remember(tracks, favorites) { tracks.filter { it.id in favorites } }
-    val favoritePreview = remember(favoriteTracks) { favoriteTracks.take(10) }
     val ownPlaylists = remember(playlists) { playlists.filter { it.editable } }
 
     var showCreateDialog by remember { mutableStateOf(false) }
     var actionTrack by remember { mutableStateOf<Track?>(null) }
+    /** Трек, ожидающий подтверждения удаления. */
+    var trackDeleteTarget by remember { mutableStateOf<Track?>(null) }
     var playlistForNewTrack by remember { mutableStateOf<Track?>(null) }
 
     val favoriteAction: (() -> Unit)? = if (favoriteTracks.isEmpty()) {
@@ -181,33 +182,53 @@ fun HomeScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) -> 
                 )
             }
 
-            if (localTracks.isEmpty()) {
-                item { ScanLibraryCard(scanning = scanning, onScan = { vm.scanLibrary() }) }
-            }
-            item {
-                QuickAccessRow(
-                    onCatalog = { navigate(Routes.DISCOVER) },
-                    onSearch = { navigate(Routes.SEARCH) },
-                )
-            }
-
-            item {
-                ImportMusicCard(
-                    importing = fileImport.importing,
-                    imported = fileImport.imported,
-                    failed = fileImport.failed,
-                    done = fileImport.done,
-                    onPickFiles = { musicImportLauncher.launch(arrayOf("*/*")) },
-                    onShowGuide = { showImportGuide = true },
-                )
-            }
-
             if (recent.isNotEmpty()) {
                 item { HomeSectionHeader(title = "Недавно добавленные") }
                 item {
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(RailSpacing)) {
                         items(recent, key = { "recent-${it.id}" }, contentType = { "track" }) { track ->
-                            TrackTile(track = track, onClick = { vm.playOrOpen(track) })
+                            TrackTile(
+                                track = track,
+                                onClick = { vm.playOrOpen(track) },
+                                onLongClick = { actionTrack = track },
+                            )
+                        }
+                    }
+                }
+            }
+
+            // «Избранное» — такая же горизонтальная полка, как остальные.
+            // Раньше это был вертикальный список во всю высоту страницы, из-за
+            // чего главная выглядела как два разных экрана: полки сверху и
+            // длинный список снизу. В Яндекс Музыке главная — это только полки.
+            item {
+                HomeSectionHeader(
+                    title = "Избранное",
+                    actionLabel = if (favoriteAction != null) "Играть все" else null,
+                    onAction = favoriteAction,
+                )
+            }
+            if (favoriteTracks.isEmpty()) {
+                item {
+                    EmptyState(
+                        icon = Icons.Rounded.FavoriteBorder,
+                        title = "Пока пусто",
+                        subtitle = "Отмечайте треки сердечком — они появятся здесь.",
+                    )
+                }
+            } else {
+                item {
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(RailSpacing)) {
+                        items(
+                            favoriteTracks,
+                            key = { "fav-${it.id}" },
+                            contentType = { "track" },
+                        ) { track ->
+                            TrackTile(
+                                track = track,
+                                onClick = { vm.playOrOpen(track) },
+                                onLongClick = { actionTrack = track },
+                            )
                         }
                     }
                 }
@@ -226,35 +247,26 @@ fun HomeScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) -> 
                 }
             }
 
+            // Служебные карточки уходят под полки: сверху должно быть то, что
+            // человек слушает, а не настройка библиотеки.
+            if (localTracks.isEmpty()) {
+                item { ScanLibraryCard(scanning = scanning, onScan = { vm.scanLibrary() }) }
+            }
             item {
-                HomeSectionHeader(
-                    title = "Избранное",
-                    actionLabel = if (favoriteAction != null) "Играть все" else null,
-                    onAction = favoriteAction,
+                QuickAccessRow(
+                    onCatalog = { navigate(Routes.DISCOVER) },
+                    onSearch = { navigate(Routes.SEARCH) },
                 )
             }
-            if (favoriteTracks.isEmpty()) {
-                item {
-                    EmptyState(
-                        icon = Icons.Rounded.FavoriteBorder,
-                        title = "Пока пусто",
-                        subtitle = "Отмечайте треки сердечком — они появятся здесь.",
-                    )
-                }
-            } else {
-                items(favoritePreview, key = { "fav-${it.id}" }, contentType = { "track" }) { track ->
-                    TrackRow(
-                        track = track,
-                        isFavorite = track.id in favorites,
-                        isPlaying = player.current?.id == track.id && player.isPlaying,
-                        onClick = { vm.playOrOpen(track) },
-                        onLongClick = { actionTrack = track },
-                        onFavorite = { vm.toggleFavorite(track.id) },
-                        rating = ratingIndex.ratingOf(track),
-                        onLike = { vm.toggleTrackLike(track) },
-                        onDislike = { vm.toggleTrackDislike(track) },
-                    )
-                }
+            item {
+                ImportMusicCard(
+                    importing = fileImport.importing,
+                    imported = fileImport.imported,
+                    failed = fileImport.failed,
+                    done = fileImport.done,
+                    onPickFiles = { musicImportLauncher.launch(arrayOf("*/*")) },
+                    onShowGuide = { showImportGuide = true },
+                )
             }
         }
 
@@ -308,6 +320,43 @@ fun HomeScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) -> 
                 rating = ratingIndex.ratingOf(track),
                 onLike = { vm.toggleTrackLike(track) },
                 onDislike = { vm.toggleTrackDislike(track) },
+                onDelete = {
+                    actionTrack = null
+                    trackDeleteTarget = track
+                },
+                deleteLabel = if (track.source == Source.LOCAL) "Удалить с устройства" else "Удалить",
+            )
+        }
+
+        trackDeleteTarget?.let { target ->
+            val isLocalFile = target.source == Source.LOCAL
+            AlertDialog(
+                onDismissRequest = { trackDeleteTarget = null },
+                title = { Text("Удалить трек?") },
+                text = {
+                    Text(
+                        if (isLocalFile) {
+                            "«${target.title}» будет убран из медиатеки, плейлистов и " +
+                                "избранного, а файл — удалён с устройства. " +
+                                "Отменить это будет нельзя."
+                        } else {
+                            "«${target.title}» будет убран из медиатеки, плейлистов и избранного."
+                        },
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            vm.deleteTrack(target)
+                            trackDeleteTarget = null
+                        },
+                    ) {
+                        Text("Удалить", color = MaterialTheme.colorScheme.error)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { trackDeleteTarget = null }) { Text("Отмена") }
+                },
             )
         }
 
@@ -903,6 +952,7 @@ private fun WaveCard(
 private fun TrackTile(
     track: Track,
     onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
     onDislike: (() -> Unit)? = null,
     onRadio: (() -> Unit)? = null,
     onLike: (() -> Unit)? = null,
@@ -919,7 +969,14 @@ private fun TrackTile(
                 .background(MaterialTheme.colorScheme.surfaceContainerHigh)
                 .combinedClickable(
                     onClick = onClick,
-                    onLongClick = if (hasMenu) ({ menuOpen = true }) else null,
+                    // Долгое нажатие открывает меню трека, если оно есть, иначе
+                    // действие экрана (удаление). Приоритет у меню: «Радио по
+                    // треку» и оценки нужны чаще удаления.
+                    onLongClick = when {
+                        hasMenu -> ({ menuOpen = true })
+                        onLongClick != null -> onLongClick
+                        else -> null
+                    },
                 )
                 .padding(8.dp),
         ) {
@@ -934,7 +991,9 @@ private fun TrackTile(
             Text(
                 text = track.title,
                 style = MaterialTheme.typography.titleMedium,
-                maxLines = 1,
+                // Две строки вместо одной: на полке видно длинное название
+                // целиком, а не «Coldplay - Yellow (Officia…».
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(horizontal = 2.dp),
             )

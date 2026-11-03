@@ -122,6 +122,26 @@ class PlaybackController(context: Context) {
 
     private var lastLoggedIndex = -1
 
+    /**
+     * Позиция, на которую пользователь только что перемотал, но плеер ещё не
+     * применил её.
+     *
+     * Нужна потому, что `seekTo` в media3 асинхронный: после вызова
+     * `controller.seekTo(x)` свойство `currentPosition` ещё некоторое время
+     * возвращает СТАРОЕ значение. Пока оно не обновилось, фоновый цикл
+     * прогресса и `refresh()` успевали записать старое значение в состояние, и
+     * ползунок отскакивал назад — та самая «некорректная перемотка вперёд»,
+     * которая воспроизводилась тем чаще, чем ближе к моменту перемотки
+     * приходился очередной тик цикла.
+     *
+     * Пока значение не `null`, позиция из плеера игнорируется в пользу
+     * [pendingSeekTargetMs]. Снимается по `onPositionDiscontinuity` с причиной
+     * `SEEK` — это авторитетный момент, когда плеер применил перемотку, — либо
+     * по таймауту, если событие потерялось.
+     */
+    private var pendingSeekTargetMs: Long? = null
+    private var pendingSeekIssuedAtMs = 0L
+
     /** Регистр треков: mediaId → Track. Метаданные для state.queue берём отсюда. */
     private val trackRegistry = HashMap<String, Track>()
 
@@ -190,6 +210,17 @@ class PlaybackController(context: Context) {
             refresh()
         }
 
+        override fun onPositionDiscontinuity(
+            oldPosition: Player.PositionInfo,
+            newPosition: Player.PositionInfo,
+            reason: Int,
+        ) {
+            if (reason == Player.DISCONTINUITY_REASON_SEEK) {
+                onSeekApplied(newPosition.positionMs)
+            }
+            refresh()
+        }
+
         override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
             android.util.Log.w(TAG, "player error: ${error.errorCodeName} ${error.message?.take(120)}")
             onStreamError?.invoke(error)
@@ -250,7 +281,10 @@ class PlaybackController(context: Context) {
             while (isActive) {
                 val c = controller
                 if (c != null && c.isPlaying) {
-                    val position = runCatching { c.currentPosition }.getOrDefault(0L)
+                    // Через effectivePosition: пока перемотка не применена,
+                    // currentPosition возвращает старое значение и ползунок
+                    // отскакивал назад.
+                    val position = effectivePosition(c)
                     val sampledAt = elapsed()
                     _state.update {
                         it.copy(positionMs = position, positionSampledAtMs = sampledAt)
@@ -275,7 +309,7 @@ class PlaybackController(context: Context) {
         }
         reconcileQueueFromPlayer(c)
         val duration = runCatching { c.duration }.getOrDefault(0L)
-        val position = runCatching { c.currentPosition }.getOrDefault(_state.value.positionMs)
+        val position = effectivePosition(c)
         val index = runCatching { c.currentMediaItemIndex }.getOrDefault(0).coerceAtLeast(0)
         lastLoggedIndex = index
         _state.update { st ->
@@ -760,11 +794,52 @@ class PlaybackController(context: Context) {
     }
 
     fun seekTo(positionMs: Long) {
-        controller?.seekTo(positionMs.coerceAtLeast(0L))
+        val target = positionMs.coerceAtLeast(0L)
+        val c = controller
+        if (c == null) {
+            _state.update { it.copy(positionMs = target, positionSampledAtMs = elapsed()) }
+            return
+        }
+        // Зажигаем «замороженную» позицию ДО вызова seekTo: иначе цикл прогресса
+        // успевает записать старое значение между вызовом и этим присваиванием.
+        pendingSeekTargetMs = target
+        pendingSeekIssuedAtMs = elapsed()
+        runCatching { c.seekTo(target) }
         _state.update {
             it.copy(
-                positionMs = positionMs,
+                positionMs = target,
                 positionSampledAtMs = elapsed(),
+            )
+        }
+    }
+
+    /**
+     * Позиция для показа: цель незавершённой перемотки, пока плеер её не
+     * применил, иначе фактическая позиция плеера.
+     */
+    private fun effectivePosition(c: Player): Long {
+        val pending = pendingSeekTargetMs
+        if (pending != null) {
+            val stillFresh = elapsed() - pendingSeekIssuedAtMs <= SEEK_SETTLE_TIMEOUT_MS
+            if (stillFresh) return pending
+            // Событие о перемотке потерялось — снимаем заморозку, иначе
+            // ползунок навсегда застынет на цели.
+            pendingSeekTargetMs = null
+        }
+        return runCatching { c.currentPosition }.getOrDefault(_state.value.positionMs)
+    }
+
+    /** Плеер сообщил о разрыве позиции — если это наша перемотка, снимаем заморозку. */
+    private fun onSeekApplied(positionMs: Long) {
+        val pending = pendingSeekTargetMs ?: return
+        pendingSeekTargetMs = null
+        // Округляем до 50 мс: плеер встаёт рядом с целью, но не точно в неё
+        // (например, на границу кадра или ключевого кадра).
+        val drift = kotlin.math.abs(positionMs - pending)
+        if (drift > SEEK_DRIFT_LOG_MS) {
+            android.util.Log.i(
+                TAG,
+                "seek drift: requested=$pending actual=$positionMs drift=$drift",
             )
         }
     }
@@ -1205,6 +1280,15 @@ class PlaybackController(context: Context) {
 
         /** Защита от повторного авто-перехода в конце очереди. */
         const val END_ADVANCE_COOLDOWN_MS = 1_500L
+
+        /**
+         * Сколько держать «замороженную» позицию перемотки, если плеер так и не
+         * прислал `onPositionDiscontinuity`. Страховка от застывшего ползунка.
+         */
+        const val SEEK_SETTLE_TIMEOUT_MS = 2_000L
+
+        /** Расхождение цели и фактической позиции, о котором стоит писать в лог. */
+        const val SEEK_DRIFT_LOG_MS = 750L
 
         /**
          * Живой контроллер UI (если приложение открыто). Сервис использует его,
