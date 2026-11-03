@@ -50,7 +50,7 @@ import app.sonora.ui.MainViewModel
 import app.sonora.ui.components.BackIconButton
 import app.sonora.ui.components.CoverArt
 import app.sonora.ui.components.EmptyState
-import app.sonora.ui.components.SourceChip
+import app.sonora.ui.components.SourceDot
 import app.sonora.ui.components.sourceColor
 
 private val PagePadding = 16.dp
@@ -330,7 +330,8 @@ private fun DiscoverTrackCard(
             Text(
                 text = track.title,
                 style = MaterialTheme.typography.titleMedium,
-                maxLines = 1,
+                // Две строки: в одну длинные названия каталогов обрезались.
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
@@ -351,7 +352,17 @@ private fun DiscoverTrackCard(
                         modifier = Modifier.weight(1f, fill = false),
                     )
                 }
-                SourceChip(label = track.source.title, color = sourceColor(track.source))
+                // Точка вместо чипа с надписью: в карточке каталога строка уже, и
+                // надпись «Internet Archive» съедала её почти целиком.
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    SourceDot(source = track.source)
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        text = track.source.title,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = sourceColor(track.source),
+                    )
+                }
             }
         }
         IconButton(onClick = onPlay) {

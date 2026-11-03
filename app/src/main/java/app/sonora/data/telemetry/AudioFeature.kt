@@ -106,32 +106,70 @@ class AudioFeatureCache(context: Context) {
     }
 
     suspend fun put(key: String, feature: AudioFeature) {
+        putAll(listOf(key to feature))
+    }
+
+    /**
+     * Пакетная запись одним обращением к диску.
+     *
+     * Нужна для импорта файлов с данными: [put] перезаписывает весь JSON целиком,
+     * поэтому вставка по одной записи на файле в тысячи строк означала бы тысячи
+     * полных перезаписей. Здесь файл пишется один раз.
+     *
+     * Обновлённая запись переставляется в конец: в `LinkedHashMap` повторная
+     * вставка существующего ключа НЕ меняет порядок, и при вытеснении самая
+     * свежая запись могла бы уйти как «самая старая». Для этого ключ сначала
+     * удаляется.
+     *
+     * @return сколько записей было добавлено заново (остальные — обновления).
+     */
+    suspend fun putAll(entries: List<Pair<String, AudioFeature>>): Int {
+        if (entries.isEmpty()) return 0
         ensureLoaded()
+        var added = 0
         mutex.withLock {
-            map[key] = feature
+            entries.forEach { (key, feature) ->
+                if (map.remove(key) == null) added += 1
+                map[key] = feature
+            }
             while (map.size > MAX_ENTRIES) {
                 val oldest = map.keys.firstOrNull() ?: break
                 map.remove(oldest)
             }
-            JsonFile.write(
-                appContext,
-                FILE,
-                serializer,
-                map.map { (k, v) -> CachedFeature(k, v, System.currentTimeMillis()) },
-            )
+            write()
         }
+        return added
     }
+
+    /** Сколько записей сейчас в кэше. */
+    suspend fun size(): Int {
+        ensureLoaded()
+        return mutex.withLock { map.size }
+    }
+
+    private suspend fun write() = JsonFile.write(
+        appContext,
+        FILE,
+        serializer,
+        map.map { (k, v) -> CachedFeature(k, v, System.currentTimeMillis()) },
+    )
 
     suspend fun clear() {
         ensureLoaded()
         mutex.withLock {
             map.clear()
-            JsonFile.write(appContext, FILE, serializer, emptyList())
+            write()
         }
     }
 
     private companion object {
         const val FILE = "audio_features.json"
-        const val MAX_ENTRIES = 1000
+
+        /**
+         * Предел кэша. Было 1000, но один файл данных может нести до
+         * [TelemetryFileParser.MAX_ENTRIES] строк, и при меньшем пределе импорт
+         * молча вытеснял бы собственные же свежие записи.
+         */
+        const val MAX_ENTRIES = 20_000
     }
 }

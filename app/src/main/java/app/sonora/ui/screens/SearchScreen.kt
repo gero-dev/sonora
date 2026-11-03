@@ -68,10 +68,8 @@ import app.sonora.ui.MainViewModel
 import app.sonora.ui.components.CreatePlaylistDialog
 import app.sonora.ui.components.EmptyState
 import app.sonora.ui.components.SectionHeader
-import app.sonora.ui.components.SourceChip
 import app.sonora.ui.components.TrackActionSheet
 import app.sonora.ui.components.TrackRow
-import app.sonora.ui.components.sourceColor
 import app.sonora.ui.nav.Routes
 import coil.compose.AsyncImage
 
@@ -340,15 +338,9 @@ private fun SearchTrackRow(
         onLongClick = onLongClick,
         onFavorite = onFavorite,
         saveState = saveState,
-        trailing = {
-            if (showSource) {
-                SourceChip(
-                    label = track.source.title,
-                    color = sourceColor(track.source),
-                    modifier = Modifier.padding(end = 4.dp),
-                )
-            }
-        },
+        // Источник ушёл из конца строки в точку перед исполнителем: чип с
+        // надписью отнимал у названия около сотни dp.
+        showSource = showSource,
     )
 }
 

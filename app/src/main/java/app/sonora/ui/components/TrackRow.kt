@@ -69,6 +69,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -282,7 +284,14 @@ fun EmptyState(
     }
 }
 
-/** Небольшой цветной чип источника (Spotify / YouTube Music / SoundCloud). */
+/**
+ * Небольшой цветной чип источника (Spotify / YouTube Music / SoundCloud).
+ *
+ * В строках списков больше не применяется — там источник показывает [SourceDot].
+ * Оставлен для мест, где строк мало и ширина не в дефиците: надпись вроде
+ * «Internet Archive» занимает около сотни dp, и в списке из сотен треков эта
+ * ширина отнималась у названия и исполнителя.
+ */
 @Composable
 fun SourceChip(label: String, color: Color, modifier: Modifier = Modifier) {
     Box(
@@ -293,6 +302,27 @@ fun SourceChip(label: String, color: Color, modifier: Modifier = Modifier) {
     ) {
         Text(label, style = MaterialTheme.typography.labelSmall, color = color)
     }
+}
+
+/**
+ * Точка-индикатор источника трека: цвет сервиса, 8dp.
+ *
+ * Заменяет [SourceChip] в строке списка. Чип с надписью полезен там, где строк
+ * мало и ширина не в дефиците, а в списке из сотен треков он отнимал у названия
+ * и исполнителя больше сотни dp. Цвет несёт ту же информацию, а название
+ * сервиса доступно через `contentDescription` — оно же озвучивается
+ * программой чтения с экрана.
+ */
+@Composable
+fun SourceDot(source: Source, modifier: Modifier = Modifier) {
+    val color = sourceColor(source)
+    Box(
+        modifier = modifier
+            .size(8.dp)
+            .clip(CircleShape)
+            .background(color)
+            .semantics { contentDescription = "Источник: ${source.title}" },
+    )
 }
 
 /**
@@ -315,6 +345,15 @@ fun TrackRow(
     onLongClick: () -> Unit = {},
     onFavorite: () -> Unit,
     trailing: @Composable (() -> Unit)? = null,
+    /**
+     * Показывать источник трека точкой перед исполнителем.
+     *
+     * Раньше источник рисовался чипом с надписью в конце строки (`trailing`),
+     * и надпись вроде «Internet Archive» съедала около сотни dp — ровно ту
+     * ширину, которой не хватало названию и исполнителю. Точка цвета сервиса
+     * занимает 8dp и не мешает тексту занять всю строку.
+     */
+    showSource: Boolean = false,
     onDownload: (() -> Unit)? = null,
     saveState: TrackSaveState? = null,
     rating: Int? = null,
@@ -363,34 +402,44 @@ fun TrackRow(
                 text = track.title,
                 style = MaterialTheme.typography.titleMedium,
                 color = if (isPlaying) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                // Две строки, как в Spotify: длинные названия («… (Official Video)
-                // [HD Remastered]») в одну строку обрезались до бессмысленного
-                // огрызка. Строка растёт по высоте, фиксированной высоты нет.
+                // Ровно две строки и ВСЯ ширина строки: раньше чип источника стоял
+                // справа и отнимал у названия и исполнителя до сотни dp, из-за чего
+                // длинные названия обрезались, хотя места в строке было достаточно.
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
             val saveFailed = saveState?.status == SaveStatus.ERROR
-            Text(
-                text = when {
-                    saving -> saveState?.label ?: track.displaySubtitle
-                    saveFailed -> "Ошибка сохранения — нажмите ↻"
-                    else -> track.displaySubtitle
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = when {
-                    saving -> MaterialTheme.colorScheme.primary
-                    saveFailed -> MaterialTheme.colorScheme.error
-                    else -> MaterialTheme.colorScheme.onSurfaceVariant
-                },
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.clickable(
-                    enabled = !saving && !saveFailed && track.artist.isNotBlank(),
-                ) {
-                    // Как в Spotify/Metrolist: имя артиста ведёт на его страницу.
-                    openArtist(track.artist)
-                },
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // Источник — маленькая точка перед исполнителем, а не чип справа.
+                // Точка занимает 12dp вместо 100dp у чипа с надписью, поэтому
+                // исполнитель и альбом укладываются в полную строку.
+                if (showSource) {
+                    SourceDot(source = track.source, modifier = Modifier.padding(end = 6.dp))
+                }
+                Text(
+                    text = when {
+                        saving -> saveState?.label ?: track.displaySubtitle
+                        saveFailed -> "Ошибка сохранения — нажмите ↻"
+                        else -> track.displaySubtitle
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = when {
+                        saving -> MaterialTheme.colorScheme.primary
+                        saveFailed -> MaterialTheme.colorScheme.error
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable(
+                            enabled = !saving && !saveFailed && track.artist.isNotBlank(),
+                        ) {
+                            // Как в Spotify/Metrolist: имя артиста ведёт на его страницу.
+                            openArtist(track.artist)
+                        },
+                )
+            }
         }
         if (saving) {
             if (saveState?.percent in 0..99) {

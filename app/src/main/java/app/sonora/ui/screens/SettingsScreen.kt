@@ -62,6 +62,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -186,6 +187,40 @@ fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
         contract = ActivityResultContracts.OpenMultipleDocuments(),
     ) { uris ->
         if (uris.isNotEmpty()) vm.importMetadataFiles(uris)
+    }
+
+    // Данные о треках: чтение файла с числами характеристик.
+    val telemetryImport by vm.telemetryImport.collectAsState()
+    val telemetryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri != null) vm.importTelemetryFile(uri)
+    }
+    // Текст выгрузки держим до тех пор, пока пользователь не выберет, куда
+    // сохранить: системный диалог асинхронный, и без этого текст бы потерялся.
+    var pendingTelemetryExport by remember { mutableStateOf<String?>(null) }
+    val telemetryExportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/json"),
+    ) { uri ->
+        val text = pendingTelemetryExport
+        pendingTelemetryExport = null
+        if (uri == null || text == null) {
+            vm.onTelemetryExported(saved = false)
+        } else {
+            val saved = runCatching {
+                context.contentResolver.openOutputStream(uri)?.use { output ->
+                    output.write(text.toByteArray(Charsets.UTF_8))
+                }
+            }.isSuccess
+            vm.onTelemetryExported(saved)
+        }
+    }
+    // Как только ViewModel подготовила текст, сразу открываем диалог сохранения.
+    LaunchedEffect(pendingTelemetryExport) {
+        val text = pendingTelemetryExport
+        if (text != null) {
+            telemetryExportLauncher.launch("sonora-tracks.json")
+        }
     }
 
     Column(
@@ -884,6 +919,125 @@ fun SettingsScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String)
                 TextButton(onClick = vm::dismissPlaylistImport) {
                     Text("Скрыть")
                 }
+            }
+
+            // Данные о треках: те же файлы, что и выше, но с числами характеристик.
+            HorizontalDivider(Modifier.padding(vertical = 10.dp))
+            Text(
+                text = "Данные о треках",
+                style = MaterialTheme.typography.titleSmall,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = "Файл того же вида, что и список треков — JSON, CSV/TSV или TXT, — " +
+                    "но со столбцами вроде tempo (BPM), energy, danceability, valence, " +
+                    "acousticness, instrumentalness, liveness, speechiness, loudness. " +
+                    "Числа встают в кэш характеристик, поэтому такие треки разбираются " +
+                    "сразу и без обращения к сети.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(
+                onClick = { telemetryLauncher.launch(arrayOf("*/*")) },
+                enabled = !telemetryImport.importing,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                if (telemetryImport.importing) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Rounded.UploadFile,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = if (telemetryImport.importing) {
+                        "Читаем данные…"
+                    } else {
+                        "Импортировать данные о треках"
+                    },
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+
+            val telemetrySummary = when {
+                telemetryImport.error != null -> telemetryImport.error
+                telemetryImport.done -> buildString {
+                    append("Прочитано строк: ${telemetryImport.read}")
+                    append(" · с числами: ${telemetryImport.withFeatures}")
+                    append(" · совпало с библиотекой: ${telemetryImport.matched}")
+                    append(" · записано: ${telemetryImport.cached}")
+                }
+
+                else -> null
+            }
+            if (!telemetrySummary.isNullOrBlank()) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = telemetrySummary,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (telemetryImport.error != null) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                )
+            }
+            telemetryImport.fileName?.let { name ->
+                Text(
+                    text = "Файл: $name",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            telemetryImport.warnings.take(3).forEach { warning ->
+                Text(
+                    text = warning,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (telemetryImport.warnings.size > 3) {
+                Text(
+                    text = "…и ещё ${telemetryImport.warnings.size - 3}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (telemetryImport.done || telemetryImport.error != null) {
+                TextButton(onClick = vm::dismissTelemetryImport) {
+                    Text("Скрыть")
+                }
+            }
+
+            TextButton(
+                onClick = {
+                    vm.exportTelemetryFile { text -> pendingTelemetryExport = text }
+                },
+                enabled = !telemetryImport.exporting,
+            ) {
+                if (telemetryImport.exporting) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(14.dp),
+                        strokeWidth = 2.dp,
+                    )
+                    Spacer(Modifier.width(6.dp))
+                }
+                Text("Выгрузить данные о треках")
+            }
+            telemetryImport.exportMessage?.let { message ->
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
 
             if (showPlaylistImportHelp) {

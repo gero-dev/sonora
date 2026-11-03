@@ -573,7 +573,9 @@ private fun QueueRow(
                 text = track.title,
                 style = MaterialTheme.typography.titleMedium,
                 color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
+                // Две строки: в очереди название тоже обрезалось, хотя строка
+                // растёт по высоте и места под ним достаточно.
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(

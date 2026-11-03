@@ -605,7 +605,9 @@ fun RecentTrackCard(
         Text(
             text = track.title,
             style = MaterialTheme.typography.titleMedium,
-            maxLines = 1,
+            // Две строки: в плитке сетки название обрезалось на середине, а по
+            // высоте место есть — под ним только исполнитель.
+            maxLines = 2,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(horizontal = 2.dp),
         )

@@ -3,6 +3,7 @@ package app.sonora.data.telemetry
 import android.content.Context
 import app.sonora.core.model.Track
 import app.sonora.core.settings.SettingsStore
+import app.sonora.data.metadata.TextMatch
 import app.sonora.data.remote.ytdlp.YtDlpResolver
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
@@ -165,6 +166,126 @@ class AudioFeatureRepository(
 
     /** Посчитать фичи конкретного трека (сеть + кэш) для фонового обогащения. */
     override suspend fun fetchFeature(track: Track): AudioFeature? = featuresFor(track)
+
+    // ---------------- Импорт и экспорт данных о треках ----------------
+
+    /**
+     * Результат сопоставления файла с библиотекой.
+     *
+     * @param read сколько строк прочитано из файла;
+     * @param withFeatures сколько строк несли хоть одну характеристику;
+     * @param matched сколько строк удалось привязать к треку библиотеки;
+     * @param cached сколько записей легло в кэш;
+     * @param warnings замечания разбора, чтобы показать их пользователю.
+     */
+    data class TelemetryImportResult(
+        val read: Int,
+        val withFeatures: Int,
+        val matched: Int,
+        val cached: Int,
+        val warnings: List<String> = emptyList(),
+    )
+
+    /**
+     * Применяет разобранный файл данных к кэшу фич.
+     *
+     * Строка привязывается к треку библиотеки по видеоидентификатору, а если его
+     * нет — по нормализованной паре «исполнитель + название». Сопоставление
+     * намеренно повторяет то, что делает [cacheKey] при чтении: иначе импорт
+     * положил бы данные под одним ключом, а поиск спрашивал бы другой, и фичи
+     * выглядели бы импортированными, но не находились.
+     *
+     * Работа идёт пакетом: [AudioFeatureCache.putAll] пишет файл один раз, а не
+     * по разу на строку.
+     *
+     * @param tracks треки библиотеки для сопоставления;
+     * @param entries строки разобранного файла.
+     */
+    suspend fun importEntries(
+        tracks: List<Track>,
+        entries: List<TelemetryFileEntry>,
+    ): TelemetryImportResult {
+        if (entries.isEmpty()) return TelemetryImportResult(0, 0, 0, 0)
+
+        // Индексы для поиска: по видео и по «исполнитель+название».
+        val byVideo = HashMap<String, Track>(tracks.size)
+        val byName = HashMap<String, Track>(tracks.size)
+        for (track in tracks) {
+            videoIdOf(track)?.let { video -> byVideo.putIfAbsent(video, track) }
+            byName.putIfAbsent(nameKey(track.artist, track.title), track)
+        }
+
+        val warnings = ArrayList<String>()
+        val pending = ArrayList<Pair<String, AudioFeature>>()
+        var withFeatures = 0
+        var matched = 0
+        var unmatched = 0
+
+        for (entry in entries) {
+            val feature = entry.feature
+            if (feature != null && !feature.isEmpty) withFeatures += 1
+            if (feature == null || feature.isEmpty) continue
+
+            val track = entry.videoId?.takeIf { it.isNotBlank() }?.let { byVideo[it] }
+                ?: byName[nameKey(entry.artist, entry.title)]
+            if (track == null) {
+                unmatched += 1
+                continue
+            }
+            matched += 1
+            pending += cacheKey(track) to feature
+        }
+
+        if (unmatched > 0) {
+            warnings += "Не найдено в библиотеке: $unmatched"
+        }
+        val cached = cache.putAll(pending)
+        return TelemetryImportResult(
+            read = entries.size,
+            withFeatures = withFeatures,
+            matched = matched,
+            cached = cached,
+            warnings = warnings,
+        )
+    }
+
+    /**
+     * Выгружает кэш фич в формат, который понимает [TelemetryFileParser]:
+     * массив объектов с полями трека и вложенным `audio_features`. Такой файл
+     * можно перенести на другое устройство или отдать на разбор.
+     *
+     * Названия и исполнители берутся из библиотеки, потому что в кэше лежат
+     * только фичи и ключ: без этого выгрузка была бы набором непонятных ключей.
+     * Записи, для которых трек не нашёлся, пропускаются.
+     */
+    suspend fun exportEntries(tracks: List<Track>): List<TelemetryFileEntry> {
+        val result = ArrayList<TelemetryFileEntry>()
+        for (track in tracks) {
+            val feature = runCatching { cache.get(cacheKey(track)) }.getOrNull() ?: continue
+            if (feature.isEmpty) continue
+            result += TelemetryFileEntry(
+                title = track.title,
+                artist = track.artist.takeIf { it.isNotBlank() },
+                album = track.album?.takeIf { it.isNotBlank() },
+                durationMs = track.durationMs.takeIf { it > 0L },
+                videoId = videoIdOf(track),
+                url = track.deepLink,
+                feature = feature,
+            )
+        }
+        return result
+    }
+
+    /** Сколько записей в кэше фич. */
+    suspend fun cachedCount(): Int = runCatching { cache.size() }.getOrDefault(0)
+
+    /**
+     * Ключ сопоставления по названию. Использует ту же нормализацию, что и
+     * поиск метаданных ([TextMatch]), чтобы «Beyoncé» из файла нашёл «Beyonce»
+     * в библиотеке, а «Song (Remastered)» — «Song».
+     */
+    private fun nameKey(artist: String?, title: String): String =
+        "${TextMatch.normalize(artist)}|${TextMatch.normalize(title)}"
 
     /** Пауза между сетевыми анализами: не чаще одного запроса в интервал. */
     private suspend fun awaitRateLimit() {
