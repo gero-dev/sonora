@@ -14,14 +14,76 @@ android {
         applicationId = "app.sonora"
         minSdk = 26
         targetSdk = 34
-        versionCode = 50
-        versionName = "3.7.1"
+        versionCode = 51
+        versionName = "3.8.0"
         vectorDrawables.useSupportLibrary = true
+        ndk {
+            /**
+             * Только реальные ABI телефонов: arm64-v8a и armeabi-v7a.
+             *
+             * x86/x86_64 нужны исключительно эмулятору, а стоили они почти
+             * половину размера APK: ~97 МБ из 193 МБ — это `libffmpeg.zip.so` и
+             * `libpython.zip.so` под две x86-архитектуры, которые ни на одном
+             * реальном устройстве не распаковываются. Меньше APK — быстрее
+             * установка, меньше работа распаковщика при первом запуске и меньше
+             * нагрузка на флеш-память старых устройств.
+             */
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+        }
+    }
+
+    splits {
+        /**
+         * Раздельные APK на каждую ABI.
+         *
+         * Универсальный APK нёс обе arm-архитектуры сразу (~90 МБ), хотя
+         * телефону нужна ровно одна. С `splits.abi` сборка даёт
+         * `app-arm64-v8a-release.apk` и `app-armeabi-v7a-release.apk`, и на
+         * устройство ставится только своя — это самый крупный выигрыш по
+         * размеру и, соответственно, по времени установки и первого старта.
+         * `isUniversalApk = true` оставляет и общий файл для тех, кому он нужен.
+         */
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a", "armeabi-v7a")
+            isUniversalApk = true
+        }
+    }
+
+    signingConfigs {
+        /**
+         * Релиз подписывается отладочным ключом.
+         *
+         * Так было и раньше — приложение распространяется как debug-сборка, и
+         * подпись у неё отладочная. Здесь ключ нужен только для того, чтобы
+         * `assembleRelease` давал устанавливаемый APK: без `signingConfig`
+         * получается неподписанный файл, который на телефон не встанет.
+         *
+         * Отладочная подпись годится для личной установки, но не для магазина:
+         * для публикации нужен собственный ключ.
+         */
+        create("releaseDebugSigned") {
+            storeFile = file(System.getProperty("user.home") + "/.android/debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // R8: минификация и оптимизация кода.
+            //
+            // Было выключено, поэтому вся оптимизация Kotlin/Java оставалась на
+            // усмотрение ART: лишние методы, неинлайненные вызовы, мёртвый код и
+            // полные имена классов в reflection-таблицах. На старых устройствах
+            // это прямо влияет и на время старта, и на плавность прокрутки.
+            isMinifyEnabled = true
+            // Выкидываем неиспользуемые ресурсы: в проекте их много (иконки,
+            // строки под удалённые функции), и они занимают место в APK.
+            isShrinkResources = true
+            signingConfig = signingConfigs.getByName("releaseDebugSigned")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

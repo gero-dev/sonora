@@ -23,6 +23,11 @@ import app.sonora.data.remote.spotify.SpotifySource
 import app.sonora.data.remote.youtube.YouTubeSource
 import app.sonora.data.wave.PlayHistoryStore
 import app.sonora.playback.PlaybackController
+import app.sonora.data.remote.youtube.innertube.InnerTubeSession
+import app.sonora.data.remote.youtube.innertube.InnerTubeXEngine
+import app.sonora.data.remote.ytdlp.YtDlpBridge
+import app.sonora.data.streaming.StreamingAutoPilot
+import app.sonora.data.update.UpdateManager
 
 /**
  * Ручной DI-контейнер: приложение небольшое, поэтому обходимся без Hilt.
@@ -45,29 +50,46 @@ class AppGraph private constructor(context: Context) {
     )
 
     init {
-        // Движок потоков InnerTubeX требует Context для кэша player-config.
-        app.sonora.data.remote.youtube.innertube.InnerTubeXEngine.initialize(appContext)
-        // Восстанавливаем cookie/visitorData Google-аккаунта после перезапуска.
-        app.sonora.data.remote.youtube.innertube.InnerTubeSession.restore(secure)
-        // yt-dlp — источник потока и резерв для ограниченных видео.
-        app.sonora.data.remote.ytdlp.YtDlpBridge.init(ytDlp, settings)
-        // Автопилот стриминга: проверяет прямой путь и yt-dlp через NoHiT.
-        app.sonora.data.streaming.StreamingAutoPilot.init(appContext, settings, ytDlp)
-        // Проверка обновлений из GitHub Releases (добровольная установка).
-        app.sonora.data.update.UpdateManager.init(appContext, settings)
+        // Всё, что требует Context и настраивает сетевые движки, выполняется в фоне.
+        //
+        // Раньше этот блок выполнялся прямо в конструкторе, а конструктор
+        // вызывался из MainActivity.onCreate — то есть до первого кадра. Внутри
+        // три обращения к Android Keystore (MasterKey для SecureStore), чтение
+        // файлов, инициализация yt-dlp и запуск локального прокси-сервера NoHiT.
+        // Keystore — сотни миллисекунд на слабом устройстве, и всё это время
+        // экран оставался пустым. Теперь первый кадр не ждёт ничего из этого.
+        //
+        // Что здесь безопасно отложить: инициализации идемпотентны, настраивают
+        // уже созданные объекты и никому не нужны до первого сетевого запроса.
+        // Что остаётся на вызывающем потоке: только создание лёгких объектов.
+        startupExecutor.execute {
+            runCatching {
+                // Движок потоков InnerTubeX требует Context для кэша player-config.
+                InnerTubeXEngine.initialize(appContext)
+                // Восстанавливаем cookie/visitorData Google-аккаунта после перезапуска.
+                InnerTubeSession.restore(secure)
+                // yt-dlp — источник потока и резерв для ограниченных видео.
+                YtDlpBridge.init(ytDlp, settings)
+                // Автопилот стриминга: проверяет прямой путь и yt-dlp через NoHiT.
+                StreamingAutoPilot.init(appContext, settings, ytDlp)
+                // Проверка обновлений из GitHub Releases (добровольная установка).
+                UpdateManager.init(appContext, settings)
+            }.onFailure { android.util.Log.w("AppGraph", "startup init: ${it.message}") }
 
-        // NoHiT: единственный DPI-обход — фрагментация TLS ClientHello и DoH-DNS.
-        // Работает без VPN и применяется ко всему трафику Sonora: OkHttp, Ktor,
-        // ExoPlayer, yt-dlp.
-        runCatching { dev.nohit.core.NoHiT.init(appContext) }
-            .onFailure { android.util.Log.w("NoHiT", "init: ${it.message}") }
-        // NoHiT — единственный обход и он работает автоматически: не оставляем
-        // пользователю выключателей, которые можно случайно сломать.
-        if (!settings.current.nohitEnabled) {
-            settings.update { it.copy(nohitEnabled = true) }
+            // NoHiT: единственный DPI-обход — фрагментация TLS ClientHello и DoH-DNS.
+            // Работает без VPN и применяется ко всему трафику Sonora: OkHttp, Ktor,
+            // ExoPlayer, yt-dlp.
+            runCatching { dev.nohit.core.NoHiT.init(appContext) }
+                .onFailure { android.util.Log.w("NoHiT", "init: ${it.message}") }
+            // NoHiT — единственный обход и он работает автоматически: не оставляем
+            // пользователю выключателей, которые можно случайно сломать.
+            if (!settings.current.nohitEnabled) {
+                settings.update { it.copy(nohitEnabled = true) }
+            }
+            runCatching { app.sonora.net.nohit.NohitProxy.start() }
+                .onFailure { android.util.Log.w("NoHiT", "proxy: ${it.message}") }
+            maybeTuneNohit()
         }
-        app.sonora.net.nohit.NohitProxy.start()
-        maybeTuneNohit()
     }
 
     /**
@@ -166,6 +188,18 @@ class AppGraph private constructor(context: Context) {
     companion object {
         @Volatile
         private var instance: AppGraph? = null
+
+        /**
+         * Один фоновый поток на инициализацию. Отдельный пул не нужен: работы
+         * мало, и она строго последовательна (каждый шаг зависит от предыдущего).
+         * Приоритет чуть ниже обычного, чтобы не конкурировать с первым кадром.
+         */
+        private val startupExecutor: java.util.concurrent.ExecutorService =
+            java.util.concurrent.Executors.newSingleThreadExecutor { runnable ->
+                Thread(runnable, "sonora-startup").apply {
+                    priority = Thread.NORM_PRIORITY - 1
+                }
+            }
 
         fun get(context: Context): AppGraph =
             instance ?: synchronized(this) {
