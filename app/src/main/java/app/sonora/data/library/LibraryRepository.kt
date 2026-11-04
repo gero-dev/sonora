@@ -189,11 +189,29 @@ class LibraryRepository(
         )
     }
 
+    /**
+     * Существует ли файл за этим uri.
+     *
+     * Раньше на любой `content://` возвращалось `true` без проверки — считалось,
+     * что раз запись когда-то пришла из MediaStore, она там и осталась. Из-за
+     * этого трек, удалённый вне приложения, переживал пересканирование: скан его
+     * не находил, но `preserved` возвращал его обратно из старого списка, и он
+     * висел в библиотеке битой строкой.
+     *
+     * Теперь `content://` действительно проверяется через `LocalPresence`, но
+     * точечно — этот путь используется на единицы треков при скане, а не на всю
+     * библиотеку. Массовая проверка живёт в [pruneMissingLocalTracks] и делает
+     * один запрос вместо запроса на трек.
+     */
     private fun uriExists(uri: String?): Boolean {
         if (uri.isNullOrBlank()) return false
-        if (!uri.startsWith("file:", ignoreCase = true)) return true
-        val path = uri.removePrefix("file://").removePrefix("file:")
-        return runCatching { java.io.File(path).isFile }.getOrDefault(false)
+        LocalPresence.filePathOf(uri)?.let { path ->
+            return runCatching { java.io.File(path).isFile }.getOrDefault(false)
+        }
+        if (!uri.startsWith("content:", ignoreCase = true)) return false
+        return LocalPresence.mediaIdOf(uri)?.let { id ->
+            LocalPresence.presentIds(context)?.contains(id)
+        } ?: LocalPresence.exists(context, uri)
     }
 
     /**
@@ -341,6 +359,51 @@ class LibraryRepository(
     fun isFavorite(trackId: String): Boolean = _favorites.value.contains(trackId)
 
     fun favoriteTracks(): List<Track> = tracksByIds(_favorites.value.toList())
+
+    /**
+     * Убирает из библиотеки локальные треки, файлов которых больше нет на
+     * устройстве: пользователь мог удалить их через файловый менеджер или
+     * другое приложение.
+     *
+     * Отличие от [scanLocal] принципиальное. Скан отвечает на вопрос «что есть
+     * на устройстве» и потому читает метаданные каждого файла — это дорого.
+     * Здесь вопрос обратный и узкий: «чего больше нет». Проверка идёт одним
+     * курсором MediaStore на всю библиотеку (см. [LocalPresence]) и потому
+     * дешёвая — её можно звать при возврате в приложение.
+     *
+     * Возвращает число убранных треков. Ссылки в избранном и плейлистах
+     * вычищаются так же, как при обычном удалении: иначе они остались бы
+     * висеть на id, которого нет в библиотеке.
+     */
+    suspend fun pruneMissingLocalTracks(): Int {
+        val local = _tracks.value.filter { it.source == Source.LOCAL }
+        if (local.isEmpty()) return 0
+        val missing = LocalPresence.missingIds(context, local)
+        if (missing.isEmpty()) return 0
+        val next = _tracks.value.filterNot { it.id in missing }
+        publishTracks(next)
+        val favorites = _favorites.value
+        if (favorites.any { it in missing }) {
+            val nextFavorites = favorites - missing
+            _favorites.value = nextFavorites
+            JsonFile.write(context, FILE_FAVORITES, favoritesSerializer, nextFavorites.toList())
+        }
+        val playlists = _playlists.value
+        val cleaned = playlists.map { playlist ->
+            if (playlist.trackIds.any { it in missing }) {
+                playlist.copy(trackIds = playlist.trackIds.filterNot { it in missing })
+            } else {
+                playlist
+            }
+        }
+        if (cleaned != playlists) {
+            _playlists.value = cleaned
+            persistPlaylists()
+        }
+        persistTracks()
+        Log.i(TAG, "убрано пропавших файлов: ${missing.size}")
+        return missing.size
+    }
 
     /**
      * Полностью убирает трек из библиотеки: из списка, из избранного и из всех
