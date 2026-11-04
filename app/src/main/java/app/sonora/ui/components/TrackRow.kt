@@ -58,6 +58,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -69,10 +70,12 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.sonora.core.model.Playlist
@@ -84,6 +87,7 @@ import app.sonora.ui.nav.LocalArtistNavigator
 import app.sonora.ui.nav.LocalTrackRadio
 import app.sonora.ui.theme.LocalSonoraColors
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 
 /**
  * Базовые переиспользуемые элементы интерфейса Sonora.
@@ -107,7 +111,18 @@ fun sourceColor(source: Source): Color = when (source) {
 
 /**
  * Обложка произвольного размера: рисует картинку, если она есть,
- * иначе — градиентную заглушку с нотой.
+ * иначе — заглушку с нотой.
+ *
+ * Размер для декодирования берётся из фактически занятого места, а не из
+ * исходного файла. Без этой подсказки Coil декодировал обложку в её полном
+ * разрешении: картинка 1000×1000 в строке высотой 56dp занимала около 4 МБ
+ * памяти вместо 12 КБ. В списке из десятков строк это десятки мегабайт, и на
+ * слабом устройстве сборщик мусора начинает работать во время прокрутки —
+ * отсюда рывки.
+ *
+ * Ширина измеряется через `onSizeChanged`: до первого прохода компоновки её
+ * ещё нет, а подставить на этот момент «оригинал» и значит получить
+ * полноразмерный декод. До измерения рисуется заглушка — она бесплатна.
  */
 @Composable
 fun CoverArtBox(
@@ -117,14 +132,26 @@ fun CoverArtBox(
     modifier: Modifier = Modifier,
 ) {
     val shape = RoundedCornerShape(cornerRadius)
+    // Ширина в пикселях после первой компоновки. 0 — ещё не измерено.
+    var targetPx by remember { mutableIntStateOf(0) }
     Box(
         modifier = modifier
             .clip(shape)
-            .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+            .onSizeChanged { size ->
+                val measured = size.width.coerceIn(1, MAX_ARTWORK_PX)
+                if (measured != targetPx) targetPx = measured
+            },
     ) {
-        if (!url.isNullOrBlank()) {
+        if (!url.isNullOrBlank() && targetPx > 0) {
             AsyncImage(
-                model = url,
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(url)
+                    // Не грузим оригинал: просим ровно тот размер, что видно.
+                    // Кроссфейд задан один раз в общем Coil-загрузчике
+                    // (SonoraApp), дублировать его на каждый запрос незачем.
+                    .size(targetPx)
+                    .build(),
                 contentDescription = contentDescription,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.matchParentSize(),
@@ -147,6 +174,13 @@ fun CoverArtBox(
         }
     }
 }
+
+/**
+ * Потолок декодирования обложки. Полноэкранный арт плеера — это ~340dp, на
+ * экране 3x это около 1020px; 1024 покрывает и его, и любую плитку каталога,
+ * но не даёт декодировать картинку 4000px из тега файла.
+ */
+private const val MAX_ARTWORK_PX = 1024
 
 /** Квадратная обложка фиксированного размера. */
 @Composable
@@ -359,6 +393,15 @@ fun TrackRow(
     rating: Int? = null,
     onLike: (() -> Unit)? = null,
     onDislike: (() -> Unit)? = null,
+    /**
+     * Удаление трека прямо из строки, через меню «три точки».
+     *
+     * Строка не знает, как именно удалять: файл с устройства и онлайн-трек
+     * удаляются по-разному, и решает это экран. Здесь только пункт меню.
+     */
+    onDelete: (() -> Unit)? = null,
+    /** Подпись пункта удаления: «Удалить с устройства» или «Удалить из медиатеки». */
+    deleteLabel: String = "Удалить",
     modifier: Modifier = Modifier,
 ) {
     val hasLyrics = !track.lyrics.isNullOrBlank() || !track.syncedLyrics.isNullOrBlank()
@@ -482,37 +525,20 @@ fun TrackRow(
                     .padding(end = 2.dp),
             )
         }
-        // Оценки трека: компактные 👍/👎 только если экран их подключил.
-        if (rating != null) {
-            RatingButton(
-                icon = Icons.Rounded.ThumbUp,
-                active = rating > 0,
-                activeTint = MaterialTheme.colorScheme.primary,
-                description = if (rating > 0) "Убрать «нравится»" else "Нравится",
-                onClick = onLike,
-            )
-            RatingButton(
-                icon = Icons.Rounded.ThumbDown,
-                active = rating < 0,
-                activeTint = MaterialTheme.colorScheme.error,
-                description = if (rating < 0) "Убрать «не нравится»" else "Не нравится",
-                onClick = onDislike,
-            )
-        }
-        IconButton(onClick = onFavorite) {
-            Icon(
-                imageVector = if (isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                contentDescription = if (isFavorite) "Убрать из избранного" else "В избранное",
-                tint = if (isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
         if (trailing != null) {
             trailing()
         }
-        // Меню показываем только когда в нём есть хотя бы одно действие.
-        if (hasLyrics || canDownload || trackRadio != null ||
+        // Оценки, избранное, скачивание, удаление и текст — всё в «трёх точках».
+        //
+        // Раньше 👍, 👎 и ❤️ стояли прямо в строке: три круглые кнопки по 30–48dp
+        // отнимали около половины ширины, название с исполнителем ужимались, а
+        // сама строка вырастала. Оценки и избранное — действия редкие, им место
+        // в меню. В строке остаётся то, что человек читает: обложка, название,
+        // исполнитель, статус сохранения и одна кнопка меню.
+        val hasMenuItems = hasLyrics || canDownload || trackRadio != null ||
+            onDelete != null ||
             (rating != null && (onLike != null || onDislike != null))
-        ) {
+        if (hasMenuItems) {
             Box {
                 IconButton(onClick = { menuOpen = true }) {
                     Icon(
@@ -648,6 +674,52 @@ fun TrackRow(
                             },
                         )
                     }
+                    // Избранное переехало из строки в меню: сердечко занимало
+                    // 48dp постоянной ширины ради действия, которое нажимают
+                    // редко, и отнимало место у названия.
+                    DropdownMenuItem(
+                        text = {
+                            Text(if (isFavorite) "Убрать из избранного" else "В избранное")
+                        },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = if (isFavorite) {
+                                    Icons.Rounded.Favorite
+                                } else {
+                                    Icons.Rounded.FavoriteBorder
+                                },
+                                contentDescription = null,
+                                tint = if (isFavorite) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
+                                modifier = Modifier.size(20.dp),
+                            )
+                        },
+                        onClick = {
+                            menuOpen = false
+                            onFavorite()
+                        },
+                    )
+                    if (onDelete != null) {
+                        HorizontalDivider()
+                        DropdownMenuItem(
+                            text = { Text(deleteLabel, color = MaterialTheme.colorScheme.error) },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Rounded.Delete,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            },
+                            onClick = {
+                                menuOpen = false
+                                onDelete.invoke()
+                            },
+                        )
+                    }
                 }
             }
         }
@@ -661,38 +733,6 @@ fun TrackRow(
             syncedLyrics = track.syncedLyrics,
             positionMs = 0L,
             onDismiss = { lyricsVisible = false },
-        )
-    }
-}
-
-/**
- * Компактная кнопка оценки в строке: 30dp, чтобы не раздувать высоту строки
- * и не отнимать место у названия. Неактивная иконка приглушена.
- */
-@Composable
-private fun RatingButton(
-    icon: ImageVector,
-    active: Boolean,
-    activeTint: Color,
-    description: String,
-    onClick: (() -> Unit)?,
-) {
-    Box(
-        modifier = Modifier
-            .size(30.dp)
-            .clip(CircleShape)
-            .clickable(enabled = onClick != null) { onClick?.invoke() },
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = description,
-            tint = if (active) {
-                activeTint
-            } else {
-                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
-            },
-            modifier = Modifier.size(17.dp),
         )
     }
 }

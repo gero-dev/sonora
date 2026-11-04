@@ -159,6 +159,20 @@ private enum class LibraryView {
 }
 
 /**
+ * Подпись пункта удаления для трека.
+ *
+ * Файл пользователя и запись в медиатеке — разные вещи, и обещание «удалить
+ * с устройства» в меню онлайн-трека было бы неправдой. Локальный файл с
+ * `file:`-схемой действительно стирается с диска, поэтому предупреждаем об этом
+ * прямо в подписи.
+ */
+private fun deleteLabelFor(track: Track): String = when {
+    track.source != Source.LOCAL -> "Удалить"
+    track.uri?.startsWith("file:", ignoreCase = true) == true -> "Удалить с устройства"
+    else -> "Удалить из медиатеки"
+}
+
+/**
  * UI-предпочтения медиатеки. Хранятся отдельным SharedPreferences-файлом,
  * а не в SettingsStore: это состояние экрана (чип, сортировка, вид), а не
  * настройка приложения, и оно не должно требовать правок слоя данных.
@@ -354,6 +368,12 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
         localTracks.filter { it.savedFromStreaming }
             .sortedByDescending { it.extra["downloadedAt"]?.toLongOrNull() ?: 0L }
     }
+    // Быстрая проверка «этот трек уже на устройстве» для строк поиска:
+    // Set по id вместо обхода списка на каждой строке.
+    val downloadedIds = remember(tracks) {
+        tracks.filter { it.savedFromStreaming || it.source == Source.LOCAL }
+            .mapTo(HashSet()) { it.id }
+    }
     val favoriteTracks = remember(tracks, favorites) {
         tracks.filter { it.id in favorites }.distinctBy { it.id }
     }
@@ -507,10 +527,6 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
                 .padding(top = padding.calculateTopPadding()),
         ) {
             LibraryHeader(
-                trackCount = localTracks.size,
-                downloadedCount = downloadedTracks.size,
-                playlistCount = playlists.size,
-                favoriteCount = favoriteTracks.size,
                 scanning = scanning,
                 searchOpen = searchOpen,
                 onSearchClick = {
@@ -530,23 +546,23 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
                     onClose = closeSearch,
                 )
             }
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(8.dp))
             LibraryChips(
                 selected = section,
                 counts = chipCounts,
                 onSelect = selectSection,
-            )
-            Spacer(Modifier.height(4.dp))
-            LibraryToolbar(
-                sort = sort,
-                descending = sortDescending,
-                view = view,
-                showViewToggle = gridSections,
-                onSortChange = changeSort,
-                onToggleDirection = toggleDirection,
-                onViewChange = changeView,
-            )
-            Spacer(Modifier.height(4.dp))
+            ) {
+                LibraryToolbar(
+                    sort = sort,
+                    descending = sortDescending,
+                    view = view,
+                    showViewToggle = gridSections,
+                    onSortChange = changeSort,
+                    onToggleDirection = toggleDirection,
+                    onViewChange = changeView,
+                )
+            }
+            Spacer(Modifier.height(6.dp))
 
             when {
                 section == LibrarySection.ALL && searching -> LibrarySearchResults(
@@ -569,6 +585,10 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
                     onClickTrack = { vm.playOrOpen(it) },
                     onLongClickTrack = { actionTrack = it },
                     onFavoriteTrack = { vm.toggleFavorite(it.id) },
+                    saveStatesFlow = vm.saveStates,
+                    downloadedIds = downloadedIds,
+                    onDownloadTrack = { vm.downloadTrack(it) },
+                    onDeleteTrack = { trackDeleteTarget = it },
                 )
                 section == LibrarySection.ALL -> AllTab(
                     playlists = visiblePlaylists,
@@ -601,6 +621,7 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
                     onLongClickTrack = { actionTrack = it },
                     onFavoriteTrack = { vm.toggleFavorite(it.id) },
                     onPlayTracks = playTracks,
+                    onDeleteTrack = { trackDeleteTarget = it },
                 )
                 section == LibrarySection.PLAYLISTS -> PlaylistsTab(
                     playlists = visiblePlaylists,
@@ -641,6 +662,7 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
                     onClick = { vm.playOrOpen(it) },
                     onLongClick = { actionTrack = it },
                     onFavorite = { vm.toggleFavorite(it.id) },
+                    onDeleteTrack = { trackDeleteTarget = it },
                     bottomPadding = bottomPadding,
                 )
                 section == LibrarySection.DOWNLOADS -> DownloadsTab(
@@ -655,6 +677,7 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
                     onClick = { vm.playOrOpen(it) },
                     onLongClick = { actionTrack = it },
                     onFavorite = { vm.toggleFavorite(it.id) },
+                    onDeleteTrack = { trackDeleteTarget = it },
                     bottomPadding = bottomPadding,
                 )
                 section == LibrarySection.FAVORITES -> FavoritesTab(
@@ -668,6 +691,7 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
                     onClick = { vm.playOrOpen(it) },
                     onLongClick = { actionTrack = it },
                     onFavorite = { vm.toggleFavorite(it.id) },
+                    onDeleteTrack = { trackDeleteTarget = it },
                     bottomPadding = bottomPadding,
                 )
                 section == LibrarySection.YOUTUBE -> YouTubeTab(
@@ -684,6 +708,7 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
                     onImportLink = { showYouTubeImport = true },
                     importError = importError,
                     saveStatesFlow = vm.saveStates,
+                    onDeleteTrack = { trackDeleteTarget = it },
                     bottomPadding = bottomPadding,
                 )
             }
@@ -972,15 +997,16 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, navigate: (String) 
 }
 
 /**
- * Шапка медиатеки: огромное «Медиатека», строка-сводка и компактные действия —
- * поиск по библиотеке, сканирование фонотеки и аватар-«профиль» (настройки).
+ * Шапка медиатеки в духе Spotify: слева круглый аватар-«профиль» (в Spotify он
+ * тоже слева от заголовка), затем заголовок и справа — только действия.
+ *
+ * Раньше здесь были крупный заголовок headlineLarge и отдельная строка-сводка
+ * «297 треков на устройстве · загружено: 293 …». Сводка дублировала счётчики,
+ * которые и так стоят на чипах разделов, и съедала две строки высоты на самом
+ * верху экрана — то есть отодвигала контент вниз на каждом открытии медиатеки.
  */
 @Composable
 private fun LibraryHeader(
-    trackCount: Int,
-    downloadedCount: Int,
-    playlistCount: Int,
-    favoriteCount: Int,
     scanning: Boolean,
     searchOpen: Boolean,
     onSearchClick: () -> Unit,
@@ -990,56 +1016,12 @@ private fun LibraryHeader(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 20.dp, end = 6.dp, top = 10.dp, bottom = 2.dp),
+            .padding(start = 16.dp, end = 6.dp, top = 8.dp, bottom = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(Modifier.weight(1f)) {
-            Text(
-                text = "Медиатека",
-                style = MaterialTheme.typography.headlineLarge,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                text = buildString {
-                    append(tracksLabel(trackCount))
-                    append(" на устройстве")
-                    if (downloadedCount > 0) append(" · загружено: $downloadedCount")
-                    if (playlistCount > 0) append(" · плейлистов: $playlistCount")
-                    if (favoriteCount > 0) append(" · любимых: $favoriteCount")
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        IconButton(onClick = onSearchClick) {
-            Icon(
-                imageVector = Icons.Rounded.Search,
-                contentDescription = if (searchOpen) "Закрыть поиск по медиатеке" else "Поиск по медиатеке",
-                tint = if (searchOpen) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-            )
-        }
-        IconButton(onClick = onScan) {
-            if (scanning) {
-                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-            } else {
-                Icon(
-                    imageVector = Icons.Rounded.Refresh,
-                    contentDescription = "Сканировать фонотеку",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
         Box(
             modifier = Modifier
-                .size(40.dp)
+                .size(32.dp)
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.primary)
                 .clickable(onClick = onAvatarClick),
@@ -1049,8 +1031,40 @@ private fun LibraryHeader(
                 imageVector = Icons.Rounded.Person,
                 contentDescription = "Настройки профиля",
                 tint = MaterialTheme.colorScheme.onPrimary,
-                modifier = Modifier.size(22.dp),
+                modifier = Modifier.size(19.dp),
             )
+        }
+        Spacer(Modifier.width(10.dp))
+        Text(
+            text = "Медиатека",
+            style = MaterialTheme.typography.titleLarge,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        IconButton(onClick = onSearchClick, modifier = Modifier.size(40.dp)) {
+            Icon(
+                imageVector = Icons.Rounded.Search,
+                contentDescription = if (searchOpen) "Закрыть поиск по медиатеке" else "Поиск по медиатеке",
+                tint = if (searchOpen) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                modifier = Modifier.size(21.dp),
+            )
+        }
+        IconButton(onClick = onScan, modifier = Modifier.size(40.dp)) {
+            if (scanning) {
+                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+            } else {
+                Icon(
+                    imageVector = Icons.Rounded.Refresh,
+                    contentDescription = "Сканировать фонотеку",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(21.dp),
+                )
+            }
         }
     }
 }
@@ -1090,66 +1104,93 @@ private fun LibrarySearchField(
     )
 }
 
-/** Горизонтальные фильтры-чипы в духе Spotify; у выбранного — акцент и счётчик. */
+/**
+ * Горизонтальные фильтры-чипы в духе Spotify; у выбранного — акцент.
+ *
+ * Счётчик показывается только у непустого раздела. Нули в ряду чипов
+ * («Плейлисты 0», «Загрузки 0») — это шум, который читается как ошибка, а не
+ * как полезная информация: пустой раздел и так виден по чипу без числа.
+ *
+ * [trailing] — правый слот того же ряда: сортировка, направление и вид списка.
+ * Они вынесены сюда, а не в отдельную строку под чипами, чтобы медиатека
+ * отдавала первую строку контента сразу под шапкой, как в Spotify.
+ */
 @Composable
 private fun LibraryChips(
     selected: LibrarySection,
     counts: Map<LibrarySection, Int>,
     onSelect: (LibrarySection) -> Unit,
+    trailing: @Composable () -> Unit = {},
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        LibrarySection.entries.forEach { section ->
-            val isSelected = section == selected
-            Row(
-                modifier = Modifier
-                    .clip(CircleShape)
-                    .background(
-                        if (isSelected) {
-                            MaterialTheme.colorScheme.primary
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .horizontalScroll(rememberScrollState())
+                .padding(start = 16.dp, end = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            LibrarySection.entries.forEach { section ->
+                val isSelected = section == selected
+                val count = counts[section] ?: 0
+                Row(
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(
+                            if (isSelected) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.surfaceContainerHigh
+                            },
+                        )
+                        .clickable { onSelect(section) }
+                        .padding(horizontal = 13.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = section.label,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = if (isSelected) {
+                            MaterialTheme.colorScheme.onPrimary
                         } else {
-                            MaterialTheme.colorScheme.surfaceContainerHigh
+                            MaterialTheme.colorScheme.onSurfaceVariant
                         },
+                        maxLines = 1,
                     )
-                    .clickable { onSelect(section) }
-                    .padding(horizontal = 14.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = section.label,
-                    style = MaterialTheme.typography.labelLarge,
-                    color = if (isSelected) {
-                        MaterialTheme.colorScheme.onPrimary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                    maxLines = 1,
-                )
-                Spacer(Modifier.width(6.dp))
-                Text(
-                    text = (counts[section] ?: 0).toString(),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = if (isSelected) {
-                        MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.72f)
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
-                    },
-                    maxLines = 1,
-                )
+                    if (count > 0) {
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = count.toString(),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (isSelected) {
+                                MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.72f)
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
+                            },
+                            maxLines = 1,
+                        )
+                    }
+                }
             }
         }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            trailing()
+        }
+        Spacer(Modifier.width(6.dp))
     }
 }
 
 /**
- * Панель инструментов: сортировка с направлением и переключатель вида
- * «список/сетка» (для разделов с обложками). Состояние сохраняется в prefs.
+ * Правый слот ряда чипов: сортировка с направлением и переключатель вида.
+ * Раньше это была отдельная строка на всю ширину — три ряда управления
+ * (поиск, чипы, сортировка) подряд перед первой строкой контента.
  */
 @Composable
 private fun LibraryToolbar(
@@ -1162,82 +1203,67 @@ private fun LibraryToolbar(
     onViewChange: (LibraryView) -> Unit,
 ) {
     var sortMenuOpen by remember { mutableStateOf(false) }
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 16.dp, end = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box {
-            FilterChip(
-                selected = false,
-                onClick = { sortMenuOpen = true },
-                label = { Text(sort.label) },
-                colors = FilterChipDefaults.filterChipColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                ),
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Rounded.Sort,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp),
-                    )
-                },
+    Box {
+        IconButton(onClick = { sortMenuOpen = true }, modifier = Modifier.size(36.dp)) {
+            Icon(
+                imageVector = Icons.Rounded.Sort,
+                contentDescription = "Сортировка: ${sort.label}",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp),
             )
-            DropdownMenu(
-                expanded = sortMenuOpen,
-                onDismissRequest = { sortMenuOpen = false },
-            ) {
-                LibrarySort.entries.forEach { option ->
-                    DropdownMenuItem(
-                        text = { Text(option.label) },
-                        leadingIcon = {
-                            if (option == sort) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Check,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp),
-                                )
-                            }
-                        },
-                        onClick = {
-                            sortMenuOpen = false
-                            onSortChange(option)
-                        },
-                    )
-                }
+        }
+        DropdownMenu(
+            expanded = sortMenuOpen,
+            onDismissRequest = { sortMenuOpen = false },
+        ) {
+            LibrarySort.entries.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(option.label) },
+                    leadingIcon = {
+                        if (option == sort) {
+                            Icon(
+                                imageVector = Icons.Rounded.Check,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                    },
+                    onClick = {
+                        sortMenuOpen = false
+                        onSortChange(option)
+                    },
+                )
             }
         }
-        IconButton(onClick = onToggleDirection, modifier = Modifier.size(36.dp)) {
-            Icon(
-                imageVector = if (descending) {
-                    Icons.Rounded.ArrowDownward
-                } else {
-                    Icons.Rounded.ArrowUpward
-                },
-                contentDescription = if (descending) {
-                    "Сначала новые и большие"
-                } else {
-                    "Сначала старые и меньшие"
-                },
-                modifier = Modifier.size(18.dp),
-            )
-        }
-        Spacer(Modifier.weight(1f))
-        if (showViewToggle) {
-            ViewModeButton(
-                icon = Icons.Rounded.GridView,
-                selected = view == LibraryView.GRID,
-                description = "Показать сеткой",
-                onClick = { onViewChange(LibraryView.GRID) },
-            )
-            ViewModeButton(
-                icon = Icons.Rounded.ViewList,
-                selected = view == LibraryView.LIST,
-                description = "Показать списком",
-                onClick = { onViewChange(LibraryView.LIST) },
-            )
-        }
+    }
+    IconButton(onClick = onToggleDirection, modifier = Modifier.size(36.dp)) {
+        Icon(
+            imageVector = if (descending) {
+                Icons.Rounded.ArrowDownward
+            } else {
+                Icons.Rounded.ArrowUpward
+            },
+            contentDescription = if (descending) {
+                "Сначала новые и большие"
+            } else {
+                "Сначала старые и меньшие"
+            },
+            modifier = Modifier.size(18.dp),
+        )
+    }
+    if (showViewToggle) {
+        ViewModeButton(
+            icon = Icons.Rounded.GridView,
+            selected = view == LibraryView.GRID,
+            description = "Показать сеткой",
+            onClick = { onViewChange(LibraryView.GRID) },
+        )
+        ViewModeButton(
+            icon = Icons.Rounded.ViewList,
+            selected = view == LibraryView.LIST,
+            description = "Показать списком",
+            onClick = { onViewChange(LibraryView.LIST) },
+        )
     }
 }
 
@@ -1299,6 +1325,8 @@ private fun AllTab(
     ratingIndex: TrackRatingIndex,
     onLikeTrack: (Track) -> Unit,
     onDislikeTrack: (Track) -> Unit,
+    /** Удаление трека: тем же путём, что и в остальном плеере. */
+    onDeleteTrack: (Track) -> Unit,
 ) {
     // Срезы для рельсов считаем один раз на список, а не на каждую перерисовку.
     val featuredPlaylists = remember(playlists) { playlists.take(10) }
@@ -1518,6 +1546,10 @@ private fun AllTab(
                     rating = ratingIndex.ratingOf(track),
                     onLike = { onLikeTrack(track) },
                     onDislike = { onDislikeTrack(track) },
+                    // Удаление из «трёх точек» — как в остальном плеере.
+                    // Долгое нажатие тоже открывает лист действий с удалением.
+                    onDelete = { onDeleteTrack(track) },
+                    deleteLabel = deleteLabelFor(track),
                 )
             }
         }
@@ -1858,6 +1890,8 @@ private fun TracksTab(
     onClick: (Track) -> Unit,
     onLongClick: (Track) -> Unit,
     onFavorite: (Track) -> Unit,
+    /** Удаление трека: тем же путём, что и в остальном плеере. */
+    onDeleteTrack: (Track) -> Unit,
     bottomPadding: Dp,
     ratingIndex: TrackRatingIndex,
     onLikeTrack: (Track) -> Unit,
@@ -1937,6 +1971,10 @@ private fun TracksTab(
                     rating = ratingIndex.ratingOf(track),
                     onLike = { onLikeTrack(track) },
                     onDislike = { onDislikeTrack(track) },
+                    // Удаление из «трёх точек» — как в остальном плеере.
+                    // Долгое нажатие тоже открывает лист действий с удалением.
+                    onDelete = { onDeleteTrack(track) },
+                    deleteLabel = deleteLabelFor(track),
                 )
             }
         }
@@ -1953,6 +1991,8 @@ private fun FavoritesTab(
     onClick: (Track) -> Unit,
     onLongClick: (Track) -> Unit,
     onFavorite: (Track) -> Unit,
+    /** Удаление трека: тем же путём, что и в остальном плеере. */
+    onDeleteTrack: (Track) -> Unit,
     bottomPadding: Dp,
     ratingIndex: TrackRatingIndex,
     onLikeTrack: (Track) -> Unit,
@@ -2016,6 +2056,10 @@ private fun FavoritesTab(
                     rating = ratingIndex.ratingOf(track),
                     onLike = { onLikeTrack(track) },
                     onDislike = { onDislikeTrack(track) },
+                    // Удаление из «трёх точек» — как в остальном плеере.
+                    // Долгое нажатие тоже открывает лист действий с удалением.
+                    onDelete = { onDeleteTrack(track) },
+                    deleteLabel = deleteLabelFor(track),
                 )
             }
         }
@@ -2037,6 +2081,8 @@ private fun DownloadsTab(
     onClick: (Track) -> Unit,
     onLongClick: (Track) -> Unit,
     onFavorite: (Track) -> Unit,
+    /** Удаление трека: тем же путём, что и в остальном плеере. */
+    onDeleteTrack: (Track) -> Unit,
     bottomPadding: Dp,
     ratingIndex: TrackRatingIndex,
     onLikeTrack: (Track) -> Unit,
@@ -2108,6 +2154,10 @@ private fun DownloadsTab(
                     rating = ratingIndex.ratingOf(track),
                     onLike = { onLikeTrack(track) },
                     onDislike = { onDislikeTrack(track) },
+                    // Удаление из «трёх точек» — как в остальном плеере.
+                    // Долгое нажатие тоже открывает лист действий с удалением.
+                    onDelete = { onDeleteTrack(track) },
+                    deleteLabel = deleteLabelFor(track),
                 )
             }
         }
@@ -2139,7 +2189,14 @@ private fun LibrarySearchResults(
     ratingIndex: TrackRatingIndex,
     onLikeTrack: (Track) -> Unit,
     onDislikeTrack: (Track) -> Unit,
+    /** Статусы сохранения: результаты поиска показывают, что уже на устройстве. */
+    saveStatesFlow: StateFlow<Map<String, TrackSaveState>>,
+    /** id треков, лежащих на устройстве — по ним решаем, нужна ли кнопка скачивания. */
+    downloadedIds: Set<String>,
+    onDownloadTrack: (Track) -> Unit,
+    onDeleteTrack: (Track) -> Unit,
 ) {
+    val saveStates by saveStatesFlow.collectAsState()
     val hasResults = playlists.isNotEmpty() || albums.isNotEmpty() ||
         artists.isNotEmpty() || tracks.isNotEmpty()
     LazyColumn(
@@ -2221,6 +2278,21 @@ private fun LibrarySearchResults(
                     onClick = { onClickTrack(track) },
                     onLongClick = { onLongClickTrack(track) },
                     onFavorite = { onFavoriteTrack(track) },
+                    // Статус сохранения и источник видны прямо в результатах:
+                    // иначе по строке нельзя понять, лежит файл на устройстве
+                    // или трек играется из сети.
+                    saveState = saveStates[track.id],
+                    showSource = true,
+                    onDownload = if (track.playable && track.source != Source.LOCAL &&
+                        !downloadedIds.contains(track.id)
+                    ) {
+                        { onDownloadTrack(track) }
+                    } else {
+                        null
+                    },
+                    // Полное удаление доступно там же, где у остальных списков.
+                    onDelete = { onDeleteTrack(track) },
+                    deleteLabel = deleteLabelFor(track),
                     rating = ratingIndex.ratingOf(track),
                     onLike = { onLikeTrack(track) },
                     onDislike = { onDislikeTrack(track) },
@@ -2247,6 +2319,8 @@ private fun YouTubeTab(
     ratingIndex: TrackRatingIndex,
     onLikeTrack: (Track) -> Unit,
     onDislikeTrack: (Track) -> Unit,
+    /** Удаление трека: тем же путём, что и в остальном плеере. */
+    onDeleteTrack: (Track) -> Unit,
 ) {
     // Прогресс скачиваний обновляется часто: подписку держим внутри вкладки,
     // чтобы проценты сохранения не перерисовывали всю Медиатеку.
@@ -2318,6 +2392,10 @@ private fun YouTubeTab(
                     rating = ratingIndex.ratingOf(track),
                     onLike = { onLikeTrack(track) },
                     onDislike = { onDislikeTrack(track) },
+                    // Удаление из «трёх точек» — как в остальном плеере.
+                    // Долгое нажатие тоже открывает лист действий с удалением.
+                    onDelete = { onDeleteTrack(track) },
+                    deleteLabel = deleteLabelFor(track),
                 )
             }
         }

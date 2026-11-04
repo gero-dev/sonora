@@ -222,8 +222,12 @@ fun PlayerScreen(vm: MainViewModel, onBack: () -> Unit, navigate: (String) -> Un
                         expanded = menuExpanded,
                         onDismissRequest = { menuExpanded = false },
                     ) {
-                        // Радио доступно для любого источника: локального файла,
-                        // InnerTube, yt-dlp и SoundCloud.
+                        // Меню содержит только то, чего нет на самом экране.
+                        //
+                        // «Очередь» и «Таймер сна» отсюда убраны: они уже есть в
+                        // строке действий под транспортом, и дублирование меню
+                        // заставляло выбирать между двумя одинаковыми входами.
+                        // Радио осталось здесь единственным входом.
                         track?.let { radioSeed ->
                             DropdownMenuItem(
                                 text = { Text("Радио по треку") },
@@ -247,22 +251,8 @@ fun PlayerScreen(vm: MainViewModel, onBack: () -> Unit, navigate: (String) -> Un
                                     navigate(Routes.artist(artist))
                                 },
                             )
-                            HorizontalDivider()
                         }
-                        DropdownMenuItem(
-                            text = { Text("Очередь") },
-                            onClick = {
-                                menuExpanded = false
-                                navigate(Routes.QUEUE)
-                            },
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Таймер сна") },
-                            onClick = {
-                                menuExpanded = false
-                                sleepDialogVisible = true
-                            },
-                        )
+                        HorizontalDivider()
                         DropdownMenuItem(
                             text = { Text("Качество · ${settings.audioQuality.label}") },
                             leadingIcon = {
@@ -454,9 +444,15 @@ fun PlayerScreen(vm: MainViewModel, onBack: () -> Unit, navigate: (String) -> Un
                             )
                         }
                     }
-                    // Оценки «нравится / не нравится» и радио по треку.
+                    // Оценки «нравится / не нравится».
+                    //
                     // Лайк дополнительно попадает в избранное, дизлайк скрывает
                     // трек из волны и приглушает похожих исполнителей.
+                    //
+                    // Кнопки «Радио» здесь больше нет: она дублировала пункт
+                    // «Радио по треку» в верхнем меню. Два входа в одно действие
+                    // на одном экране — это и есть перегруз: строка оценок
+                    // растягивалась на всю ширину ради кнопки с подписью.
                     val myRating = ratingIndex.ratingOf(current)
                     Row(
                         modifier = Modifier
@@ -495,16 +491,6 @@ fun PlayerScreen(vm: MainViewModel, onBack: () -> Unit, navigate: (String) -> Un
                                 },
                                 modifier = Modifier.size(22.dp),
                             )
-                        }
-                        Spacer(Modifier.weight(1f))
-                        TextButton(onClick = { vm.startTrackRadio(current) }) {
-                            Icon(
-                                imageVector = Icons.Rounded.Radio,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp),
-                            )
-                            Spacer(Modifier.width(6.dp))
-                            Text("Радио")
                         }
                     }
                     if (saveState?.isActive == true) {                        Spacer(Modifier.height(10.dp))
@@ -875,19 +861,6 @@ fun PlayerScreen(vm: MainViewModel, onBack: () -> Unit, navigate: (String) -> Un
                             }
                         }
                     }
-                    Spacer(Modifier.height(12.dp))
-                    Text(
-                        text = "Долгое нажатие на ⤨ — стриминг · " +
-                            if (streamingEnabled) "онлайн включён" else "только устройство",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (streamingEnabled) {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        } else {
-                            MaterialTheme.colorScheme.error.copy(alpha = 0.85f)
-                        },
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
                 }
             }
         }
