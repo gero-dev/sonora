@@ -743,6 +743,29 @@ class MainViewModel(private val graph: AppGraph) : ViewModel() {
         }
     }
 
+    /**
+     * Убирает из библиотеки треки, файлы которых исчезли с устройства.
+     *
+     * Дёргается при возврате в приложение: пользователь мог удалить файл в
+     * файловом менеджере, свернув Sonora. Проверка дешёвая — один курсор
+     * MediaStore на всю библиотеку и один list() на папку (см. LocalPresence),
+     * поэтому её можно звать на каждый onResume, не подвешивая UI.
+     *
+     * Очередь воспроизведения синхронизируется только если что-то реально
+     * пропало: иначе каждый возврат в приложение трогал бы плеер без причины.
+     */
+    fun pruneMissingLocalTracks() {
+        viewModelScope.launch {
+            val removed = runCatching { graph.library.pruneMissingLocalTracks() }
+                .getOrDefault(0)
+            if (removed > 0) {
+                graph.playback.applyMetadata(
+                    graph.library.tracks.value.filter { it.source == Source.LOCAL },
+                )
+            }
+        }
+    }
+
     fun albums() = graph.library.albums()
 
     fun artists() = graph.library.artists()
